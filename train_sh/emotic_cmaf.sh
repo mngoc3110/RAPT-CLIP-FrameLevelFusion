@@ -16,6 +16,7 @@ BBOX_FACE="${ROOT_DIR}/Annotations/face_bbox.json"
 BBOX_BODY="${ROOT_DIR}/Annotations/body_bbox.json"
 
 python main.py \
+    --mode train \
     --exper-name ${EXP_NAME} \
     --dataset EMOTIC \
     --gpu 0 \
@@ -24,14 +25,33 @@ python main.py \
     --epochs ${EPOCHS} \
     --optimizer AdamW \
     --lr 2e-5 \
-    --lr-prompt-learner 2e-4 \
+    --lr-image-encoder 1e-6 \
+    --lr-prompt-learner 3e-4 \
     --lr-adapter 1e-4 \
+    --weight-decay 0.005 \
+    --milestones 10 15 \
+    --gamma 0.1 \
     --use-amp \
     --fusion-type cmaf \
     --use-context \
     --crop-body \
     --num-segments 1 \
     --duration 1 \
+    --image-size 224 \
+    --temperature 0.07 \
+    --drop-path-rate 0.1 \
+    --grad-clip 1.0 \
+    --lambda_mi 0.1 \
+    --lambda_dc 0.1 \
+    --mi-warmup 2 \
+    --mi-ramp 5 \
+    --dc-warmup 2 \
+    --dc-ramp 5 \
+    --text-type prompt_ensemble \
+    --contexts-number 8 \
+    --class-token-position end \
+    --class-specific-contexts True \
+    --load_and_tune_prompt_learner True \
     --root-dir ${ROOT_DIR} \
     --train-annotation ${TRAIN_ANNOT} \
     --val-annotation ${VAL_ANNOT} \
