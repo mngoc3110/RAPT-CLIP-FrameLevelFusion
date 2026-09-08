@@ -187,7 +187,8 @@ class Trainer:
                     num_classes_expected = self.model.num_classes
                 elif hasattr(self.model, 'args') and hasattr(self.model.args, 'num_classes'):
                     num_classes_expected = self.model.args.num_classes
-                if num_classes_expected is not None:
+                if num_classes_expected is not None and target.dtype == torch.long:
+                    # Only check integer class indices (RAER/CAER), not multi-hot floats (EMOTIC)
                     invalid_mask = (target < 0) | (target >= num_classes_expected)
                     if invalid_mask.any():
                         bad_vals = target[invalid_mask].cpu().tolist()
@@ -197,7 +198,9 @@ class Trainer:
                 
                 # Apply Mixup
                 if is_train and self.mixup_alpha > 0:
-                    images_face, images_body, target_b, lam = self.mixup_data(images_face, images_body, self.mixup_alpha)
+                    images_face, images_body, mix_index, lam = self.mixup_data(images_face, images_body, self.mixup_alpha)
+                    # mix_index is the permutation index (B,), use it to shuffle the target labels
+                    target_b = target[mix_index]  # shape (B, 26) for EMOTIC, (B,) for RAER
 
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
                     # Forward pass
