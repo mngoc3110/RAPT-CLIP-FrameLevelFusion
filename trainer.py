@@ -330,25 +330,40 @@ class Trainer:
                         else:
                             break
                 
-                # Update progress bar with Running UAR
-                running_uar = 0.0
-                if len(all_preds_list) > 0 and not is_emotic:
-                    curr_preds = torch.cat(all_preds_list).numpy()
-                    curr_targets = torch.cat(all_targets_list).numpy()
-                    # Only calc UAR every 10 batches to save CPU time
-                    if i % 10 == 0: 
+                # Update progress bar with Running UAR/mAP
+                running_metric = 0.0
+                if len(all_preds_list) > 0:
+                    # Only calc complex metrics every 10 batches to save CPU time
+                    if i % 10 == 0 or i == len(loader) - 1:
+                        curr_preds = torch.cat(all_preds_list).numpy()
+                        curr_targets = torch.cat(all_targets_list).numpy()
                         try:
-                            cm = confusion_matrix(curr_targets, curr_preds, labels=range(output.shape[1]))
-                            class_acc = cm.diagonal() / (cm.sum(axis=1) + 1e-6)
-                            running_uar = np.nanmean(class_acc) * 100
+                            if is_emotic:
+                                from sklearn.metrics import average_precision_score
+                                ap_scores = []
+                                for c in range(curr_targets.shape[1]):
+                                    ap = average_precision_score(curr_targets[:, c], curr_preds[:, c])
+                                    if not np.isnan(ap):
+                                        ap_scores.append(ap)
+                                running_metric = np.mean(ap_scores) * 100 if ap_scores else 0.0
+                            else:
+                                cm = confusion_matrix(curr_targets, curr_preds, labels=range(output.shape[1]))
+                                class_acc = cm.diagonal() / (cm.sum(axis=1) + 1e-6)
+                                running_metric = np.nanmean(class_acc) * 100
                         except:
                             pass
                 
-                pbar.set_postfix({
-                    'Loss': f"{losses.avg:.4f}",
-                    'WAR': f"{war_meter.avg:.2f}%" if not is_emotic else "N/A",
-                    'UAR': f"{running_uar:.2f}%" if not is_emotic else "N/A"
-                })
+                if is_emotic:
+                    pbar.set_postfix({
+                        'Loss': f"{losses.avg:.4f}",
+                        'mAP': f"{running_metric:.2f}%"
+                    })
+                else:
+                    pbar.set_postfix({
+                        'Loss': f"{losses.avg:.4f}",
+                        'WAR': f"{war_meter.avg:.2f}%",
+                        'UAR': f"{running_metric:.2f}%"
+                    })
         
         # Calculate epoch-level metrics
         if is_emotic:
