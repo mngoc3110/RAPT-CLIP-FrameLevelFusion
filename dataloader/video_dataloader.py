@@ -216,16 +216,27 @@ class VideoDataset(data.Dataset):
             is_video_file = True
             cap = cv2.VideoCapture(record.path)
             num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            # Don't release cap yet, we need it to read frames
-            if not cap.isOpened():
+            is_valid = cap.isOpened() and num_real_frames > 0
+            if not is_valid:
                  print(f"Warning: Could not open video file {record.path}, returning zeros.")
-                 num_real_frames = 0
 
-        if num_real_frames == 0:
-            print(f"Warning: No frames found for video {record.path}, returning zeros.")
-            dummy_shape = (self.num_segments * self.duration, 3, self.image_size, self.image_size)
-            if is_video_file and 'cap' in locals(): cap.release()
-            return torch.zeros(dummy_shape), torch.zeros(dummy_shape), torch.zeros(dummy_shape), record.label - 1
+        # For frame-directory datasets, is_valid is based on whether frames exist
+        if not is_video_file:
+            is_valid = num_real_frames > 0
+
+        if not is_valid:
+            # print(f"Warning: No frames found for video {record.path}, returning zeros.")
+            dummy_shape = (self.num_segments, 3, self.image_size, self.image_size)
+            if self.dataset_name == "EMOTIC":
+                multi_hot = torch.zeros(26)
+                if isinstance(record.label, list):
+                    for l in record.label:
+                        multi_hot[l] = 1.0
+                else:
+                    multi_hot[record.label] = 1.0
+                return torch.zeros(dummy_shape), torch.zeros(dummy_shape), torch.zeros(dummy_shape), multi_hot
+            else:
+                return torch.zeros(dummy_shape), torch.zeros(dummy_shape), torch.zeros(dummy_shape), record.label - 1
 
         # Clamp indices to be valid
         indices = np.clip(indices, 0, num_real_frames - 1)
