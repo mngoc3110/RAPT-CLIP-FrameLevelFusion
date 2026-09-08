@@ -37,8 +37,8 @@ python main.py \
     --class-specific-contexts True \
     --load_and_tune_prompt_learner True \
     --root-dir /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/cvpr_emotic \
-    --train-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/train_10pct.txt \
-    --val-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/val.txt \
-    --test-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/test.txt \
+    --train-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/train_bbox_10pct.txt \
+    --val-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/val_bbox.txt \
+    --test-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/test_bbox.txt \
     --bounding-box-face /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/emotic_face_bboxes_mtcnn.json \
     --bounding-box-body /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/emotic_body_bboxes.json

@@ -41,6 +41,13 @@ class VideoRecord(object):
         if ',' in lbl_str:
             return [int(x.strip()) for x in lbl_str.split(',') if x.strip()]
         return int(lbl_str)
+        
+    @property
+    def inline_bbox(self):
+        # Returns [x1, y1, x2, y2] if available
+        if len(self._data) >= 7:
+            return [int(self._data[3]), int(self._data[4]), int(self._data[5]), int(self._data[6])]
+        return None
 
 class VideoDataset(data.Dataset):
     def __init__(self, list_file, num_segments, duration, mode, transform, image_size,bounding_box_face,bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name=""):
@@ -140,9 +147,13 @@ class VideoDataset(data.Dataset):
             for line in f:
                 parts = line.strip().split(' ')
                 if len(parts) == 2:
-                    # Case: [path, label] (e.g., EMOTIC images)
+                    # Case: [path, label] (e.g., EMOTIC images train.txt)
                     # We inject num_frames = 1
                     self.sample_list.append([parts[0], 1, parts[1]])
+                elif len(parts) == 6 and ',' in parts[1]:
+                    # Case: [path, label, x1, y1, x2, y2] (e.g., EMOTIC train_bbox.txt)
+                    # We inject num_frames = 1 and keep the inline bbox coordinates
+                    self.sample_list.append([parts[0], 1, parts[1], parts[2], parts[3], parts[4], parts[5]])
                 elif len(parts) > 3:
                     # Path contains spaces, join all parts except the last two
                     path = ' '.join(parts[:-2])
@@ -311,6 +322,10 @@ class VideoDataset(data.Dataset):
                     if matched_video_key and matched_video_key in self.body_boxes:
                         if frame_key in self.body_boxes[matched_video_key]:
                             body_box = self.body_boxes[matched_video_key][frame_key]
+                            
+                    # Fallback to inline bbox from train_bbox.txt if JSON is missing
+                    if body_box is None and hasattr(record, 'inline_bbox') and record.inline_bbox is not None:
+                        body_box = record.inline_bbox
                     
                     if body_box is not None:
                         left, upper, right, lower = body_box

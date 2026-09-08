@@ -3,13 +3,13 @@
 # Configuration
 EXP_NAME="EMOTIC_RAPT_CLIP_ASL"
 BATCH_SIZE=8
-EPOCHS=15
+EPOCHS=35
 
 # Kaggle Dataset Paths
 ROOT_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
-TRAIN_ANNOT="${ROOT_DIR}/train.txt"
-VAL_ANNOT="${ROOT_DIR}/val.txt"
-TEST_ANNOT="${ROOT_DIR}/test.txt"
+TRAIN_ANNOT="${ROOT_DIR}/train_bbox.txt"
+VAL_ANNOT="${ROOT_DIR}/val_bbox.txt"
+TEST_ANNOT="${ROOT_DIR}/test_bbox.txt"
 
 BBOX_FACE="${ROOT_DIR}/emotic_face_bboxes_mtcnn.json"
 BBOX_BODY="${ROOT_DIR}/emotic_body_bboxes.json"
