@@ -31,12 +31,12 @@ python main.py \
     --lr-image-encoder 0 \
     --lr-prompt-learner 5e-5 \
     --lr-adapter 1e-4 \
-    --weight-decay 0.01 \
+    --weight-decay 0.005 \
     --milestones 5 8 \
     --gamma 0.1 \
     --use-amp \
     --freeze-image-encoder \
-    --mixup-alpha 0.2 \
+    --mixup-alpha 0.0 \
     --modality-dropout 0.3 \
     --fusion-type cmaf \
     --use-context \
