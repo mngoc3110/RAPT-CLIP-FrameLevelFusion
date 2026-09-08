@@ -221,10 +221,9 @@ def run_training(args: argparse.Namespace) -> None:
         print(f"=> Calculating class distribution from EMOTIC sample_list...")
         for record in train_loader.dataset.sample_list:
             labels = str(record[-1]).split(',')
-            for l in labels:
-                l = l.strip()
-                if l and 0 <= int(l) < len(cls_num_list):
-                    cls_num_list[int(l)] += 1
+            for idx, l in enumerate(labels):
+                if l.strip() == '1' and idx < len(cls_num_list):
+                    cls_num_list[idx] += 1
     elif hasattr(train_loader.dataset, 'video_list'):
         print(f"=> Calculating class distribution from video_list...")
         for record in train_loader.dataset.video_list:

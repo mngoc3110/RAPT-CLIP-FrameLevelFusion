@@ -135,20 +135,22 @@ class VideoDataset(data.Dataset):
                 return occluded_image
     
     def _read_sample(self):
-        # tmp = [x.strip().split(' ') for x in open(self.list_file)]
-        # self.sample_list = [item for item in tmp]
-        
         self.sample_list = []
         with open(self.list_file, 'r') as f:
             for line in f:
                 parts = line.strip().split(' ')
-                if len(parts) > 3:
+                if len(parts) == 2:
+                    # Case: [path, label] (e.g., EMOTIC images)
+                    # We inject num_frames = 1
+                    self.sample_list.append([parts[0], 1, parts[1]])
+                elif len(parts) > 3:
                     # Path contains spaces, join all parts except the last two
                     path = ' '.join(parts[:-2])
                     num_frames = parts[-2]
                     label = parts[-1]
                     self.sample_list.append([path, num_frames, label])
                 else:
+                    # Case: [path, num_frames, label] (e.g., standard RAER)
                     self.sample_list.append(parts)
 
 
@@ -361,13 +363,8 @@ class VideoDataset(data.Dataset):
         
         # Process target to multi-hot if it's a list (EMOTIC)
         if isinstance(record.label, list):
-            target_tensor = torch.zeros(26) # Hardcoded 26 for EMOTIC for simplicity
-            for l in record.label:
-                # Assuming labels are 0-indexed in EMOTIC? Wait, in RAER they are 1-indexed.
-                # EMOTIC dataset labels in annotation file: check if they are 0 or 1-indexed.
-                # Assuming 0-indexed for EMOTIC based on 'cls_num_list[int(l)] += 1'
-                if 0 <= l < 26:
-                    target_tensor[l] = 1.0
+            # record.label is already a list of 0s and 1s representing the multi-hot vector
+            target_tensor = torch.tensor(record.label, dtype=torch.float32)
             return process_data_face, process_data, process_data_context, target_tensor
         else:
             return process_data_face, process_data, process_data_context, record.label - 1
