@@ -1,27 +1,13 @@
 #!/bin/bash
 
-# Configuration
-EXP_NAME="EMOTIC_RAPT_CLIP_ASL"
-BATCH_SIZE=8
-EPOCHS=15
-
-# Kaggle Dataset Paths
-ROOT_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
-TRAIN_ANNOT="${ROOT_DIR}/train.txt"
-VAL_ANNOT="${ROOT_DIR}/val.txt"
-TEST_ANNOT="${ROOT_DIR}/test.txt"
-
-BBOX_FACE="${ROOT_DIR}/emotic_face_bboxes_mtcnn.json"
-BBOX_BODY="${ROOT_DIR}/emotic_body_bboxes.json"
-
 python main.py \
     --mode train \
-    --exper-name ${EXP_NAME} \
+    --exper-name EMOTIC-Test-MPS \
     --dataset EMOTIC \
-    --gpu 0 \
+    --gpu mps \
     --workers 4 \
-    --batch-size ${BATCH_SIZE} \
-    --epochs ${EPOCHS} \
+    --batch-size 8 \
+    --epochs 1 \
     --optimizer AdamW \
     --lr 2e-5 \
     --lr-image-encoder 1e-6 \
@@ -30,7 +16,6 @@ python main.py \
     --weight-decay 0.005 \
     --milestones 10 15 \
     --gamma 0.1 \
-    --use-amp \
     --fusion-type cmaf \
     --use-context \
     --crop-body \
@@ -51,9 +36,9 @@ python main.py \
     --class-token-position end \
     --class-specific-contexts True \
     --load_and_tune_prompt_learner True \
-    --root-dir ${ROOT_DIR}/cvpr_emotic \
-    --train-annotation ${TRAIN_ANNOT} \
-    --val-annotation ${VAL_ANNOT} \
-    --test-annotation ${TEST_ANNOT} \
-    --bounding-box-face ${BBOX_FACE} \
-    --bounding-box-body ${BBOX_BODY}
+    --root-dir /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/cvpr_emotic \
+    --train-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/train_10pct.txt \
+    --val-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/val.txt \
+    --test-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/test.txt \
+    --bounding-box-face /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/emotic_face_bboxes_mtcnn.json \
+    --bounding-box-body /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/emotic_body_bboxes.json
