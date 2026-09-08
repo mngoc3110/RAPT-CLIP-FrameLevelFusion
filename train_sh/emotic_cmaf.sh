@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Configuration — Anti-Overfit v2
-EXP_NAME="EMOTIC_RAPT_CLIP_ASL_v2"
+# Configuration — Balanced Anti-Overfit v3
+EXP_NAME="EMOTIC_RAPT_CLIP_ASL_v3"
 BATCH_SIZE=16
 EPOCHS=20  # Valid plateaus ~Epoch 10, no need for 35 epochs
 
@@ -29,14 +29,14 @@ python main.py \
     --optimizer AdamW \
     --lr 2e-5 \
     --lr-image-encoder 0 \
-    --lr-prompt-learner 5e-6 \
+    --lr-prompt-learner 5e-5 \
     --lr-adapter 1e-4 \
-    --weight-decay 0.02 \
+    --weight-decay 0.01 \
     --milestones 5 8 \
     --gamma 0.1 \
     --use-amp \
     --freeze-image-encoder \
-    --mixup-alpha 0.4 \
+    --mixup-alpha 0.2 \
     --modality-dropout 0.3 \
     --fusion-type cmaf \
     --use-context \
