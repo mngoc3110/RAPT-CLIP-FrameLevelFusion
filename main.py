@@ -220,7 +220,10 @@ def run_training(args: argparse.Namespace) -> None:
     if args.dataset == 'EMOTIC' and hasattr(train_loader.dataset, 'sample_list'):
         print(f"=> Calculating class distribution from EMOTIC sample_list...")
         for record in train_loader.dataset.sample_list:
-            labels = str(record[-1]).split(',')
+            # record format: [path, num_frames, label_str, ...bbox coords...]
+            # label is ALWAYS at index 2, NOT record[-1] (which may be a bbox coord)
+            label_str = str(record[2])
+            labels = label_str.split(',')
             for idx, l in enumerate(labels):
                 if l.strip() == '1' and idx < len(cls_num_list):
                     cls_num_list[idx] += 1

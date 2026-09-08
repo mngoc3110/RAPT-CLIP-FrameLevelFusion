@@ -205,12 +205,23 @@ class VideoDataset(data.Dataset):
         return self.get(record, segment_indices)
 
     def get(self, record, indices):
-        # Check if record.path is a directory (frames) or a file (video)
+        # Check if record.path is a directory (frames) or a file (video/image)
+        IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
+        is_image_file = record.path.lower().endswith(IMAGE_EXTS)
+        
         if os.path.isdir(record.path):
             video_frames_path = glob.glob(os.path.join(record.path, '*'))
             video_frames_path.sort()
             num_real_frames = len(video_frames_path)
             is_video_file = False
+            is_valid = num_real_frames > 0
+        elif is_image_file:
+            # Static image (EMOTIC): read directly with PIL, treat as single frame
+            is_video_file = False
+            num_real_frames = 1
+            is_valid = os.path.exists(record.path)
+            if not is_valid:
+                print(f"Warning: Image not found: {record.path}, returning zeros.")
         else:
             # Assume it's a video file
             is_video_file = True
@@ -218,10 +229,10 @@ class VideoDataset(data.Dataset):
             num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             is_valid = cap.isOpened() and num_real_frames > 0
             if not is_valid:
-                 print(f"Warning: Could not open video file {record.path}, returning zeros.")
+                print(f"Warning: Could not open video file {record.path}, returning zeros.")
 
         # For frame-directory datasets, is_valid is based on whether frames exist
-        if not is_video_file:
+        if not is_video_file and not is_image_file:
             is_valid = num_real_frames > 0
 
         if not is_valid:
@@ -253,7 +264,13 @@ class VideoDataset(data.Dataset):
                 box = None
                 
                 # 1. Read Image — smart sequential seek to avoid expensive cap.set() on every frame
-                if is_video_file:
+                if is_image_file:
+                    # Static image file (EMOTIC): just open with PIL directly
+                    try:
+                        img_pil = Image.open(record.path).convert('RGB')
+                    except Exception as e:
+                        img_pil = Image.new('RGB', (self.image_size, self.image_size))
+                elif is_video_file:
                     gap = p - current_frame_idx
                     if gap == 1:
                         # Next consecutive frame: just read directly
@@ -283,42 +300,56 @@ class VideoDataset(data.Dataset):
                         img_pil = Image.new('RGB', (self.image_size, self.image_size))
 
                 # 2. Key Lookup Strategy for Bounding Box
-                # Construct possible keys to look up in the JSON
-                # Priority 1: Full relative path from dataset root (e.g., 'RAER/train/Neutral/001')
-                # Priority 2: Parent dir + Filename (e.g., 'Neutral/001')
-                
                 # Normalize path separators to forward slash
                 rel_path = record.path.replace('./', '').replace('\\', '/')
-                # Remove extension
-                video_key_full = os.path.splitext(rel_path)[0]
-                
-                frame_key = f"{p}.jpg" # Standard frame key format
-                
-                # Try finding the video key in boxes
-                matched_video_key = None
-                
-                # Strategy A: Exact match
-                if video_key_full in self.boxs:
-                    matched_video_key = video_key_full
-                
-                # Strategy B: Suffix match (handle 'dataset/' prefix issues)
-                if matched_video_key is None:
-                    parts = video_key_full.split('/')
-                    for idx in range(1, len(parts)):
-                        sub_key = '/'.join(parts[idx:])
-                        if sub_key in self.boxs:
-                            matched_video_key = sub_key
+                # Remove root_dir prefix to get relative key
+                if self.root_dir and rel_path.startswith(self.root_dir.replace('\\', '/')):
+                    rel_key = rel_path[len(self.root_dir.rstrip('/')) + 1:]
+                else:
+                    rel_key = rel_path
+                    # Also try stripping any common leading path
+                    parts_full = rel_key.split('/')
+                    for start in range(1, len(parts_full)):
+                        candidate = '/'.join(parts_full[start:])
+                        if candidate in self.boxs:
+                            rel_key = candidate
                             break
-                
-                # 3. Retrieve Box
-                if matched_video_key and frame_key in self.boxs[matched_video_key]:
-                    box = self.boxs[matched_video_key][frame_key]
-                
-                # Debug logging for missing boxes (only once per video to avoid spam)
-                if box is None and i == 0 and p == indices[0]: 
-                    # Only log if it's the first frame of the first segment
-                    # print(f"[DEBUG] Missing Box: Video='{video_key_full}', Frame='{frame_key}'. MatchedKey='{matched_video_key}'")
-                    pass
+
+                box = None
+                if is_image_file:
+                    # EMOTIC flat JSON: {"mscoco/images/xxx.jpg": [x1,y1,x2,y2]}
+                    if rel_key in self.boxs:
+                        raw = self.boxs[rel_key]
+                        # Value can be [x1,y1,x2,y2] directly or a list of lists
+                        if isinstance(raw[0], (int, float)):
+                            box = raw
+                        else:
+                            box = raw[0]  # take first bbox
+                    else:
+                        # Try suffix-match fallback
+                        rel_key_parts = rel_key.split('/')
+                        for start in range(1, len(rel_key_parts)):
+                            candidate = '/'.join(rel_key_parts[start:])
+                            if candidate in self.boxs:
+                                raw = self.boxs[candidate]
+                                box = raw if isinstance(raw[0], (int, float)) else raw[0]
+                                break
+                else:
+                    # RAER nested JSON: {"video_id": {"0.jpg": [x1,y1,x2,y2]}}
+                    video_key_full = os.path.splitext(rel_key)[0]
+                    frame_key = f"{p}.jpg"
+                    matched_video_key = None
+                    if video_key_full in self.boxs:
+                        matched_video_key = video_key_full
+                    if matched_video_key is None:
+                        parts = video_key_full.split('/')
+                        for idx in range(1, len(parts)):
+                            sub_key = '/'.join(parts[idx:])
+                            if sub_key in self.boxs:
+                                matched_video_key = sub_key
+                                break
+                    if matched_video_key and frame_key in self.boxs[matched_video_key]:
+                        box = self.boxs[matched_video_key][frame_key]
 
                 # 4. Face Detection (Crop)
                 # Reduce margin to 10 (Tight Crop) to zoom in on micro-expressions (eyebrows/eyes)
@@ -330,12 +361,28 @@ class VideoDataset(data.Dataset):
                 img_pil_body = img_pil # Default to full image
                 if self.crop_body:
                     body_box = None
-                    if matched_video_key and matched_video_key in self.body_boxes:
-                        if frame_key in self.body_boxes[matched_video_key]:
-                            body_box = self.body_boxes[matched_video_key][frame_key]
-                            
+                    if is_image_file:
+                        # EMOTIC flat JSON: {"mscoco/images/xxx.jpg": [x1,y1,x2,y2]}
+                        if rel_key in self.body_boxes:
+                            raw = self.body_boxes[rel_key]
+                            body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
+                        else:
+                            # suffix-match fallback
+                            rel_key_parts = rel_key.split('/')
+                            for start in range(1, len(rel_key_parts)):
+                                candidate = '/'.join(rel_key_parts[start:])
+                                if candidate in self.body_boxes:
+                                    raw = self.body_boxes[candidate]
+                                    body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
+                                    break
+                    else:
+                        # RAER nested JSON lookup (uses matched_video_key/frame_key from above)
+                        if 'matched_video_key' in dir() and matched_video_key and matched_video_key in self.body_boxes:
+                            if 'frame_key' in dir() and frame_key in self.body_boxes[matched_video_key]:
+                                body_box = self.body_boxes[matched_video_key][frame_key]
+                    
                     # Fallback to inline bbox from train_bbox.txt if JSON is missing
-                    if body_box is None and hasattr(record, 'inline_bbox') and record.inline_bbox is not None:
+                    if body_box is None and record.inline_bbox is not None:
                         body_box = record.inline_bbox
                     
                     if body_box is not None:
@@ -365,7 +412,7 @@ class VideoDataset(data.Dataset):
                 if p < num_real_frames - 1:
                     p += 1
         
-        if is_video_file:
+        if is_video_file and 'cap' in dir() and cap is not None:
             cap.release()
 
         # Transforms take a list of PIL images
