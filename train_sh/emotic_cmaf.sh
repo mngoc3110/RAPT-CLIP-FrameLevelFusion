@@ -2,7 +2,7 @@
 
 # Configuration
 EXP_NAME="EMOTIC_RAPT_CLIP_ASL"
-BATCH_SIZE=8
+BATCH_SIZE=16
 EPOCHS=35
 
 # Kaggle Dataset Paths
