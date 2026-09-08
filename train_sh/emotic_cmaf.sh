@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Configuration
-EXP_NAME="EMOTIC_RAPT_CLIP_ASL"
+# Configuration — Anti-Overfit v2
+EXP_NAME="EMOTIC_RAPT_CLIP_ASL_v2"
 BATCH_SIZE=16
-EPOCHS=35
+EPOCHS=20  # Valid plateaus ~Epoch 10, no need for 35 epochs
 
 # Kaggle Dataset Paths
 BASE_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
@@ -28,13 +28,16 @@ python main.py \
     --epochs ${EPOCHS} \
     --optimizer AdamW \
     --lr 2e-5 \
-    --lr-image-encoder 1e-6 \
-    --lr-prompt-learner 3e-4 \
+    --lr-image-encoder 0 \
+    --lr-prompt-learner 5e-6 \
     --lr-adapter 1e-4 \
-    --weight-decay 0.005 \
-    --milestones 10 15 \
+    --weight-decay 0.02 \
+    --milestones 5 8 \
     --gamma 0.1 \
     --use-amp \
+    --freeze-image-encoder \
+    --mixup-alpha 0.4 \
+    --modality-dropout 0.3 \
     --fusion-type cmaf \
     --use-context \
     --crop-body \
@@ -46,9 +49,9 @@ python main.py \
     --grad-clip 1.0 \
     --lambda_mi 0.1 \
     --lambda_dc 0.1 \
-    --mi-warmup 2 \
+    --mi-warmup 7 \
     --mi-ramp 5 \
-    --dc-warmup 2 \
+    --dc-warmup 7 \
     --dc-ramp 5 \
     --text-type prompt_ensemble \
     --contexts-number 8 \
