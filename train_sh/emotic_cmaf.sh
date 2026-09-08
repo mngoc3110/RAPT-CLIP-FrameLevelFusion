@@ -6,13 +6,17 @@ BATCH_SIZE=8
 EPOCHS=35
 
 # Kaggle Dataset Paths
-ROOT_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
-TRAIN_ANNOT="${ROOT_DIR}/train_bbox.txt"
-VAL_ANNOT="${ROOT_DIR}/val_bbox.txt"
-TEST_ANNOT="${ROOT_DIR}/test_bbox.txt"
+BASE_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
+ROOT_DIR="${BASE_DIR}/cvpr_emotic/cvpr_emotic"  # actual images live here
 
-BBOX_FACE="${ROOT_DIR}/emotic_face_bboxes_mtcnn.json"
-BBOX_BODY="${ROOT_DIR}/emotic_body_bboxes.json"
+# Annotation files live in the cvpr_emotic/ (outer) folder
+ANNOT_DIR="${BASE_DIR}/cvpr_emotic"
+TRAIN_ANNOT="${ANNOT_DIR}/train_bbox.txt"
+VAL_ANNOT="${ANNOT_DIR}/val_bbox.txt"
+TEST_ANNOT="${ANNOT_DIR}/test_bbox.txt"
+
+BBOX_FACE="${ANNOT_DIR}/emotic_face_bboxes_mtcnn.json"
+BBOX_BODY="${ANNOT_DIR}/emotic_body_bboxes.json"
 
 python main.py \
     --mode train \
@@ -51,7 +55,7 @@ python main.py \
     --class-token-position end \
     --class-specific-contexts True \
     --load_and_tune_prompt_learner True \
-    --root-dir ${ROOT_DIR}/cvpr_emotic \
+    --root-dir ${ROOT_DIR} \
     --train-annotation ${TRAIN_ANNOT} \
     --val-annotation ${VAL_ANNOT} \
     --test-annotation ${TEST_ANNOT} \
