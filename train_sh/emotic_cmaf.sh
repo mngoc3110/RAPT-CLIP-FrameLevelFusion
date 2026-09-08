@@ -7,13 +7,12 @@ EPOCHS=15
 
 # Kaggle Dataset Paths
 ROOT_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
-TRAIN_ANNOT="${ROOT_DIR}/Annotations/train.txt"
-VAL_ANNOT="${ROOT_DIR}/Annotations/val.txt"
-TEST_ANNOT="${ROOT_DIR}/Annotations/test.txt"
+TRAIN_ANNOT="${ROOT_DIR}/train.txt"
+VAL_ANNOT="${ROOT_DIR}/val.txt"
+TEST_ANNOT="${ROOT_DIR}/test.txt"
 
-# Assuming bbox JSONs are also placed in Annotations
-BBOX_FACE="${ROOT_DIR}/Annotations/face_bbox.json"
-BBOX_BODY="${ROOT_DIR}/Annotations/body_bbox.json"
+BBOX_FACE="${ROOT_DIR}/emotic_face_bboxes.json"
+BBOX_BODY="${ROOT_DIR}/emotic_body_bboxes.json"
 
 python main.py \
     --mode train \
@@ -52,7 +51,7 @@ python main.py \
     --class-token-position end \
     --class-specific-contexts True \
     --load_and_tune_prompt_learner True \
-    --root-dir ${ROOT_DIR} \
+    --root-dir ${ROOT_DIR}/cvpr_emotic \
     --train-annotation ${TRAIN_ANNOT} \
     --val-annotation ${VAL_ANNOT} \
     --test-annotation ${TEST_ANNOT} \
