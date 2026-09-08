@@ -36,10 +36,14 @@ class VideoRecord(object):
 
     @property       # 标签
     def label(self):
-        return int(self._data[2])
+        # Support multi-label (e.g. '1,4,12')
+        lbl_str = str(self._data[2])
+        if ',' in lbl_str:
+            return [int(x.strip()) for x in lbl_str.split(',') if x.strip()]
+        return int(lbl_str)
 
 class VideoDataset(data.Dataset):
-    def __init__(self, list_file, num_segments, duration, mode, transform, image_size,bounding_box_face,bounding_box_body, crop_body=False, root_dir="", num_classes=8):
+    def __init__(self, list_file, num_segments, duration, mode, transform, image_size,bounding_box_face,bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name=""):
         self.list_file = list_file
         self.duration = duration
         self.num_segments = num_segments
@@ -50,6 +54,7 @@ class VideoDataset(data.Dataset):
         self.bounding_box_body = bounding_box_body
         self.crop_body = crop_body
         self.root_dir = root_dir
+        self.dataset_name = dataset_name
         
         # Debugging: Initialize for saving sample images
         self.debug_samples_path = 'debug_samples'
@@ -103,8 +108,11 @@ class VideoDataset(data.Dataset):
     def _face_detect(self,img,box,margin,mode = 'face'):
         if box is None:
             if mode == 'face':
-                # FALLBACK: Return original image instead of black image if no face detected
-                # This helps prevent information loss in Test set
+                if self.dataset_name == 'EMOTIC':
+                    # Fallback for EMOTIC: Center crop 60% to avoid copying full context
+                    w, h = img.size
+                    return img.crop((int(w * 0.2), int(h * 0.2), int(w * 0.8), int(h * 0.8)))
+                # Default FALLBACK: Return original image instead of black image if no face detected
                 return img
             return img
         else:
@@ -351,7 +359,18 @@ class VideoDataset(data.Dataset):
         process_data_face = process_data_face.view(-1, 3, self.image_size, self.image_size)
         process_data_context = process_data_context.view(-1, 3, self.image_size, self.image_size)
         
-        return process_data_face, process_data, process_data_context, record.label - 1
+        # Process target to multi-hot if it's a list (EMOTIC)
+        if isinstance(record.label, list):
+            target_tensor = torch.zeros(26) # Hardcoded 26 for EMOTIC for simplicity
+            for l in record.label:
+                # Assuming labels are 0-indexed in EMOTIC? Wait, in RAER they are 1-indexed.
+                # EMOTIC dataset labels in annotation file: check if they are 0 or 1-indexed.
+                # Assuming 0-indexed for EMOTIC based on 'cls_num_list[int(l)] += 1'
+                if 0 <= l < 26:
+                    target_tensor[l] = 1.0
+            return process_data_face, process_data, process_data_context, target_tensor
+        else:
+            return process_data_face, process_data, process_data_context, record.label - 1
 
     def __len__(self):
         return len(self.video_list)
@@ -368,6 +387,14 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size,da
             GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor()])
+    elif dataset_name == "EMOTIC":
+         train_transforms = torchvision.transforms.Compose([
+            GroupResize(image_size),
+            GroupRandomHorizontalFlip(),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+         ])
     else:
          # Default transforms for other datasets like CK+
          train_transforms = torchvision.transforms.Compose([
@@ -386,15 +413,22 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size,da
                               bounding_box_face=bounding_box_face,
                               bounding_box_body=bounding_box_body,
                               crop_body=crop_body,
-                              num_classes=num_classes
+                              num_classes=num_classes,
+                              dataset_name=dataset_name
                               )
     return train_data
 
 
-def test_data_loader(root_dir, list_file, num_segments, duration, image_size,bounding_box_face,bounding_box_body, crop_body=False, num_classes=8):
-    test_transform = torchvision.transforms.Compose([GroupResize(image_size),
-                                                     Stack(),
-                                                     ToTorchFormatTensor()])
+def test_data_loader(root_dir, list_file, num_segments, duration, image_size,bounding_box_face,bounding_box_body, crop_body=False, num_classes=8, dataset_name=""):
+    if dataset_name == "EMOTIC":
+        test_transform = torchvision.transforms.Compose([GroupResize(image_size),
+                                                         Stack(),
+                                                         ToTorchFormatTensor(),
+                                                         GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])])
+    else:
+        test_transform = torchvision.transforms.Compose([GroupResize(image_size),
+                                                         Stack(),
+                                                         ToTorchFormatTensor()])
     
     test_data = VideoDataset(root_dir=root_dir, list_file=list_file,
                              num_segments=num_segments,
@@ -405,6 +439,7 @@ def test_data_loader(root_dir, list_file, num_segments, duration, image_size,bou
                              bounding_box_face=bounding_box_face,
                              bounding_box_body=bounding_box_body,
                              crop_body=crop_body,
-                             num_classes=num_classes
+                             num_classes=num_classes,
+                             dataset_name=dataset_name
                              )
     return test_data

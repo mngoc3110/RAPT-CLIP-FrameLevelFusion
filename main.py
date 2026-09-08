@@ -216,8 +216,16 @@ def run_training(args: argparse.Namespace) -> None:
 
     # Calculate cls_num_list for LDAM or other imbalance handling
     cls_num_list = [0] * len(class_names)
-    # Check if dataset has video_list (standard VideoDataset)
-    if hasattr(train_loader.dataset, 'video_list'):
+    
+    if args.dataset == 'EMOTIC' and hasattr(train_loader.dataset, 'sample_list'):
+        print(f"=> Calculating class distribution from EMOTIC sample_list...")
+        for record in train_loader.dataset.sample_list:
+            labels = str(record[-1]).split(',')
+            for l in labels:
+                l = l.strip()
+                if l and 0 <= int(l) < len(cls_num_list):
+                    cls_num_list[int(l)] += 1
+    elif hasattr(train_loader.dataset, 'video_list'):
         print(f"=> Calculating class distribution from video_list...")
         for record in train_loader.dataset.video_list:
             # Labels in RAER/CAER annotations are typically 1-based (e.g., 1..8)
@@ -229,14 +237,15 @@ def run_training(args: argparse.Namespace) -> None:
     else:
         # Fallback or warning if dataset structure is different
         print("=> Warning: Could not calculate class distribution directly from dataset. Using uniform distribution placeholder if needed.")
-        # Attempt to infer from simple iteration if small, but likely too slow. 
-        # For now, just warn. LDAM might fail or perform poorly if this is zero.
         pass
     
     print(f"=> Class distribution (Training): {cls_num_list}")
 
     # Loss and optimizer
-    if args.use_ldl:
+    if args.dataset == 'EMOTIC':
+        print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
+        criterion = AsymmetricLoss(gamma_neg=4, gamma_pos=1, clip=0.05).to(args.device)
+    elif args.use_ldl:
         print(f"=> Using SemanticLDLLoss (LDL) with temperature {args.ldl_temperature}")
         criterion = SemanticLDLLoss(temperature=args.ldl_temperature).to(args.device)
     elif args.loss_type == 'ldam':

@@ -244,21 +244,22 @@ class Trainer:
                         else:
                             classification_loss = current_criterion(output, target)
                     
-                    # DEBUG: Print details for the first batch of the first epoch
-                    if is_train and int(epoch_str) == 0 and i == 0:
-                        print(f"\n[DEBUG] Batch 0 Check:")
-                        print(f"  Logits Shape: {output.shape}")
-                        print(f"  Target Shape: {target.shape}")
-                        # Move to CPU first to avoid triggering CUDA sync errors on bad targets
-                        target_cpu = target.detach().cpu()
-                        print(f"  Target Min/Max: {target_cpu.min().item()} / {target_cpu.max().item()}")
-                        print(f"  Unique Targets: {target_cpu.unique().tolist()}")
-                        logits_np = output[:2].detach().cpu().numpy()
-                        print(f"  Logits (first 2): {logits_np}")
-                        print(f"  Targets (first 2): {target_cpu[:2].numpy()}")
-                        print(f"  CE/LDL Loss: {classification_loss.item():.6f}")
+                    # DEBUG: Print details for the first batch
+                    if is_train and i == 0:
+                        logits_np = output.detach().cpu().float().numpy()
+                        probs_np = torch.sigmoid(output).detach().cpu().float().numpy()
+                        print(f"\n=================================================================")
+                        print(f"[BATCH-0 DIAGNOSIS] Epoch {epoch_str}")
+                        print(f"  Logits  → min:{logits_np.min():.3f} max:{logits_np.max():.3f} mean:{logits_np.mean():.3f} std:{logits_np.std():.3f}")
+                        print(f"  Sigmoid → min:{probs_np.min():.5f} max:{probs_np.max():.5f} mean:{probs_np.mean():.5f}")
+                        pred_over_05 = (probs_np > 0.5).mean()
+                        print(f"  Pred>0.5 rate: {pred_over_05:.4f}")
+                        saturated = (np.abs(logits_np) > 10).mean() * 100
+                        print(f"  |logit|>10 (saturated): {saturated:.2f}%")
+                        print(f"  Classification Loss: {classification_loss.item():.6f}")
                         if hasattr(self.model, 'args') and hasattr(self.model.args, 'temperature'):
-                             print(f"  Model Temperature: {self.model.args.temperature}")
+                             print(f"  Temperature: {self.model.args.temperature}")
+                        print(f"=================================================================\n")
 
                     loss = classification_loss
 
@@ -298,18 +299,23 @@ class Trainer:
                     self.ema.update(self.model)
 
                 # Record metrics
-                preds = output.argmax(dim=1)
-                correct_preds = preds.eq(target).sum().item()
-                acc = (correct_preds / target.size(0)) * 100.0
+                is_emotic = hasattr(self.model, 'args') and self.model.args.dataset == 'EMOTIC'
+                if is_emotic:
+                    preds = torch.sigmoid(output)
+                    acc = 0.0 # Handled at epoch level
+                    all_preds_list.append(preds.detach().cpu())
+                    all_targets_list.append(target.detach().cpu())
+                else:
+                    preds = output.argmax(dim=1)
+                    correct_preds = preds.eq(target).sum().item()
+                    acc = (correct_preds / target.size(0)) * 100.0
+                    all_preds_list.append(preds.cpu())
+                    all_targets_list.append(target.cpu())
 
                 losses.update(loss.item(), target.size(0))
                 war_meter.update(acc, target.size(0))
 
-                # Collect preds for UAR
-                all_preds_list.append(preds.cpu())
-                all_targets_list.append(target.cpu())
-
-                if not is_train and saved_images_count < 32:
+                if not is_train and saved_images_count < 32 and not is_emotic:
                     for img_idx in range(images_face.size(0)):
                         if saved_images_count < 32:
                             self._save_debug_image(
@@ -326,7 +332,7 @@ class Trainer:
                 
                 # Update progress bar with Running UAR
                 running_uar = 0.0
-                if len(all_preds_list) > 0:
+                if len(all_preds_list) > 0 and not is_emotic:
                     curr_preds = torch.cat(all_preds_list).numpy()
                     curr_targets = torch.cat(all_targets_list).numpy()
                     # Only calc UAR every 10 batches to save CPU time
@@ -340,26 +346,67 @@ class Trainer:
                 
                 pbar.set_postfix({
                     'Loss': f"{losses.avg:.4f}",
-                    'WAR': f"{war_meter.avg:.2f}%",
-                    'UAR': f"{running_uar:.2f}%"
+                    'WAR': f"{war_meter.avg:.2f}%" if not is_emotic else "N/A",
+                    'UAR': f"{running_uar:.2f}%" if not is_emotic else "N/A"
                 })
         
         # Calculate epoch-level metrics
-        all_preds = torch.cat(all_preds_list)
-        all_targets = torch.cat(all_targets_list)
-        
-        cm = confusion_matrix(all_targets.numpy(), all_preds.numpy())
-        war = war_meter.avg 
-        
-        class_acc = cm.diagonal() / (cm.sum(axis=1) + 1e-6)
-        uar = np.nanmean(class_acc) * 100
+        if is_emotic:
+            from sklearn.metrics import average_precision_score
+            all_preds = torch.cat(all_preds_list).numpy()
+            all_targets = torch.cat(all_targets_list).numpy()
+            
+            ap_scores = []
+            for c in range(all_targets.shape[1]):
+                try:
+                    ap = average_precision_score(all_targets[:, c], all_preds[:, c])
+                    if not np.isnan(ap):
+                        ap_scores.append(ap)
+                except:
+                    pass
+            
+            macro_map = np.mean(ap_scores) * 100 if ap_scores else 0.0
+            war = macro_map # Use mAP to track best model
+            uar = macro_map
+            cm = f"Multi-label EMOTIC mAP: {macro_map:.2f}%"
+            
+            prefix = f"{mode_str} Epoch: [{epoch_str}]"
+            logging.info(f"{prefix} * mAP: {macro_map:.3f}")
+            with open(self.log_txt_path, 'a') as f:
+                f.write(f'Current mAP: {macro_map:.3f}\n')
+                
+            if not is_train:
+                from sklearn.metrics import precision_recall_curve
+                thresholds_dict = {}
+                for c in range(all_targets.shape[1]):
+                    try:
+                        precision, recall, thresholds = precision_recall_curve(all_targets[:, c], all_preds[:, c])
+                        f1_scores = 2 * recall * precision / (recall + precision + 1e-6)
+                        best_thresh_idx = np.argmax(f1_scores)
+                        best_thresh = thresholds[best_thresh_idx] if best_thresh_idx < len(thresholds) else 0.5
+                        thresholds_dict[c] = float(best_thresh)
+                    except:
+                        thresholds_dict[c] = 0.5
+                print(f"Optimal Thresholds computed.")
+                with open(os.path.join(os.path.dirname(self.log_txt_path), "emotic_thresholds.txt"), "w") as f:
+                    f.write(str(thresholds_dict))
+            return war, uar, losses.avg, cm
+        else:
+            all_preds = torch.cat(all_preds_list)
+            all_targets = torch.cat(all_targets_list)
+            
+            cm = confusion_matrix(all_targets.numpy(), all_preds.numpy())
+            war = war_meter.avg 
+            
+            class_acc = cm.diagonal() / (cm.sum(axis=1) + 1e-6)
+            uar = np.nanmean(class_acc) * 100
 
-        prefix = f"{mode_str} Epoch: [{epoch_str}]"
-        logging.info(f"{prefix} * WAR: {war:.3f} | UAR: {uar:.3f}")
-        with open(self.log_txt_path, 'a') as f:
-            f.write('Current WAR: {war:.3f}'.format(war=war) + '\n')
-            f.write('Current UAR: {uar:.3f}'.format(uar=uar) + '\n')
-        return war, uar, losses.avg, cm
+            prefix = f"{mode_str} Epoch: [{epoch_str}]"
+            logging.info(f"{prefix} * WAR: {war:.3f} | UAR: {uar:.3f}")
+            with open(self.log_txt_path, 'a') as f:
+                f.write('Current WAR: {war:.3f}'.format(war=war) + '\n')
+                f.write('Current UAR: {uar:.3f}'.format(uar=uar) + '\n')
+            return war, uar, losses.avg, cm
         
     def train_epoch(self, train_loader, epoch_num):
         """Executes one full training epoch."""

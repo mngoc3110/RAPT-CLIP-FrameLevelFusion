@@ -146,7 +146,8 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         duration=args.duration, image_size=args.image_size,
         bounding_box_face=args.bounding_box_face,bounding_box_body=args.bounding_box_body,
         crop_body=args.crop_body,
-        num_classes=num_classes
+        num_classes=num_classes,
+        dataset_name=args.dataset
     )
 
     print(f"Loading test data (Standard) for {args.dataset}...")
@@ -155,7 +156,8 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         duration=args.duration, image_size=args.image_size,
         bounding_box_face=args.bounding_box_face,bounding_box_body=args.bounding_box_body,
         crop_body=args.crop_body,
-        num_classes=num_classes
+        num_classes=num_classes,
+        dataset_name=args.dataset
     )
 
     print(f"Total number of training images: {len(train_data)}")
