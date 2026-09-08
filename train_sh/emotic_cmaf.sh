@@ -9,8 +9,8 @@ EPOCHS=35
 BASE_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
 ROOT_DIR="${BASE_DIR}/cvpr_emotic/cvpr_emotic"  # actual images live here
 
-# Annotation files live in the cvpr_emotic/ (outer) folder
-ANNOT_DIR="${BASE_DIR}/cvpr_emotic"
+# Annotation files live at BASE_DIR level
+ANNOT_DIR="${BASE_DIR}"
 TRAIN_ANNOT="${ANNOT_DIR}/train_bbox.txt"
 VAL_ANNOT="${ANNOT_DIR}/val_bbox.txt"
 TEST_ANNOT="${ANNOT_DIR}/test_bbox.txt"
