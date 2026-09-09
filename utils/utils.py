@@ -263,3 +263,71 @@ def computer_uar_war(val_loader, model, device, class_names, log_confusion_matri
         f.write(f'WAR (Accuracy): {war:.2f}%\n')
         f.write('************************\n')
     return uar, war
+
+
+def evaluate_emotic_map(test_loader, model, device, class_names, log_txt_path):
+    """Multi-label evaluation for EMOTIC: computes per-class AP and macro-mAP.
+    Replaces computer_uar_war which assumes single-label classification.
+    """
+    from sklearn.metrics import average_precision_score, precision_recall_curve
+    model.eval()
+    all_preds = []
+    all_targets = []
+
+    with torch.no_grad():
+        for batch in tqdm.tqdm(test_loader, desc="[EMOTIC Test] Calculating mAP"):
+            if len(batch) == 4:
+                images_face, images_body, images_context, target = batch
+                images_context = images_context.to(device)
+            else:
+                images_face, images_body, target = batch
+                images_context = None
+
+            images_face = images_face.to(device)
+            images_body = images_body.to(device)
+
+            if images_context is not None:
+                output, _, _, _ = model(images_face, images_body, images_context)
+            else:
+                output, _, _, _ = model(images_face, images_body)
+
+            probs = torch.sigmoid(output).cpu()
+            all_preds.append(probs)
+            all_targets.append(target.cpu())
+
+    all_preds = torch.cat(all_preds, 0).numpy()    # (N, 26)
+    all_targets = torch.cat(all_targets, 0).numpy() # (N, 26)
+
+    ap_scores = []
+    per_class_str = []
+    thresholds_dict = {}
+    for c in range(all_targets.shape[1]):
+        try:
+            ap = average_precision_score(all_targets[:, c], all_preds[:, c])
+            if not np.isnan(ap):
+                ap_scores.append(ap)
+                per_class_str.append(f"  {class_names[c]:20s}: AP={ap*100:.2f}%")
+            precision, recall, thresholds = precision_recall_curve(all_targets[:, c], all_preds[:, c])
+            f1_scores = 2 * recall * precision / (recall + precision + 1e-6)
+            best_idx = np.argmax(f1_scores)
+            thresholds_dict[c] = float(thresholds[best_idx]) if best_idx < len(thresholds) else 0.5
+        except Exception:
+            thresholds_dict[c] = 0.5
+
+    macro_map = np.mean(ap_scores) * 100 if ap_scores else 0.0
+
+    print("\n--- EMOTIC Test Evaluation ---")
+    for s in per_class_str:
+        print(s)
+    print(f"\nMacro mAP (Test): {macro_map:.2f}%")
+    print("-------------------------------\n")
+
+    with open(log_txt_path, 'a') as f:
+        f.write('************************\n')
+        f.write('Final EMOTIC Test Evaluation:\n')
+        for s in per_class_str:
+            f.write(s + '\n')
+        f.write(f'Macro mAP (Test): {macro_map:.2f}%\n')
+        f.write('************************\n')
+
+    return macro_map, thresholds_dict

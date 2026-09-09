@@ -26,7 +26,8 @@ from models.Generate_Model import GenerateModel
 from models.Text import *
 from trainer import Trainer
 from utils.loss import *
-from utils.utils import *
+from utils.utils import (AverageMeter, load_slim_checkpoint, computer_uar_war,
+                          evaluate_emotic_map, plot_confusion_matrix)
 from utils.builders import *
 from utils.checkpoint_utils import save_slim_checkpoint, load_slim_checkpoint
 
@@ -431,15 +432,24 @@ def run_training(args: argparse.Namespace) -> None:
     # Final evaluation with best model (load slim checkpoint)
     print("=> Final evaluation on test set...")
     load_slim_checkpoint(model, best_checkpoint_path, device=args.device)
-    computer_uar_war(
-        val_loader=test_loader,
-        model=model,
-        device=args.device,
-        class_names=class_names,
-        log_confusion_matrix_path=log_confusion_matrix_path,
-        log_txt_path=log_txt_path,
-        title=f"Confusion Matrix on {args.dataset} Test Set"
-    )
+    if args.dataset == 'EMOTIC':
+        evaluate_emotic_map(
+            test_loader=test_loader,
+            model=model,
+            device=args.device,
+            class_names=class_names,
+            log_txt_path=log_txt_path,
+        )
+    else:
+        computer_uar_war(
+            val_loader=test_loader,
+            model=model,
+            device=args.device,
+            class_names=class_names,
+            log_confusion_matrix_path=log_confusion_matrix_path,
+            log_txt_path=log_txt_path,
+            title=f"Confusion Matrix on {args.dataset} Test Set"
+        )
 
 def run_eval(args: argparse.Namespace) -> None:
     print("=> Starting evaluation mode...")
@@ -458,15 +468,24 @@ def run_eval(args: argparse.Namespace) -> None:
     _, _, test_loader = build_dataloaders(args)
 
     # Run evaluation
-    computer_uar_war(
-        val_loader=test_loader,
-        model=model,
-        device=args.device,
-        class_names=class_names,
-        log_confusion_matrix_path=log_confusion_matrix_path,
-        log_txt_path=log_txt_path,
-        title=f"Confusion Matrix on {args.dataset}"
-    )
+    if args.dataset == 'EMOTIC':
+        evaluate_emotic_map(
+            test_loader=test_loader,
+            model=model,
+            device=args.device,
+            class_names=class_names,
+            log_txt_path=log_txt_path,
+        )
+    else:
+        computer_uar_war(
+            val_loader=test_loader,
+            model=model,
+            device=args.device,
+            class_names=class_names,
+            log_confusion_matrix_path=log_confusion_matrix_path,
+            log_txt_path=log_txt_path,
+            title=f"Confusion Matrix on {args.dataset}"
+        )
     print("=> Evaluation complete.")
 
 
