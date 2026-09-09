@@ -247,7 +247,7 @@ def run_training(args: argparse.Namespace) -> None:
     # Loss and optimizer
     if args.dataset == 'EMOTIC':
         print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
-        criterion = AsymmetricLoss(gamma_neg=2.0, gamma_pos=0.0, clip=0.05).to(args.device)
+        criterion = AsymmetricLoss(gamma_neg=3.0, gamma_pos=0.5, clip=0.05).to(args.device)
     elif args.use_ldl:
         print(f"=> Using SemanticLDLLoss (LDL) with temperature {args.ldl_temperature}")
         criterion = SemanticLDLLoss(temperature=args.ldl_temperature).to(args.device)

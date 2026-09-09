@@ -406,8 +406,9 @@ class Trainer:
                     except:
                         thresholds_dict[c] = 0.5
                 print(f"Optimal Thresholds computed.")
-                with open(os.path.join(os.path.dirname(self.log_txt_path), "emotic_thresholds.txt"), "w") as f:
-                    f.write(str(thresholds_dict))
+                import json
+                with open(os.path.join(os.path.dirname(self.log_txt_path), "emotic_thresholds.json"), "w") as f:
+                    json.dump(thresholds_dict, f, indent=4)
             return war, uar, losses.avg, cm
         else:
             all_preds = torch.cat(all_preds_list)

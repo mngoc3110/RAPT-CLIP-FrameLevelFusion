@@ -25,8 +25,8 @@ python main.py \
     --temperature 0.07 \
     --drop-path-rate 0.1 \
     --grad-clip 1.0 \
-    --lambda_mi 0.1 \
-    --lambda_dc 0.1 \
+    --lambda_mi 0.0 \
+    --lambda_dc 0.0 \
     --mi-warmup 2 \
     --mi-ramp 5 \
     --dc-warmup 2 \

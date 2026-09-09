@@ -299,18 +299,40 @@ def evaluate_emotic_map(test_loader, model, device, class_names, log_txt_path):
     all_targets = torch.cat(all_targets, 0).numpy() # (N, 26)
 
     ap_scores = []
+    import json
+    thresholds_file = os.path.join(os.path.dirname(log_txt_path), "emotic_thresholds.json")
+    loaded_thresholds = {}
+    if os.path.exists(thresholds_file):
+        try:
+            with open(thresholds_file, "r") as f:
+                loaded_thresholds = {int(k): float(v) for k, v in json.load(f).items()}
+            print(f"Loaded optimal thresholds from {thresholds_file}")
+        except Exception as e:
+            print(f"Failed to load thresholds: {e}")
+
+    ap_scores = []
     per_class_str = []
     thresholds_dict = {}
+    from sklearn.metrics import f1_score
     for c in range(all_targets.shape[1]):
         try:
             ap = average_precision_score(all_targets[:, c], all_preds[:, c])
             if not np.isnan(ap):
                 ap_scores.append(ap)
-                per_class_str.append(f"  {class_names[c]:20s}: AP={ap*100:.2f}%")
-            precision, recall, thresholds = precision_recall_curve(all_targets[:, c], all_preds[:, c])
-            f1_scores = 2 * recall * precision / (recall + precision + 1e-6)
-            best_idx = np.argmax(f1_scores)
-            thresholds_dict[c] = float(thresholds[best_idx]) if best_idx < len(thresholds) else 0.5
+            
+            # F1 score logic
+            if c in loaded_thresholds:
+                thresh = loaded_thresholds[c]
+                bin_preds = (all_preds[:, c] >= thresh).astype(int)
+                f1 = f1_score(all_targets[:, c], bin_preds, zero_division=0)
+                per_class_str.append(f"  {class_names[c]:20s}: AP={ap*100:5.2f}% | F1={f1*100:5.2f}% (t={thresh:.2f})")
+                thresholds_dict[c] = thresh
+            else:
+                per_class_str.append(f"  {class_names[c]:20s}: AP={ap*100:5.2f}%")
+                precision, recall, thresholds = precision_recall_curve(all_targets[:, c], all_preds[:, c])
+                f1_scores = 2 * recall * precision / (recall + precision + 1e-6)
+                best_idx = np.argmax(f1_scores)
+                thresholds_dict[c] = float(thresholds[best_idx]) if best_idx < len(thresholds) else 0.5
         except Exception:
             thresholds_dict[c] = 0.5
 
