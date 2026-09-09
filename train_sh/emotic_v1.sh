@@ -3,7 +3,7 @@
 # Configuration — v1 (From 09-08 06:22 Log)
 EXP_NAME="EMOTIC_RAPT_CLIP_ASL"
 BATCH_SIZE=16
-EPOCHS=35
+EPOCHS=25
 
 # Kaggle Dataset Paths
 BASE_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
