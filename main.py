@@ -26,7 +26,7 @@ from models.Generate_Model import GenerateModel
 from models.Text import *
 from trainer import Trainer
 from utils.loss import *
-from utils.utils import (AverageMeter, load_slim_checkpoint, computer_uar_war,
+from utils.utils import (AverageMeter, computer_uar_war,
                           evaluate_emotic_map, plot_confusion_matrix)
 from utils.builders import *
 from utils.checkpoint_utils import save_slim_checkpoint, load_slim_checkpoint
