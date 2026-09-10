@@ -128,7 +128,7 @@ model_group.add_argument('--freeze-image-encoder', action='store_true', help='Fr
 model_group.add_argument('--ablation-no-text', action='store_true', help='Use Visual-Only ablation architecture.')
 model_group.add_argument('--use-v2', action='store_true', help='Use V2 Triple-Stream Architecture.')
 model_group.add_argument('--modality-dropout', type=float, default=0.3, help='Modality Dropout probability.')
-model_group.add_argument('--fusion-type', type=str, default='cmaf', choices=['gfi', 'cmaf', 'cmaf_decoupled'], help='Fusion method: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion).')
+model_group.add_argument('--fusion-type', type=str, default='cmaf', choices=['gfi', 'cmaf', 'cmaf_decoupled', 'q2l'], help='Fusion method: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion).')
 model_group.add_argument('--use-context', action='store_true', help='Enable context stream (Triple Stream: Face, Body, Context).')
 
 # ==================== Helper Functions ====================

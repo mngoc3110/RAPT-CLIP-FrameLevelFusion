@@ -68,7 +68,11 @@ class GenerateModel(nn.Module):
         self.fusion_type = getattr(args, 'fusion_type', 'cmaf')
         print(f"=> Using Fusion Type: {self.fusion_type}")
 
-        if self.fusion_type == 'cmaf_decoupled':
+        if self.fusion_type == 'q2l':
+            self.q2l_attention = nn.MultiheadAttention(embed_dim=512, num_heads=8, batch_first=True)
+            self.q2l_norm = nn.LayerNorm(512)
+            in_dim = 512 # Not actually used in Q2L but keep to avoid undefined errors
+        elif self.fusion_type == 'cmaf_decoupled':
             in_dim = 512
         else:
             in_dim = 1536 if self.use_context else 1024
@@ -212,26 +216,81 @@ class GenerateModel(nn.Module):
         return video_features
         
     def forward(self, image_face, image_body, image_context=None):
+        ################# Text Part ###################
+        # Compute text features first since Q2L needs them as queries
+        prompts = self.prompt_learner()
+        tokenized_prompts = self.tokenized_prompts
+        
+        with torch.cuda.amp.autocast(enabled=False):
+            text_features = self.text_encoder(prompts, tokenized_prompts)
+            text_features = text_features.float()
+            text_features = text_features / (text_features.norm(dim=-1, keepdim=True) + 1e-6)
+
+        hand_crafted_prompts = self.hand_crafted_prompt_embeddings
+        tokenized_hand_crafted_prompts = self.tokenized_hand_crafted_prompts.to(hand_crafted_prompts.device)
+        
+        with torch.cuda.amp.autocast(enabled=False):
+            hand_crafted_text_features = self.text_encoder(hand_crafted_prompts, tokenized_hand_crafted_prompts)
+            hand_crafted_text_features = hand_crafted_text_features.float()
+            hand_crafted_text_features = hand_crafted_text_features / (hand_crafted_text_features.norm(dim=-1, keepdim=True) + 1e-6)
+
         ################# Visual Part #################
         n, t, c, h, w = image_face.shape
 
         # Face Part
         image_face_reshaped = image_face.contiguous().view(-1, c, h, w)
-        image_face_features = self.image_encoder(image_face_reshaped.type(self.dtype))
-        image_face_features = self.face_adapter(image_face_features) # Apply EAA
+        if self.fusion_type == 'q2l':
+            image_face_features = self.image_encoder.forward_features(image_face_reshaped.type(self.dtype)) # (B, 197, 512)
+        else:
+            image_face_features = self.image_encoder(image_face_reshaped.type(self.dtype))
+            image_face_features = self.face_adapter(image_face_features) # Apply EAA
         
         # Body Part
         image_body_reshaped = image_body.contiguous().view(-1, c, h, w)
-        image_body_features = self.image_encoder(image_body_reshaped.type(self.dtype))
+        if self.fusion_type == 'q2l':
+            image_body_features = self.image_encoder.forward_features(image_body_reshaped.type(self.dtype))
+        else:
+            image_body_features = self.image_encoder(image_body_reshaped.type(self.dtype))
 
         # Context Part
         if self.use_context:
             assert image_context is not None, "image_context must be provided when use_context=True"
             image_context_reshaped = image_context.contiguous().view(-1, c, h, w)
-            image_context_features = self.image_encoder(image_context_reshaped.type(self.dtype))
+            if self.fusion_type == 'q2l':
+                image_context_features = self.image_encoder.forward_features(image_context_reshaped.type(self.dtype))
+            else:
+                image_context_features = self.image_encoder(image_context_reshaped.type(self.dtype))
 
-        # Frame-Level Fusion (CMAF or GFI)
-        if self.fusion_type == 'gfi':
+        # Frame-Level Fusion (CMAF, GFI, or Q2L)
+        if self.fusion_type == 'q2l':
+            # 1. Combine patches (exclude CLS token if preferred, but we can keep it)
+            # image_face_features: (B, 197, 512)
+            if self.use_context:
+                all_patches = torch.cat([image_face_features, image_body_features, image_context_features], dim=1)
+            else:
+                all_patches = torch.cat([image_face_features, image_body_features], dim=1)
+            
+            # 2. Setup queries from text_features
+            # text_features: (C, 512) -> queries: (B, C, 512)
+            queries = text_features.unsqueeze(0).expand(n, -1, -1)
+            
+            # 3. Cross Attention
+            class_features, _ = self.q2l_attention(query=queries, key=all_patches, value=all_patches)
+            class_features = self.q2l_norm(class_features + queries) # Residual + Norm
+            
+            # 4. We bypass the TemporalNet for now since EMOTIC is image-based (t=1).
+            # If t > 1, we would need to reshape. For Q2L, we can just return the logits directly.
+            output = (class_features * queries).sum(dim=-1) / self.args.temperature
+            
+            # Pack a dummy video_features to not break MoCo or other references
+            video_features = class_features.mean(dim=1)
+            self.last_video_features = video_features
+            
+            # Return immediately for Q2L, skipping the old classification block
+            moco_logits = None
+            return output, text_features, hand_crafted_text_features, moco_logits
+
+        elif self.fusion_type == 'gfi':
             features_to_concat = [image_face_features, image_body_features]
             if self.use_context:
                 features_to_concat.append(image_context_features)
@@ -279,28 +338,7 @@ class GenerateModel(nn.Module):
         # Save video features for feature-level knowledge distillation
         self.last_video_features = video_features
 
-        ################# Text Part ###################
-        # Learnable prompts
-        prompts = self.prompt_learner()
-        tokenized_prompts = self.tokenized_prompts
-        
-        # FORCE FP32 for Text Encoder to avoid NaN on MPS
-        with torch.cuda.amp.autocast(enabled=False):
-            # Text Encoder might contain layers incompatible with AMP on MPS or just unstable
-            text_features = self.text_encoder(prompts, tokenized_prompts)
-            # Robust normalization
-            text_features = text_features.float() # Ensure float32
-            text_features = text_features / (text_features.norm(dim=-1, keepdim=True) + 1e-6)
-
-        # Hand-crafted prompts (for MI Loss, not used for classification)
-        hand_crafted_prompts = self.hand_crafted_prompt_embeddings
-        tokenized_hand_crafted_prompts = self.tokenized_hand_crafted_prompts.to(hand_crafted_prompts.device)
-        
-        with torch.cuda.amp.autocast(enabled=False):
-            hand_crafted_text_features = self.text_encoder(hand_crafted_prompts, tokenized_hand_crafted_prompts)
-            hand_crafted_text_features = hand_crafted_text_features.float()
-            # Robust normalization
-            hand_crafted_text_features = hand_crafted_text_features / (hand_crafted_text_features.norm(dim=-1, keepdim=True) + 1e-6)
+        # Text features are already computed above.
 
         ################# MoCo Updates ###################
         moco_logits = None
