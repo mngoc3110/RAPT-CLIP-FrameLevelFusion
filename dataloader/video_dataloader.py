@@ -162,6 +162,8 @@ class VideoDataset(data.Dataset):
                     self.sample_list.append([path, num_frames, label])
                 else:
                     # Case: [path, num_frames, label] (e.g., standard RAER)
+                    if self.dataset_name == 'DAiSEE' and parts[0].startswith('DAiSEE_data/'):
+                        parts[0] = parts[0].replace('DAiSEE_data/', '')
                     self.sample_list.append(parts)
 
 
@@ -215,6 +217,18 @@ class VideoDataset(data.Dataset):
             num_real_frames = len(video_frames_path)
             is_video_file = False
             is_valid = num_real_frames > 0
+        elif self.dataset_name == 'DAiSEE' and record.path.endswith('frames') and not os.path.exists(record.path):
+            clip_id = os.path.basename(os.path.dirname(record.path))
+            fallback_video = os.path.join(os.path.dirname(record.path), f"{clip_id}.avi")
+            if not os.path.exists(fallback_video):
+                fallback_video = os.path.join(os.path.dirname(record.path), f"{clip_id}.mp4")
+            record._data[0] = fallback_video  # Update path
+            is_video_file = True
+            cap = cv2.VideoCapture(fallback_video)
+            num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            is_valid = cap.isOpened() and num_real_frames > 0
+            if not is_valid:
+                print(f"Warning: DAiSEE video fallback failed for {fallback_video}")
         elif is_image_file:
             # Static image (EMOTIC): read directly with PIL, treat as single frame
             is_video_file = False

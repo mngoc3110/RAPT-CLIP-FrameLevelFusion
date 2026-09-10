@@ -91,7 +91,7 @@ def get_class_info(args: argparse.Namespace) -> Tuple[list, list]:
         class_names_with_context = class_names_with_context_daisee
         class_descriptor = class_descriptor_daisee
         ensemble_prompts = prompt_ensemble_daisee
-    elif dataset_name == "CAER":
+    elif dataset_name in ["CAER", "CAER_S", "CAER-S"]:
         class_names = class_names_caer
         class_names_with_context = class_names_with_context_caer
         class_descriptor = class_descriptor_caer

@@ -692,4 +692,34 @@ prompt_ensemble_emotic_26 = [
     ],
 ]
 
-
+class_names_daisee = ['Very Low Engagement', 'Low Engagement', 'High Engagement', 'Very High Engagement']
+class_names_with_context_daisee = [
+    'A student showing very low engagement in an online classroom.',
+    'A student showing low engagement in an online classroom.',
+    'A student showing high engagement in an online classroom.',
+    'A student highly engaged and deeply focused on the online classroom.'
+]
+class_descriptor_daisee = [
+    "A close-up of a student's face with eyes fully closed, appearing to be asleep during class.",
+    "A student looking away from the screen, distracted and showing low engagement.",
+    "A student's face with steady eye contact toward the camera and a neutral attentive expression.",
+    "A close-up of a student's face with wide alert eyes showing intense focus and interest."
+]
+prompt_ensemble_daisee = [
+    [
+        "A close-up of a student's face with eyes fully closed, appearing to be asleep during class.",
+        "A student showing very low engagement in an online classroom."
+    ],
+    [
+        "A student looking away from the screen, distracted and showing low engagement.",
+        "A student with unfocused eyes, looking bored or confused."
+    ],
+    [
+        "A student's face with steady eye contact toward the camera and a neutral attentive expression.",
+        "A student looking at the screen with high engagement."
+    ],
+    [
+        "A close-up of a student's face with wide alert eyes showing intense focus and interest.",
+        "A student highly engaged and deeply focused on the online classroom."
+    ]
+]
