@@ -65,7 +65,13 @@ class GenerateModel(nn.Module):
         self.use_context = getattr(args, 'use_context', False)
         print(f"=> Using Context Stream: {self.use_context}")
 
-        in_dim = 1536 if self.use_context else 1024
+        self.fusion_type = getattr(args, 'fusion_type', 'cmaf')
+        print(f"=> Using Fusion Type: {self.fusion_type}")
+
+        if self.fusion_type == 'cmaf_decoupled':
+            in_dim = 512
+        else:
+            in_dim = 1536 if self.use_context else 1024
 
         self.unified_temporal_net = Temporal_Transformer_AttnPool(num_patches=16,
                                                      input_dim=in_dim,
@@ -80,9 +86,6 @@ class GenerateModel(nn.Module):
         self.project_fc = nn.Linear(in_dim, 512)
 
         # Fusion Selection: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion)
-        self.fusion_type = getattr(args, 'fusion_type', 'cmaf')
-        print(f"=> Using Fusion Type: {self.fusion_type}")
-        
         if self.fusion_type == 'gfi':
             self.gate_fc = nn.Sequential(
                 nn.Linear(in_dim, in_dim // 4),
@@ -235,19 +238,43 @@ class GenerateModel(nn.Module):
             fused_frame_features = torch.cat(features_to_concat, dim=-1)
             gate = self.gate_fc(fused_frame_features)
             fused_frame_features = fused_frame_features * gate
+            
+            fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
+            video_features = self.unified_temporal_net(fused_frame_features)
+            video_features = self.project_fc(video_features)
+            video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
+            
+        elif self.fusion_type == 'cmaf_decoupled':
+            if self.use_context:
+                face_out, body_out, ctx_out = self.cmaf(image_face_features, image_body_features, image_context_features, return_decoupled=True)
+                outs = [face_out, body_out, ctx_out]
+            else:
+                face_out, body_out = self.cmaf(image_face_features, image_body_features, return_decoupled=True)
+                outs = [face_out, body_out]
+            
+            video_features_list = []
+            for out in outs:
+                out = out.contiguous().view(n, t, -1)
+                vid_feat = self.unified_temporal_net(out)
+                vid_feat = self.project_fc(vid_feat)
+                vid_feat = vid_feat / (vid_feat.norm(dim=-1, keepdim=True) + 1e-6)
+                video_features_list.append(vid_feat)
+            
+            # Pack the decoupled features into a tuple to be handled by the trainer
+            video_features = tuple(video_features_list)
         else:
             if self.use_context:
                 fused_frame_features = self.cmaf(image_face_features, image_body_features, image_context_features)
             else:
                 fused_frame_features = self.cmaf(image_face_features, image_body_features)
             
-        # Unified Temporal Transformer
-        fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
-        video_features = self.unified_temporal_net(fused_frame_features)
+            # Unified Temporal Transformer
+            fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
+            video_features = self.unified_temporal_net(fused_frame_features)
 
-        video_features = self.project_fc(video_features)
-        # Robust normalization to avoid NaN on MPS
-        video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
+            video_features = self.project_fc(video_features)
+            # Robust normalization to avoid NaN on MPS
+            video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
         
         # Save video features for feature-level knowledge distillation
         self.last_video_features = video_features
@@ -282,11 +309,14 @@ class GenerateModel(nn.Module):
                 self._momentum_update_key_encoder()
                 k_video_features = self.forward_momentum(image_face, image_body)
             
+            # If decoupled, average the modalities just for MoCo contrastive learning
+            vf_moco = torch.stack(video_features, dim=-1).mean(dim=-1) if isinstance(video_features, tuple) else video_features
+
             # Compute MoCo Logits
             # Positive logits: similarity between query and key
-            l_pos = torch.einsum('nc,nc->n', [video_features, k_video_features]).unsqueeze(-1)
+            l_pos = torch.einsum('nc,nc->n', [vf_moco, k_video_features]).unsqueeze(-1)
             # Negative logits: similarity between query and queue
-            l_neg = torch.einsum('nc,ck->nk', [video_features, self.queue.clone().detach()])
+            l_neg = torch.einsum('nc,ck->nk', [vf_moco, self.queue.clone().detach()])
 
             # logits: Nx(1+K)
             moco_logits = torch.cat([l_pos, l_neg], dim=1)
@@ -302,14 +332,28 @@ class GenerateModel(nn.Module):
             # Normalize again just in case (optional but safe) - Robust version
             text_features = text_features / (text_features.norm(dim=-1, keepdim=True) + 1e-6)
             
-            # Compute logits per prompt: (B, D) @ (D, P, C) -> (B, P, C)
-            # Note: We use einsum for clarity with batch and ensemble dimensions
-            logits = torch.einsum('bd,cpd->bcp', video_features, text_features)
-            
-            # Average the logits across the prompts for each class
-            output = torch.mean(logits, dim=2) / self.args.temperature
+            if isinstance(video_features, tuple):
+                outputs = []
+                for vid_feat in video_features:
+                    # Compute logits per prompt: (B, D) @ (D, P, C) -> (B, P, C)
+                    logits = torch.einsum('bd,cpd->bcp', vid_feat, text_features)
+                    # Average the logits across the prompts for each class
+                    out = torch.mean(logits, dim=2) / self.args.temperature
+                    outputs.append(out)
+                # Take the maximum logit across modalities (Decoupled Routing)
+                output = torch.stack(outputs, dim=-1).max(dim=-1)[0]
+            else:
+                logits = torch.einsum('bd,cpd->bcp', video_features, text_features)
+                output = torch.mean(logits, dim=2) / self.args.temperature
 
         else:
-            output = video_features @ text_features.t() / self.args.temperature
+            if isinstance(video_features, tuple):
+                outputs = []
+                for vid_feat in video_features:
+                    out = vid_feat @ text_features.t() / self.args.temperature
+                    outputs.append(out)
+                output = torch.stack(outputs, dim=-1).max(dim=-1)[0]
+            else:
+                output = video_features @ text_features.t() / self.args.temperature
 
         return output, text_features, hand_crafted_text_features, moco_logits

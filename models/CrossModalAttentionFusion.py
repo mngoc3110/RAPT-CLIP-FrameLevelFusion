@@ -73,7 +73,7 @@ class CrossModalAttentionFusion(nn.Module):
             nn.init.xavier_uniform_(module.out_proj.weight)
             nn.init.constant_(module.out_proj.bias, 0.0)
 
-    def forward(self, face_feat, body_feat, context_feat=None):
+    def forward(self, face_feat, body_feat, context_feat=None, return_decoupled=False):
         """
         Args:
             face_feat: (B, dim) face features
@@ -97,6 +97,8 @@ class CrossModalAttentionFusion(nn.Module):
             body_cross, _ = self.cross_attn_b2f(body_q, face_kv, face_kv)
             body_out = self.norm_b(body_cross.squeeze(1) + body_feat)  # residual
 
+            if return_decoupled:
+                return face_out, body_out
             return torch.cat((face_out, body_out), dim=-1)
         else:
             assert context_feat is not None, "context_feat must be provided when use_context=True"
@@ -119,4 +121,6 @@ class CrossModalAttentionFusion(nn.Module):
             context_cross, _ = self.cross_attn_c2fb(context_q, face_body_kv, face_body_kv)
             context_out = self.norm_c(context_cross.squeeze(1) + context_feat)
 
+            if return_decoupled:
+                return face_out, body_out, context_out
             return torch.cat((face_out, body_out, context_out), dim=-1)
