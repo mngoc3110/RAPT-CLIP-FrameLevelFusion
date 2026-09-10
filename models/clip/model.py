@@ -293,6 +293,8 @@ class VisionTransformer(nn.Module):
         x = x.permute(1, 0, 2)  # LND -> NLD
 
         # Return all tokens including patches instead of just CLS token
+        x = self.ln_post(x)
+
         # We also apply the projection to all tokens to match the output dimension
         if self.proj is not None:
             x = x @ self.proj

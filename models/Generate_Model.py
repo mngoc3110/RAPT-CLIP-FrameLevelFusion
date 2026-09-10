@@ -241,6 +241,7 @@ class GenerateModel(nn.Module):
         image_face_reshaped = image_face.contiguous().view(-1, c, h, w)
         if self.fusion_type == 'q2l':
             image_face_features = self.image_encoder.forward_features(image_face_reshaped.type(self.dtype)) # (B, 197, 512)
+            image_face_features = self.face_adapter(image_face_features) # Apply EAA to patches
         else:
             image_face_features = self.image_encoder(image_face_reshaped.type(self.dtype))
             image_face_features = self.face_adapter(image_face_features) # Apply EAA
