@@ -75,15 +75,20 @@ class VideoDataset(data.Dataset):
             self._read_body_boxes()
 
     def _read_boxs(self):
-        with open(self.bounding_box_face, 'r') as f:
-            self.boxs = json.load(f)
+        if self.bounding_box_face and os.path.exists(self.bounding_box_face):
+            with open(self.bounding_box_face, 'r') as f:
+                self.boxs = json.load(f)
+        else:
+            print(f"Warning: Face bounding box file not found or None ({self.bounding_box_face}). Proceeding without face boxes.")
+            self.boxs = {}
 
-
-    
     def _read_body_boxes(self):
-        if self.bounding_box_body:
+        if self.bounding_box_body and os.path.exists(self.bounding_box_body):
             with open(self.bounding_box_body, 'r') as f:
                 self.body_boxes = json.load(f)
+        else:
+            print(f"Warning: Body bounding box file not found or None ({self.bounding_box_body}). Proceeding without body boxes.")
+            self.body_boxes = {}
 
 
     def _cv2pil(self,im_cv):
