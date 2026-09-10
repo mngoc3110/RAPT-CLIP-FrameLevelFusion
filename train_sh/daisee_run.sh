@@ -5,8 +5,8 @@ EXP_NAME="DAiSEE_RAPT_CLIP"
 BATCH_SIZE=8 # Small batch size due to 8 frames per clip
 EPOCHS=35
 
-# Kaggle Dataset Paths - adjust ROOT_DIR to point to the parent of DataSet/ and daisee_train.txt
-ROOT_DIR="/kaggle/input/daisee/DAiSEE"
+# Kaggle Dataset Paths
+ROOT_DIR="/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data"
 TRAIN_ANNOT="${ROOT_DIR}/daisee_train.txt"
 VAL_ANNOT="${ROOT_DIR}/daisee_val.txt"
 TEST_ANNOT="${ROOT_DIR}/daisee_test.txt"
