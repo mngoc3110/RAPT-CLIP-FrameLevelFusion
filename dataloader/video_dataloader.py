@@ -79,7 +79,7 @@ class VideoDataset(data.Dataset):
             with open(self.bounding_box_face, 'r') as f:
                 self.boxs = json.load(f)
         else:
-            print(f"Warning: Face bounding box file not found or None ({self.bounding_box_face}). Proceeding without face boxes.")
+            # print(f"Warning: Face bounding box file not found or None ({self.bounding_box_face}). Proceeding without face boxes.")
             self.boxs = {}
 
     def _read_body_boxes(self):
@@ -87,7 +87,7 @@ class VideoDataset(data.Dataset):
             with open(self.bounding_box_body, 'r') as f:
                 self.body_boxes = json.load(f)
         else:
-            print(f"Warning: Body bounding box file not found or None ({self.bounding_box_body}). Proceeding without body boxes.")
+            # print(f"Warning: Body bounding box file not found or None ({self.bounding_box_body}). Proceeding without body boxes.")
             self.body_boxes = {}
 
 
@@ -233,14 +233,16 @@ class VideoDataset(data.Dataset):
             num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             is_valid = cap.isOpened() and num_real_frames > 0
             if not is_valid:
-                print(f"Warning: DAiSEE video fallback failed for {fallback_video}")
+                # print(f"Warning: DAiSEE video fallback failed for {fallback_video}")
+                pass
         elif is_image_file:
             # Static image (EMOTIC): read directly with PIL, treat as single frame
             is_video_file = False
             num_real_frames = 1
             is_valid = os.path.exists(record.path)
             if not is_valid:
-                print(f"Warning: Image not found: {record.path}, returning zeros.")
+                # print(f"Warning: Image not found: {record.path}, returning zeros.")
+                pass
         else:
             # Assume it's a video file
             is_video_file = True
@@ -248,7 +250,8 @@ class VideoDataset(data.Dataset):
             num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             is_valid = cap.isOpened() and num_real_frames > 0
             if not is_valid:
-                print(f"Warning: Could not open video file {record.path}, returning zeros.")
+                # print(f"Warning: Could not open video file {record.path}, returning zeros.")
+                pass
 
         # For frame-directory datasets, is_valid is based on whether frames exist
         if not is_video_file and not is_image_file:
