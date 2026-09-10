@@ -272,7 +272,13 @@ class GenerateModel(nn.Module):
             
             # 2. Setup queries from text_features
             # text_features: (C, 512) -> queries: (B, C, 512)
-            queries = text_features.unsqueeze(0).expand(n, -1, -1)
+            if self.is_ensemble:
+                q2l_text_features = text_features.view(self.num_classes, self.num_prompts_per_class, -1).mean(dim=1)
+                q2l_text_features = q2l_text_features / (q2l_text_features.norm(dim=-1, keepdim=True) + 1e-6)
+            else:
+                q2l_text_features = text_features
+            
+            queries = q2l_text_features.unsqueeze(0).expand(n, -1, -1)
             
             # 3. Cross Attention
             class_features, _ = self.q2l_attention(query=queries, key=all_patches, value=all_patches)
