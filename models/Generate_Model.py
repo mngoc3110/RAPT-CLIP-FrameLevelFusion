@@ -284,8 +284,11 @@ class GenerateModel(nn.Module):
             class_features, _ = self.q2l_attention(query=queries, key=all_patches, value=all_patches)
             class_features = self.q2l_norm(class_features + queries) # Residual + Norm
             
-            # 4. We bypass the TemporalNet for now since EMOTIC is image-based (t=1).
-            # If t > 1, we would need to reshape. For Q2L, we can just return the logits directly.
+            # 4. Normalize the class-specific features (Crucial for Cosine Similarity to prevent exploding logits)
+            class_features = class_features / (class_features.norm(dim=-1, keepdim=True) + 1e-6)
+            
+            # We bypass the TemporalNet for now since EMOTIC is image-based (t=1).
+            # Output Logits = Cosine Similarity scaled by temperature
             output = (class_features * queries).sum(dim=-1) / self.args.temperature
             
             # Pack a dummy video_features to not break MoCo or other references
