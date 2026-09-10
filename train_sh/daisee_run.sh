@@ -2,7 +2,7 @@
 
 # DAiSEE (Engagement) Training Script
 EXP_NAME="DAiSEE_RAPT_CLIP"
-BATCH_SIZE=8 # Small batch size due to 8 frames per clip
+BATCH_SIZE=4 # Reduced batch size to 4 to prevent OOM on 16GB GPUs
 EPOCHS=35
 
 # Kaggle Dataset Paths
@@ -31,7 +31,6 @@ python main.py \
     --mixup-alpha 0.0 \
     --modality-dropout 0.3 \
     --fusion-type cmaf \
-    --use-context \
     --crop-body \
     --num-segments 8 \
     --duration 1 \
@@ -47,9 +46,7 @@ python main.py \
     --ldam-s 1.0 \
     --ldam-max-m 0.5 \
     --text-type prompt_ensemble \
-    --contexts-number 8 \
     --class-token-position end \
-    --class-specific-contexts True \
     --load_and_tune_prompt_learner True \
     --root-dir ${ROOT_DIR} \
     --train-annotation ${TRAIN_ANNOT} \
