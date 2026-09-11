@@ -4,16 +4,22 @@ import torch.nn as nn
 
 class CrossModalAttentionFusion(nn.Module):
     """
-    Bidirectional Cross-Modal Attention Fusion (CMAF).
+    Bidirectional / Tridirectional Cross-Modal Attention Fusion (CMAF).
 
-    Enables face and body modalities to attend to each other before fusion,
+    Enables visual modalities to attend to each other before fusion,
     allowing the model to learn which aspects of one modality are most
-    relevant given the other.
+    relevant given the others.
 
-    Architecture:
-        Face(Q) × Body(K,V) → Cross-Attention → face_out  (face informed by body)
-        Body(Q) × Face(K,V) → Cross-Attention → body_out  (body informed by face)
+    Architecture (use_context=False):
+        Face(Q) × Body(K,V) → Cross-Attention → face_out
+        Body(Q) × Face(K,V) → Cross-Attention → body_out
         Output = concat(face_out, body_out) → 1024-d
+
+    Architecture (use_context=True):
+        Face(Q) × [Body, Context](K,V) → face_out
+        Body(Q) × [Face, Context](K,V) → body_out
+        Context(Q) × [Face, Body](K,V) → context_out
+        Output = concat(face_out, body_out, context_out) → 1536-d
 
     Uses residual connections and LayerNorm for stable training.
 
