@@ -8,8 +8,9 @@ import os
 import torchvision
 import sys
 
-from utils.utils import AverageMeter, get_loss_weight, get_loss_weight_rampdown
-from utils.loss import SemanticLDLLoss
+from utils.utils import (AverageMeter, get_loss_weight, get_loss_weight_rampdown,
+                          computer_uar_war, evaluate_emotic_map, plot_confusion_matrix)
+from utils.loss import SemanticLDLLoss, DiscreteLoss
 
 class ModelEMA:
     def __init__(self, model, decay=0.999):
@@ -234,14 +235,21 @@ class Trainer:
                          # we can just use F.cross_entropy.
                          current_criterion = torch.nn.CrossEntropyLoss()
                     
-                    if isinstance(current_criterion, SemanticLDLLoss):
+                    if isinstance(current_criterion, DiscreteLoss):
+                        # DiscreteLoss (MSE) expects probabilities, so we must sigmoid the unbounded logits
+                        if is_train and self.mixup_alpha > 0:
+                            classification_loss = lam * current_criterion(torch.sigmoid(output), target) + \
+                                                  (1 - lam) * current_criterion(torch.sigmoid(output), target_b)
+                        else:
+                            classification_loss = current_criterion(torch.sigmoid(output), target)
+                    elif isinstance(current_criterion, SemanticLDLLoss):
                         if is_train and self.mixup_alpha > 0:
                             classification_loss = lam * current_criterion(output, target, processed_learnable_text_features) + \
                                                   (1 - lam) * current_criterion(output, target_b, processed_learnable_text_features)
                         else:
                             classification_loss = current_criterion(output, target, processed_learnable_text_features)
                     else:
-                        # Standard CE or LSR
+                        # Standard CE, LSR, ASL or LDAM (they expect raw logits)
                         if is_train and self.mixup_alpha > 0:
                             classification_loss = lam * current_criterion(output, target) + (1 - lam) * current_criterion(output, target_b)
                         else:

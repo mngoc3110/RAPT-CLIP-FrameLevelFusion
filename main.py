@@ -88,7 +88,7 @@ optim_group.add_argument('--gamma', type=float, default=0.1, help='Factor for le
 
 # --- Loss & Imbalance Handling ---
 loss_group = parser.add_argument_group('Loss & Imbalance Handling', 'Parameters for loss functions and imbalance handling')
-loss_group.add_argument('--loss-type', type=str, default='ce', choices=['ce', 'ldl', 'ldam'], help='Type of primary classification loss (ce, ldl, ldam).')
+loss_group.add_argument('--loss-type', type=str, default='ce', choices=['ce', 'ldl', 'ldam', 'asl', 'discrete'], help='Type of primary classification loss.')
 loss_group.add_argument('--lambda_mi', type=float, default=0.1, help='Weight for the Mutual Information loss.')
 loss_group.add_argument('--lambda_dc', type=float, default=0.1, help='Weight for the Decorrelation loss.')
 loss_group.add_argument('--mi-warmup', type=int, default=5, help='Warmup epochs for MI loss.')
@@ -246,8 +246,12 @@ def run_training(args: argparse.Namespace) -> None:
 
     # Loss and optimizer
     if args.dataset == 'EMOTIC':
-        print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
-        criterion = AsymmetricLoss(gamma_neg=3.0, gamma_pos=0.0, clip=0.05).to(args.device)
+        if args.loss_type == 'discrete':
+            print("=> Using DiscreteLoss (Dynamic) for EMOTIC Multi-label classification")
+            criterion = DiscreteLoss(weight_type='dynamic', device=args.device).to(args.device)
+        else:
+            print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
+            criterion = AsymmetricLoss(gamma_neg=3.0, gamma_pos=0.0, clip=0.05).to(args.device)
     elif args.use_ldl:
         print(f"=> Using SemanticLDLLoss (LDL) with temperature {args.ldl_temperature}")
         criterion = SemanticLDLLoss(temperature=args.ldl_temperature).to(args.device)
