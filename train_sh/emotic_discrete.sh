@@ -36,7 +36,7 @@ python main.py \
     --gamma 0.1 \
     --use-amp \
     --mixup-alpha 0.0 \
-    --modality-dropout 0.3 \
+    --modality-dropout 0.0 \
     --fusion-type cmaf \
     --use-context \
     --crop-body \
