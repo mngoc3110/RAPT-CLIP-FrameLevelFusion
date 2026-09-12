@@ -143,52 +143,73 @@ class DiscreteLoss(nn.Module):
         return weights
 
 class DynamicAsymmetricLoss(nn.Module):
-    ''' Asymmetric Loss combined with EMOTIC Dynamic Weighting '''
-    def __init__(self, gamma_neg=4, gamma_pos=1, clip=0.05, eps=1e-8, device=torch.device('cpu')):
+    '''
+    Asymmetric Loss (ASL) combined with EMOTIC Dynamic Weighting.
+
+    Key design decisions:
+    - Clamps input logits to [-14, 14] BEFORE sigmoid to prevent saturation
+      when CLIP temperature (0.07) produces very large logit magnitudes.
+    - Dynamic weights are applied per-class, then averaged over batch.
+      (BUG FIX: old code did sum()/batch, double-weighting heavy classes)
+    - gamma_pos=0 recommended for EMOTIC to not penalize true positives.
+    '''
+    def __init__(self, gamma_neg=4, gamma_pos=0, clip=0.05, eps=1e-8,
+                 device=torch.device('cpu'), logit_clamp=14.0):
         super(DynamicAsymmetricLoss, self).__init__()
         self.gamma_neg = gamma_neg
         self.gamma_pos = gamma_pos
         self.clip = clip
         self.eps = eps
         self.device = device
-        
+        self.logit_clamp = logit_clamp  # Prevents sigmoid saturation from CLIP temp
+
     def prepare_dynamic_weights(self, target):
+        """Per-class inverse-log frequency weights. Rare class → higher weight."""
         target_stats = torch.sum(target, dim=0).float().unsqueeze(dim=0).cpu()
-        weights = torch.zeros((1, 26))
+        weights = torch.zeros((1, target.shape[1]))
         weights[target_stats != 0] = 1.0 / torch.log(target_stats[target_stats != 0].data + 1.2)
-        weights[target_stats == 0] = 0.0001
+        weights[target_stats == 0] = 0.0001  # Near-zero for absent classes in batch
         return weights
 
     def forward(self, x, y):
+        # --- Guard: clamp logits to prevent sigmoid saturation ---
+        # CLIP logits = cosine_sim / temperature (0.07) → can reach ±14
+        # sigmoid(14) ≈ 0.9999999 → gradient ≈ 0 → model doesn't learn
+        if self.logit_clamp is not None:
+            x = x.clamp(-self.logit_clamp, self.logit_clamp)
+
         # Calculating Probabilities
         x_sigmoid = torch.sigmoid(x)
         xs_pos = x_sigmoid
         xs_neg = 1 - x_sigmoid
 
-        # Asymmetric Clipping
+        # Asymmetric Clipping (shift negatives up to reduce their weight)
         if self.clip is not None and self.clip > 0:
             xs_neg = (xs_neg + self.clip).clamp(max=1)
 
-        # Basic CE calculation
+        # Basic BCE calculation
         los_pos = y * torch.log(xs_pos.clamp(min=self.eps))
         los_neg = (1 - y) * torch.log(xs_neg.clamp(min=self.eps))
-        loss = los_pos + los_neg
+        loss = los_pos + los_neg  # (B, C), negative values
 
-        # Asymmetric Focusing
+        # Asymmetric Focusing (down-weight easy negatives more aggressively)
         if self.gamma_neg > 0 or self.gamma_pos > 0:
             pt0 = xs_pos * y
-            pt1 = xs_neg * (1 - y)  # pt = p if t > 0 else 1-p
+            pt1 = xs_neg * (1 - y)  # pt = p if t>0 else 1-p
             pt = pt0 + pt1
             one_sided_gamma = self.gamma_pos * y + self.gamma_neg * (1 - y)
             one_sided_w = torch.pow(1 - pt, one_sided_gamma)
-            loss *= one_sided_w
+            loss = loss * one_sided_w  # (B, C)
 
-        # Apply Dynamic Weights (EMOTIC Logic)
-        dynamic_weights = self.prepare_dynamic_weights(y).to(x.device)
-        # Multiply the individual losses by the weights BEFORE taking the mean
-        loss = loss * dynamic_weights
+        # Apply EMOTIC Dynamic Weights per class
+        # Correct reduction: sum over classes (weighted), mean over batch
+        dynamic_weights = self.prepare_dynamic_weights(y).to(x.device)  # (1, C)
+        loss = loss * dynamic_weights  # (B, C)
 
-        return -loss.sum() / x.size(0) # Average over batch size
+        # FIX: sum over C (classes), mean over B (batch)
+        # Old: -loss.sum() / B  ← wrong, doesn't normalize across C properly
+        # New: -loss.sum(dim=1).mean()  ← correct: per-sample total, then batch mean
+        return -loss.sum(dim=1).mean()
 
 class BlvLoss(nn.Module):
     def __init__(self, cls_num_list, sigma=4, loss_name='BlvLoss'):

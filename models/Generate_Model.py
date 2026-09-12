@@ -73,6 +73,25 @@ class GenerateModel(nn.Module):
             self.q2l_norm = nn.LayerNorm(512)
             in_dim = 512 # Not actually used in Q2L but keep to avoid undefined errors
         elif self.fusion_type == 'cmaf_decoupled':
+            # Decoupled CMAF with Learnable Modality Router.
+            # num_modalities = 3 (face, body, context) or 2 (face, body)
+            # The router learns per-class soft attention weights: which modality
+            # to trust most for each emotion class, simultaneously.
+            # Gradient flows to ALL modalities (unlike hard max which blocks 2/3).
+            num_mod = 3 if self.use_context else 2
+            num_classes = getattr(args, 'num_classes', 26)
+            # Router: takes stack of (B, num_mod) logits per class → weights
+            # Implemented as a small class-aware linear layer over modality dim
+            self.decoupled_vote_router = nn.Sequential(
+                nn.Linear(num_mod, num_mod * 4),
+                nn.GELU(),
+                nn.Linear(num_mod * 4, num_mod),
+            )  # Input: (B*C, num_mod) → Output: (B*C, num_mod) softmax weights
+            # Initialize near-uniform to start
+            nn.init.zeros_(self.decoupled_vote_router[0].weight)
+            nn.init.zeros_(self.decoupled_vote_router[2].weight)
+            nn.init.zeros_(self.decoupled_vote_router[0].bias)
+            nn.init.zeros_(self.decoupled_vote_router[2].bias)
             in_dim = 512
         else:
             in_dim = 1536 if self.use_context else 1024
@@ -388,8 +407,21 @@ class GenerateModel(nn.Module):
                     # Average the logits across the prompts for each class
                     out = torch.mean(logits, dim=2) / self.args.temperature
                     outputs.append(out)
-                # Take the maximum logit across modalities (Decoupled Routing)
-                output = torch.stack(outputs, dim=-1).max(dim=-1)[0]
+                # ── Soft Modality Router ──────────────────────────────────────
+                # outputs: list of (B, C) tensors, one per modality
+                # Stack → (B, C, num_mod), route per-class
+                stacked = torch.stack(outputs, dim=-1)  # (B, C, M)
+                if hasattr(self, 'decoupled_vote_router'):
+                    B, C, M = stacked.shape
+                    # Run router over stacked logits: (B*C, M) → (B*C, M)
+                    router_in = stacked.view(B * C, M)
+                    router_weights = torch.softmax(
+                        self.decoupled_vote_router(router_in), dim=-1
+                    )  # (B*C, M)
+                    output = (stacked.view(B * C, M) * router_weights).sum(dim=-1).view(B, C)
+                else:
+                    # Fallback: uniform average (safe default)
+                    output = stacked.mean(dim=-1)  # (B, C)
             else:
                 logits = torch.einsum('bd,cpd->bcp', video_features, text_features)
                 output = torch.mean(logits, dim=2) / self.args.temperature
@@ -400,7 +432,17 @@ class GenerateModel(nn.Module):
                 for vid_feat in video_features:
                     out = vid_feat @ text_features.t() / self.args.temperature
                     outputs.append(out)
-                output = torch.stack(outputs, dim=-1).max(dim=-1)[0]
+                # ── Soft Modality Router (non-ensemble path) ─────────────────
+                stacked = torch.stack(outputs, dim=-1)  # (B, C, M)
+                if hasattr(self, 'decoupled_vote_router'):
+                    B, C, M = stacked.shape
+                    router_in = stacked.view(B * C, M)
+                    router_weights = torch.softmax(
+                        self.decoupled_vote_router(router_in), dim=-1
+                    )  # (B*C, M)
+                    output = (stacked.view(B * C, M) * router_weights).sum(dim=-1).view(B, C)
+                else:
+                    output = stacked.mean(dim=-1)  # fallback: uniform average
             else:
                 output = video_features @ text_features.t() / self.args.temperature
 

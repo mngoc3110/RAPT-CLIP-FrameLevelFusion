@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Configuration — v4 (Balanced: freeze ViT + unfreeze tiny + no MI/DC)
-EXP_NAME="EMOTIC_RAPT_CLIP_ASL_v4"
+# Configuration — v5 (cmaf_decoupled + dynamic_asl + logit_clamp fix)
+EXP_NAME="EMOTIC_CMAF_DECOUPLED_v5"
 BATCH_SIZE=16
 EPOCHS=25  # Longer training since LR milestones are at [10, 15]
 
@@ -39,7 +39,7 @@ python main.py \
     --mixup-alpha 0.0 \
     --modality-dropout 0.0 \
     --fusion-type cmaf_decoupled \
-    --loss-type discrete \
+    --loss-type dynamic_asl \
     --use-context \
     --crop-body \
     --num-segments 1 \

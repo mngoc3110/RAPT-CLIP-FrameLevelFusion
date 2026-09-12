@@ -251,7 +251,8 @@ def run_training(args: argparse.Namespace) -> None:
             criterion = DiscreteLoss(weight_type='dynamic', device=args.device).to(args.device)
         elif args.loss_type == 'dynamic_asl':
             print("=> Using DynamicAsymmetricLoss (Dynamic ASL) for EMOTIC Multi-label classification")
-            criterion = DynamicAsymmetricLoss(gamma_neg=3.0, gamma_pos=0.0, clip=0.05, device=args.device).to(args.device)
+            criterion = DynamicAsymmetricLoss(gamma_neg=4.0, gamma_pos=0.0, clip=0.05,
+                                               device=args.device, logit_clamp=14.0).to(args.device)
         else:
             print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
             criterion = AsymmetricLoss(gamma_neg=3.0, gamma_pos=0.0, clip=0.05).to(args.device)
