@@ -9,20 +9,20 @@ python main.py \
     --batch-size 8 \
     --epochs 1 \
     --optimizer AdamW \
-    --lr 2e-5 \
-    --lr-image-encoder 1e-6 \
+    --lr 1e-4 \
+    --lr-image-encoder 1e-5 \
     --lr-prompt-learner 3e-4 \
     --lr-adapter 1e-4 \
     --weight-decay 0.005 \
     --milestones 10 15 \
     --gamma 0.1 \
-    --fusion-type q2l \
+    --fusion-type cmaf \
     --use-context \
     --crop-body \
     --num-segments 1 \
     --duration 1 \
     --image-size 224 \
-    --temperature 0.07 \
+    --temperature 1.0 \
   --loss-type dynamic_asl \
     --drop-path-rate 0.1 \
     --grad-clip 1.0 \
