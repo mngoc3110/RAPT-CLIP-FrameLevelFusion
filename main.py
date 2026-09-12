@@ -297,6 +297,12 @@ def run_training(args: argparse.Namespace) -> None:
                 {"params": model.cross_attn_fb.parameters(), "lr": args.lr},
                 {"params": model.cross_attn_fbc.parameters(), "lr": args.lr}
             ]
+            if hasattr(model, 'q2l_attention'):
+                optimizer_grouped_parameters.append({"params": model.q2l_attention.parameters(), "lr": args.lr})
+            if hasattr(model, 'q2l_norm'):
+                optimizer_grouped_parameters.append({"params": model.q2l_norm.parameters(), "lr": args.lr})
+            if hasattr(model, 'classifier'):
+                optimizer_grouped_parameters.append({"params": model.classifier.parameters(), "lr": args.lr})
         else:
             # V1 Architecture
             optimizer_grouped_parameters = [
@@ -310,6 +316,12 @@ def run_training(args: argparse.Namespace) -> None:
                 optimizer_grouped_parameters.append({"params": model.cmaf.parameters(), "lr": args.lr})
             if hasattr(model, 'gate_fc'):
                 optimizer_grouped_parameters.append({"params": model.gate_fc.parameters(), "lr": args.lr})
+            if hasattr(model, 'q2l_attention'):
+                optimizer_grouped_parameters.append({"params": model.q2l_attention.parameters(), "lr": args.lr})
+            if hasattr(model, 'q2l_norm'):
+                optimizer_grouped_parameters.append({"params": model.q2l_norm.parameters(), "lr": args.lr})
+            if hasattr(model, 'classifier'):
+                optimizer_grouped_parameters.append({"params": model.classifier.parameters(), "lr": args.lr})
 
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(optimizer_grouped_parameters, momentum=args.momentum, weight_decay=args.weight_decay)
