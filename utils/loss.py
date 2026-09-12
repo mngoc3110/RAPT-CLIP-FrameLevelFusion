@@ -142,6 +142,54 @@ class DiscreteLoss(nn.Module):
         weights[target_stats == 0] = 0.0001
         return weights
 
+class DynamicAsymmetricLoss(nn.Module):
+    ''' Asymmetric Loss combined with EMOTIC Dynamic Weighting '''
+    def __init__(self, gamma_neg=4, gamma_pos=1, clip=0.05, eps=1e-8, device=torch.device('cpu')):
+        super(DynamicAsymmetricLoss, self).__init__()
+        self.gamma_neg = gamma_neg
+        self.gamma_pos = gamma_pos
+        self.clip = clip
+        self.eps = eps
+        self.device = device
+        
+    def prepare_dynamic_weights(self, target):
+        target_stats = torch.sum(target, dim=0).float().unsqueeze(dim=0).cpu()
+        weights = torch.zeros((1, 26))
+        weights[target_stats != 0] = 1.0 / torch.log(target_stats[target_stats != 0].data + 1.2)
+        weights[target_stats == 0] = 0.0001
+        return weights
+
+    def forward(self, x, y):
+        # Calculating Probabilities
+        x_sigmoid = torch.sigmoid(x)
+        xs_pos = x_sigmoid
+        xs_neg = 1 - x_sigmoid
+
+        # Asymmetric Clipping
+        if self.clip is not None and self.clip > 0:
+            xs_neg = (xs_neg + self.clip).clamp(max=1)
+
+        # Basic CE calculation
+        los_pos = y * torch.log(xs_pos.clamp(min=self.eps))
+        los_neg = (1 - y) * torch.log(xs_neg.clamp(min=self.eps))
+        loss = los_pos + los_neg
+
+        # Asymmetric Focusing
+        if self.gamma_neg > 0 or self.gamma_pos > 0:
+            pt0 = xs_pos * y
+            pt1 = xs_neg * (1 - y)  # pt = p if t > 0 else 1-p
+            pt = pt0 + pt1
+            one_sided_gamma = self.gamma_pos * y + self.gamma_neg * (1 - y)
+            one_sided_w = torch.pow(1 - pt, one_sided_gamma)
+            loss *= one_sided_w
+
+        # Apply Dynamic Weights (EMOTIC Logic)
+        dynamic_weights = self.prepare_dynamic_weights(y).to(x.device)
+        # Multiply the individual losses by the weights BEFORE taking the mean
+        loss = loss * dynamic_weights
+
+        return -loss.sum() / x.size(0) # Average over batch size
+
 class BlvLoss(nn.Module):
     def __init__(self, cls_num_list, sigma=4, loss_name='BlvLoss'):
         super(BlvLoss, self).__init__()

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+python main.py \
+    --mode train \
+    --exper-name EMOTIC-Test-MPS \
+    --dataset EMOTIC \
+    --gpu mps \
+    --workers 4 \
+    --batch-size 8 \
+    --epochs 1 \
+    --optimizer AdamW \
+    --lr 2e-5 \
+    --lr-image-encoder 1e-6 \
+    --lr-prompt-learner 3e-4 \
+    --lr-adapter 1e-4 \
+    --weight-decay 0.005 \
+    --milestones 10 15 \
+    --gamma 0.1 \
+    --fusion-type q2l \
+    --use-context \
+    --crop-body \
+    --num-segments 1 \
+    --duration 1 \
+    --image-size 224 \
+    --temperature 0.07 \
+  --loss-type dynamic_asl \
+    --drop-path-rate 0.1 \
+    --grad-clip 1.0 \
+    --lambda_mi 0.0 \
+    --lambda_dc 0.0 \
+    --mi-warmup 2 \
+    --mi-ramp 5 \
+    --dc-warmup 2 \
+    --dc-ramp 5 \
+    --text-type prompt_ensemble \
+    --contexts-number 8 \
+    --class-token-position end \
+    --class-specific-contexts True \
+    --load_and_tune_prompt_learner True \
+    --root-dir /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/cvpr_emotic \
+    --train-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/train_bbox_10pct.txt \
+    --val-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/val_bbox.txt \
+    --test-annotation /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/test_bbox.txt \
+    --bounding-box-face /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/emotic_face_bboxes_mtcnn.json \
+    --bounding-box-body /Users/macbook/Downloads/RAPT-CLIP/emotic_dataset/emotic_body_bboxes.json
