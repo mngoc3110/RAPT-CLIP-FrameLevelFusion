@@ -44,7 +44,7 @@ python main.py \
     --num-segments 1 \
     --duration 1 \
     --image-size 224 \
-    --temperature 1.0 \
+    --temperature 0.07 \
   --loss-type dynamic_asl \
     --drop-path-rate 0.1 \
     --grad-clip 1.0 \
