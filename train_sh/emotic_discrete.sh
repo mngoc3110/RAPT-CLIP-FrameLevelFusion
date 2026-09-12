@@ -43,8 +43,8 @@ python main.py \
     --num-segments 1 \
     --duration 1 \
     --image-size 224 \
-    --temperature 1.0 \
-  --loss-type discrete \
+    --temperature 0.07 \
+  --loss-type asl \
     --drop-path-rate 0.0 \
     --grad-clip 1.0 \
     --lambda_mi 0.0 \
