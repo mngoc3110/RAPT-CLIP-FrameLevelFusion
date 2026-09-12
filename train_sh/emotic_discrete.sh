@@ -27,18 +27,17 @@ python main.py \
     --batch-size ${BATCH_SIZE} \
     --epochs ${EPOCHS} \
     --optimizer AdamW \
-    --lr 2e-5 \
-    --lr-image-encoder 1e-6 \
+    --lr 1e-4 \
+    --lr-image-encoder 1e-5 \
     --lr-prompt-learner 5e-5 \
     --lr-adapter 1e-4 \
     --weight-decay 0.005 \
     --milestones 10 15 \
     --gamma 0.1 \
     --use-amp \
-    --freeze-image-encoder \
     --mixup-alpha 0.0 \
     --modality-dropout 0.3 \
-    --fusion-type q2l \
+    --fusion-type cmaf \
     --use-context \
     --crop-body \
     --num-segments 1 \
@@ -46,7 +45,7 @@ python main.py \
     --image-size 224 \
     --temperature 1.0 \
   --loss-type discrete \
-    --drop-path-rate 0.1 \
+    --drop-path-rate 0.0 \
     --grad-clip 1.0 \
     --lambda_mi 0.0 \
     --lambda_dc 0.0 \
