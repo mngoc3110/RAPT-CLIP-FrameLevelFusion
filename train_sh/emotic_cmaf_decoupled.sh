@@ -37,15 +37,16 @@ python main.py \
     --use-amp \
     --freeze-image-encoder \
     --mixup-alpha 0.0 \
-    --modality-dropout 0.3 \
+    --modality-dropout 0.0 \
     --fusion-type cmaf_decoupled \
+    --loss-type discrete \
     --use-context \
     --crop-body \
     --num-segments 1 \
     --duration 1 \
     --image-size 224 \
     --temperature 0.07 \
-    --drop-path-rate 0.1 \
+    --drop-path-rate 0.0 \
     --grad-clip 1.0 \
     --lambda_mi 0.0 \
     --lambda_dc 0.0 \
