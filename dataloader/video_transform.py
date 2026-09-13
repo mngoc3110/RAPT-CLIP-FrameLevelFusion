@@ -430,3 +430,44 @@ class IdentityTransform(object):
 
     def __call__(self, data):
         return data
+
+
+class GroupRandomErasing(object):
+    """Randomly erases a rectangular region in the tensor (applied after ToTorchFormatTensor).
+    Simulates occlusion — important for EMOTIC where people are often partially occluded.
+    Operates on (C*T, H, W) tensor format produced by ToTorchFormatTensor.
+
+    Args:
+        p (float): probability of applying erasing. Default: 0.5
+        scale (tuple): range of proportion of erased area. Default: (0.02, 0.2)
+        ratio (tuple): range of aspect ratio of erased area. Default: (0.3, 3.3)
+        value (float): erasing value. Default: 0 (black)
+    """
+    def __init__(self, p=0.5, scale=(0.02, 0.2), ratio=(0.3, 3.3), value=0):
+        self.p = p
+        self.scale = scale
+        self.ratio = ratio
+        self.value = value
+
+    def __call__(self, tensor):
+        if random.random() > self.p:
+            return tensor
+
+        # tensor shape: (C*T, H, W)
+        _, h, w = tensor.shape
+        area = h * w
+
+        for _ in range(10):
+            erase_area = random.uniform(self.scale[0], self.scale[1]) * area
+            aspect_ratio = random.uniform(self.ratio[0], self.ratio[1])
+
+            erase_h = int(round(math.sqrt(erase_area * aspect_ratio)))
+            erase_w = int(round(math.sqrt(erase_area / aspect_ratio)))
+
+            if erase_h < h and erase_w < w:
+                x1 = random.randint(0, h - erase_h)
+                y1 = random.randint(0, w - erase_w)
+                tensor[:, x1:x1 + erase_h, y1:y1 + erase_w] = self.value
+                return tensor
+
+        return tensor

@@ -471,21 +471,26 @@ class VideoDataset(data.Dataset):
 def train_data_loader(root_dir, list_file, num_segments, duration, image_size,dataset_name,bounding_box_face,bounding_box_body, crop_body=False, num_classes=8):
     if dataset_name == "RAER" or dataset_name == "CAER":
          train_transforms = torchvision.transforms.Compose([
-            # Apply ColorJitter from video_transform (works on list of images)
-            ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.2), 
-            GroupRandomGrayscale(p=0.2), # Custom transform for list of images
-            RandomRotation(4),
-            GroupResize(image_size),
-            GroupRandomHorizontalFlip(),
-            Stack(),
-            ToTorchFormatTensor()])
-    elif dataset_name == "EMOTIC":
-         train_transforms = torchvision.transforms.Compose([
+            ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.2),
+            GroupRandomGrayscale(p=0.2),
+            RandomRotation(8),               # ↑ 4° → 8° (more head tilt variation)
             GroupResize(image_size),
             GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
-            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+            GroupRandomErasing(p=0.3, scale=(0.02, 0.15))  # occlusion simulation
+         ])
+    elif dataset_name == "EMOTIC":
+         train_transforms = torchvision.transforms.Compose([
+            ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),  # matches paper
+            GroupRandomGrayscale(p=0.1),     # force shape/pose over color occasionally
+            RandomRotation(10),              # camera angle variation in EMOTIC scenes
+            GroupResize(image_size),
+            GroupRandomHorizontalFlip(),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
+            GroupRandomErasing(p=0.4, scale=(0.02, 0.2))   # EMOTIC has heavy occlusion
          ])
     else:
          # Default transforms for other datasets like CK+
