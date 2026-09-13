@@ -84,6 +84,8 @@ optim_group.add_argument('--lr-adapter', type=float, default=1e-4, help='Learnin
 optim_group.add_argument('--weight-decay', type=float, default=0.005, help='Weight decay for the optimizer.')
 optim_group.add_argument('--momentum', type=float, default=0.9, help='Momentum for the SGD optimizer.')
 optim_group.add_argument('--milestones', nargs='+', type=int, default=[10, 15], help='Epochs at which to decay the learning rate.')
+optim_group.add_argument('--scheduler', type=str, default='multistep', choices=['multistep', 'cosine'], help='LR scheduler type: multistep (MultiStepLR) or cosine (CosineAnnealing with warmup).')
+optim_group.add_argument('--warmup-epochs', type=int, default=3, help='Number of warmup epochs for cosine scheduler.')
 optim_group.add_argument('--gamma', type=float, default=0.1, help='Factor for learning rate decay.')
 
 # --- Loss & Imbalance Handling ---
@@ -105,6 +107,12 @@ loss_group.add_argument('--mixup-alpha', type=float, default=0.0, help='Alpha va
 # NEW LDAM ARGS
 loss_group.add_argument('--ldam-max-m', type=float, default=0.5, help='Max margin for LDAM Loss.')
 loss_group.add_argument('--ldam-s', type=float, default=30.0, help='Scaling factor for LDAM Loss. s=30 works well with CLIP cosine-sim outputs (proven: 73.76%% UAR on RAER). Lower values (e.g. s=3) produce weak gradients.')
+# ASL gamma parameters (configurable via CLI)
+loss_group.add_argument('--asl-gamma-neg', type=float, default=4.0, help='Asymmetric Loss gamma_neg. Controls negative focusing. Lower=less tail suppression.')
+loss_group.add_argument('--asl-gamma-pos', type=float, default=0.0, help='Asymmetric Loss gamma_pos. Controls positive focusing.')
+loss_group.add_argument('--asl-clip', type=float, default=0.05, help='Asymmetric Loss probability clipping for negatives.')
+# Early stopping
+train_group.add_argument('--early-stopping-patience', type=int, default=0, help='Early stopping patience (0=disabled). Stop if valid metric does not improve for N epochs.')
 
 # --- Model & Input ---
 model_group = parser.add_argument_group('Model & Input', 'Parameters for model architecture and data handling')
@@ -250,9 +258,17 @@ def run_training(args: argparse.Namespace) -> None:
             print("=> Using DiscreteLoss (Dynamic) for EMOTIC Multi-label classification")
             criterion = DiscreteLoss(weight_type='dynamic', device=args.device).to(args.device)
         elif args.loss_type == 'dynamic_asl':
-            print("=> Using DynamicAsymmetricLoss (Dynamic ASL) for EMOTIC Multi-label classification")
-            criterion = DynamicAsymmetricLoss(gamma_neg=4.0, gamma_pos=0.0, clip=0.05,
-                                               device=args.device, logit_clamp=14.0).to(args.device)
+            # Compute global class frequency weights from training set
+            global_class_freq = None
+            if sum(cls_num_list) > 0:
+                global_class_freq = cls_num_list  # list of per-class counts
+                print(f"=> Using GLOBAL class freq weights for DynamicASL: {global_class_freq}")
+            else:
+                print("=> Warning: cls_num_list is empty, falling back to per-batch dynamic weights")
+            print(f"=> Using DynamicAsymmetricLoss: gamma_neg={args.asl_gamma_neg}, gamma_pos={args.asl_gamma_pos}, clip={args.asl_clip}")
+            criterion = DynamicAsymmetricLoss(gamma_neg=args.asl_gamma_neg, gamma_pos=args.asl_gamma_pos,
+                                               clip=args.asl_clip, device=args.device, logit_clamp=14.0,
+                                               global_class_freq=global_class_freq).to(args.device)
         else:
             print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
             criterion = AsymmetricLoss(gamma_neg=3.0, gamma_pos=0.0, clip=0.05).to(args.device)
@@ -359,7 +375,16 @@ def run_training(args: argparse.Namespace) -> None:
         if 'initial_lr' not in group:
             group['initial_lr'] = group['lr']
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma, last_epoch=start_epoch - 1)
+    if args.scheduler == 'cosine':
+        from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
+        warmup_epochs = args.warmup_epochs
+        warmup_sched = LinearLR(optimizer, start_factor=0.1, total_iters=warmup_epochs)
+        cosine_sched = CosineAnnealingLR(optimizer, T_max=args.epochs - warmup_epochs, eta_min=1e-7)
+        scheduler = SequentialLR(optimizer, [warmup_sched, cosine_sched], [warmup_epochs])
+        print(f"=> Using CosineAnnealing scheduler with {warmup_epochs} warmup epochs")
+    else:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma, last_epoch=start_epoch - 1)
+        print(f"=> Using MultiStepLR scheduler with milestones={args.milestones}")
 
     if args.resume and os.path.isfile(args.resume):
         if 'scheduler' in checkpoint:
@@ -376,6 +401,10 @@ def run_training(args: argparse.Namespace) -> None:
                     dc_warmup=args.dc_warmup, dc_ramp=args.dc_ramp, 
                     use_amp=args.use_amp, grad_clip=args.grad_clip, mixup_alpha=args.mixup_alpha,
                     use_ldl=args.use_ldl, ldl_warmup=args.ldl_warmup)
+    
+    # Early stopping setup
+    early_stop_patience = getattr(args, 'early_stopping_patience', 0)
+    no_improve_count = 0
     
     for epoch in range(start_epoch, args.epochs):
         inf = f'******************** Epoch: {epoch} ********************'
@@ -428,6 +457,18 @@ def run_training(args: argparse.Namespace) -> None:
             
             if hasattr(trainer, 'ema') and trainer.ema is not None:
                 trainer.ema.restore(trainer.model)
+
+        # Early stopping check
+        if is_best:
+            no_improve_count = 0
+        else:
+            no_improve_count += 1
+            if early_stop_patience > 0 and no_improve_count >= early_stop_patience:
+                early_stop_msg = f"\n==> Early stopping triggered at epoch {epoch} (no improvement for {early_stop_patience} epochs). Best Valid mAP: {best_val_uar:.2f}%"
+                print(early_stop_msg)
+                with open(log_txt_path, 'a') as f:
+                    f.write(early_stop_msg + '\n')
+                break
 
         # Record metrics
         epoch_time = time.time() - start_time

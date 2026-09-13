@@ -149,12 +149,17 @@ class DynamicAsymmetricLoss(nn.Module):
     Key design decisions:
     - Clamps input logits to [-14, 14] BEFORE sigmoid to prevent saturation
       when CLIP temperature (0.07) produces very large logit magnitudes.
-    - Dynamic weights are applied per-class, then averaged over batch.
-      (BUG FIX: old code did sum()/batch, double-weighting heavy classes)
+    - Supports two weighting modes:
+      1. Global weights (recommended): Pre-computed from full training set distribution.
+         Stable and ensures tail classes always receive proper gradient weight.
+      2. Per-batch dynamic weights (fallback): Computed from each mini-batch.
+         CAUTION: With batch_size=16, rare classes (e.g., Embarrassment ≈0.3%)
+         are absent in ~95% of batches → effectively zero-weighted.
     - gamma_pos=0 recommended for EMOTIC to not penalize true positives.
     '''
     def __init__(self, gamma_neg=4, gamma_pos=0, clip=0.05, eps=1e-8,
-                 device=torch.device('cpu'), logit_clamp=14.0):
+                 device=torch.device('cpu'), logit_clamp=14.0,
+                 global_class_freq=None):
         super(DynamicAsymmetricLoss, self).__init__()
         self.gamma_neg = gamma_neg
         self.gamma_pos = gamma_pos
@@ -162,6 +167,19 @@ class DynamicAsymmetricLoss(nn.Module):
         self.eps = eps
         self.device = device
         self.logit_clamp = logit_clamp  # Prevents sigmoid saturation from CLIP temp
+
+        # Pre-compute global weights from full training set statistics
+        if global_class_freq is not None:
+            freq = torch.FloatTensor(global_class_freq)
+            # Inverse-log frequency: rare class → higher weight
+            weights = 1.0 / torch.log(freq + 1.2)
+            # Normalize so weights sum to num_classes (preserves loss magnitude)
+            weights = weights * (len(global_class_freq) / weights.sum())
+            self.register_buffer('global_weights', weights.unsqueeze(0))  # (1, C)
+            print(f"  DynamicASL: Using GLOBAL weights (min={weights.min():.3f}, max={weights.max():.3f})")
+        else:
+            self.global_weights = None
+            print(f"  DynamicASL: Using per-batch dynamic weights (fallback)")
 
     def prepare_dynamic_weights(self, target):
         """Per-class inverse-log frequency weights. Rare class → higher weight."""
@@ -201,15 +219,20 @@ class DynamicAsymmetricLoss(nn.Module):
             one_sided_w = torch.pow(1 - pt, one_sided_gamma)
             loss = loss * one_sided_w  # (B, C)
 
-        # Apply EMOTIC Dynamic Weights per class
-        # Correct reduction: sum over classes (weighted), mean over batch
-        dynamic_weights = self.prepare_dynamic_weights(y).to(x.device)  # (1, C)
+        # Apply class weights
+        if self.global_weights is not None:
+            # Use stable global weights pre-computed from full training set
+            dynamic_weights = self.global_weights.to(x.device)  # (1, C)
+        else:
+            # Fallback: per-batch dynamic weights (noisy for rare classes)
+            dynamic_weights = self.prepare_dynamic_weights(y).to(x.device)  # (1, C)
         loss = loss * dynamic_weights  # (B, C)
 
         # FIX: sum over C (classes), mean over B (batch)
         # Old: -loss.sum() / B  ← wrong, doesn't normalize across C properly
         # New: -loss.sum(dim=1).mean()  ← correct: per-sample total, then batch mean
         return -loss.sum(dim=1).mean()
+
 
 class BlvLoss(nn.Module):
     def __init__(self, cls_num_list, sigma=4, loss_name='BlvLoss'):
