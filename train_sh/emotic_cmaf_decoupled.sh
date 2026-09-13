@@ -62,7 +62,7 @@ python main.py \
     --num-segments 1 \
     --duration 1 \
     --image-size 224 \
-    --temperature 1.0 \
+    --temperature 0.3 \
     --drop-path-rate 0.0 \
     --grad-clip 1.0 \
     --lambda_mi 0.0 \
