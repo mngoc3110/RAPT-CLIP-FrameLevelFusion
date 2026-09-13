@@ -49,7 +49,7 @@ python main.py \
     --warmup-epochs 3 \
     --use-amp \
     --freeze-image-encoder \
-    --mixup-alpha 0.4 \
+    --mixup-alpha 0.0 \
     --modality-dropout 0.1 \
     --fusion-type cmaf_decoupled \
     --loss-type dynamic_asl \

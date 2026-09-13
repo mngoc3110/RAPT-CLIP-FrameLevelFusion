@@ -69,7 +69,7 @@ class Trainer:
         print(f"DEBUG: Trainer initialized with use_ldl={use_ldl}, ldl_warmup={ldl_warmup}")
         
         # Initialize ModelEMA
-        self.ema = ModelEMA(self.model, decay=0.999)
+        self.ema = ModelEMA(self.model, decay=0.995)
         
         if self.use_amp:
             self.scaler = torch.cuda.amp.GradScaler()
