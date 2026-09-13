@@ -267,7 +267,7 @@ def run_training(args: argparse.Namespace) -> None:
                 print("=> Warning: cls_num_list is empty, falling back to per-batch dynamic weights")
             print(f"=> Using DynamicAsymmetricLoss: gamma_neg={args.asl_gamma_neg}, gamma_pos={args.asl_gamma_pos}, clip={args.asl_clip}")
             criterion = DynamicAsymmetricLoss(gamma_neg=args.asl_gamma_neg, gamma_pos=args.asl_gamma_pos,
-                                               clip=args.asl_clip, device=args.device, logit_clamp=14.0,
+                                               clip=args.asl_clip, device=args.device, logit_clamp=8.0,
                                                global_class_freq=global_class_freq).to(args.device)
         else:
             print("=> Using Asymmetric Loss (ASL) for EMOTIC Multi-label classification")
