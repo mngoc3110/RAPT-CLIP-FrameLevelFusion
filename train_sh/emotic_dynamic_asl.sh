@@ -15,10 +15,11 @@ TRAIN_ANNOT="${ANNOT_DIR}/train_bbox.txt"
 VAL_ANNOT="${ANNOT_DIR}/val_bbox.txt"
 TEST_ANNOT="${ANNOT_DIR}/test_bbox.txt"
 
-# VAD (Valence-Arousal-Dominance) annotation files
-TRAIN_VAD="${ANNOT_DIR}/train_vad.json"
-VAL_VAD="${ANNOT_DIR}/val_vad.json"
-TEST_VAD="${ANNOT_DIR}/test_vad.json"
+# VAD (Valence-Arousal-Dominance) annotation files (from local repo)
+TRAIN_VAD="emotic_dataset/train_vad.json"
+VAL_VAD="emotic_dataset/val_vad.json"
+TEST_VAD="emotic_dataset/test_vad.json"
+
 
 
 BBOX_FACE="${ANNOT_DIR}/emotic_face_bboxes_mtcnn.json"
