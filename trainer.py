@@ -206,9 +206,9 @@ class Trainer:
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
                     # Forward pass
                     if images_context is not None:
-                        output, learnable_text_features, hand_crafted_text_features, moco_logits = self.model(images_face, images_body, images_context)
+                        output, learnable_text_features, hand_crafted_text_features, moco_logits, vad_pred = self.model(images_face, images_body, images_context)
                     else:
-                        output, learnable_text_features, hand_crafted_text_features, moco_logits = self.model(images_face, images_body)
+                        output, learnable_text_features, hand_crafted_text_features, moco_logits, vad_pred = self.model(images_face, images_body)
                     
                     # DEBUG: Check model output for NaN
                     if torch.isnan(output).any():
@@ -289,6 +289,15 @@ class Trainer:
                          moco_loss = torch.nn.CrossEntropyLoss()(moco_logits, moco_target)
                          loss += moco_loss
                          moco_losses.update(moco_loss.item(), target.size(0))
+
+                    # VAD auxiliary loss (EMOTIC only)
+                    lambda_vad = getattr(self.args, 'lambda_vad', 0.0)
+                    if is_train and vad_pred is not None and lambda_vad > 0.0:
+                        # vad_target comes as 5th element in batch (if dataloader provides it)
+                        vad_target = batch[4].to(self.device) if len(batch) > 4 else None
+                        if vad_target is not None:
+                            vad_loss = torch.nn.functional.mse_loss(vad_pred, vad_target.float())
+                            loss += lambda_vad * vad_loss
 
                 if is_train:
                     self.optimizer.zero_grad()

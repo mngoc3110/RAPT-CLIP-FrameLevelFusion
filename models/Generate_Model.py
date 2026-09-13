@@ -108,6 +108,19 @@ class GenerateModel(nn.Module):
         
         self.project_fc = nn.Linear(in_dim, 512)
 
+        # VAD Head (Valence-Arousal-Dominance) — auxiliary task for EMOTIC
+        self.use_vad = (getattr(args, 'dataset', '') == 'EMOTIC' and
+                        getattr(args, 'lambda_vad', 0.0) > 0.0)
+        if self.use_vad:
+            self.vad_head = nn.Sequential(
+                nn.Linear(512, 64),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(64, 3),
+                nn.Sigmoid()   # output ∈ [0,1]: Valence, Arousal, Dominance
+            )
+            print(f"=> VAD Head enabled (lambda_vad={args.lambda_vad})")
+
         # Fusion Selection: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion)
         if self.fusion_type == 'gfi':
             self.gate_fc = nn.Sequential(
@@ -317,7 +330,7 @@ class GenerateModel(nn.Module):
             
             # Return immediately for Q2L, skipping the old classification block
             moco_logits = None
-            return output, text_features, hand_crafted_text_features, moco_logits
+            return output, text_features, hand_crafted_text_features, moco_logits, None
 
         elif self.fusion_type == 'gfi':
             features_to_concat = [image_face_features, image_body_features]
@@ -446,4 +459,12 @@ class GenerateModel(nn.Module):
             else:
                 output = video_features @ text_features.t() / self.args.temperature
 
-        return output, text_features, hand_crafted_text_features, moco_logits
+        # VAD prediction (auxiliary task — EMOTIC only)
+        vad_pred = None
+        if self.use_vad:
+            # Use final video_features (B, 512) — already L2-normalized
+            # Detach is NOT used: we want gradient to flow back through VAD head into video encoder
+            _vf = video_features if not isinstance(video_features, tuple) else video_features[0]
+            vad_pred = self.vad_head(_vf)  # (B, 3) ∈ [0,1]
+
+        return output, text_features, hand_crafted_text_features, moco_logits, vad_pred

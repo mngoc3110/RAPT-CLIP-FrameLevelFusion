@@ -139,30 +139,33 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
     print(f"Loading train data (Standard) for {args.dataset}...")
     train_data = train_data_loader(
         root_dir=args.root_dir, list_file=train_annotation_file_path, num_segments=args.num_segments,
-        duration=args.duration, image_size=args.image_size,dataset_name=args.dataset,
-        bounding_box_face=args.bounding_box_face,bounding_box_body=args.bounding_box_body,
+        duration=args.duration, image_size=args.image_size, dataset_name=args.dataset,
+        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
         crop_body=args.crop_body,
-        num_classes=num_classes
+        num_classes=num_classes,
+        vad_annotation=getattr(args, 'train_vad_annotation', None)
     )
     
     print(f"Loading validation data (Standard) for {args.dataset}...")
     val_data = test_data_loader(
         root_dir=args.root_dir, list_file=val_annotation_file_path, num_segments=args.num_segments,
         duration=args.duration, image_size=args.image_size,
-        bounding_box_face=args.bounding_box_face,bounding_box_body=args.bounding_box_body,
+        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
         crop_body=args.crop_body,
         num_classes=num_classes,
-        dataset_name=args.dataset
+        dataset_name=args.dataset,
+        vad_annotation=getattr(args, 'val_vad_annotation', None)
     )
 
     print(f"Loading test data (Standard) for {args.dataset}...")
     test_data = test_data_loader(
         root_dir=args.root_dir, list_file=test_annotation_file_path, num_segments=args.num_segments,
         duration=args.duration, image_size=args.image_size,
-        bounding_box_face=args.bounding_box_face,bounding_box_body=args.bounding_box_body,
+        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
         crop_body=args.crop_body,
         num_classes=num_classes,
-        dataset_name=args.dataset
+        dataset_name=args.dataset,
+        vad_annotation=getattr(args, 'test_vad_annotation', None)
     )
 
     print(f"Total number of training images: {len(train_data)}")

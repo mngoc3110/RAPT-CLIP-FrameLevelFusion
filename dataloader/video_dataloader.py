@@ -50,7 +50,7 @@ class VideoRecord(object):
         return None
 
 class VideoDataset(data.Dataset):
-    def __init__(self, list_file, num_segments, duration, mode, transform, image_size,bounding_box_face,bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name=""):
+    def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", vad_annotation=None):
         self.list_file = list_file
         self.duration = duration
         self.num_segments = num_segments
@@ -62,6 +62,13 @@ class VideoDataset(data.Dataset):
         self.crop_body = crop_body
         self.root_dir = root_dir
         self.dataset_name = dataset_name
+
+        # Load VAD lookup (optional, EMOTIC only)
+        self.vad_lookup = {}
+        if vad_annotation and os.path.exists(vad_annotation):
+            with open(vad_annotation, 'r') as f:
+                self.vad_lookup = json.load(f)
+            print(f"  VAD annotations loaded: {len(self.vad_lookup)} entries from {vad_annotation}")
         
         # Debugging: Initialize for saving sample images
         self.debug_samples_path = 'debug_samples'
@@ -458,17 +465,29 @@ class VideoDataset(data.Dataset):
         
         # Process target to multi-hot if it's a list (EMOTIC)
         if isinstance(record.label, list):
-            # record.label is already a list of 0s and 1s representing the multi-hot vector
             target_tensor = torch.tensor(record.label, dtype=torch.float32)
-            return process_data_face, process_data, process_data_context, target_tensor
+            # VAD lookup
+            vad_tensor = torch.full((3,), 0.5)  # neutral fallback
+            if self.vad_lookup:
+                vad_val = self.vad_lookup.get(rel_key)
+                if vad_val is None:
+                    # suffix-match fallback
+                    for start in range(1, len(rel_key.split('/')) + 1):
+                        cand = '/'.join(rel_key.split('/')[start:])
+                        if cand in self.vad_lookup:
+                            vad_val = self.vad_lookup[cand]
+                            break
+                if vad_val is not None:
+                    vad_tensor = torch.tensor(vad_val, dtype=torch.float32)
+            return process_data_face, process_data, process_data_context, target_tensor, vad_tensor
         else:
-            return process_data_face, process_data, process_data_context, record.label - 1
+            return process_data_face, process_data, process_data_context, record.label - 1, None
 
     def __len__(self):
         return len(self.video_list)
 
 
-def train_data_loader(root_dir, list_file, num_segments, duration, image_size,dataset_name,bounding_box_face,bounding_box_body, crop_body=False, num_classes=8):
+def train_data_loader(root_dir, list_file, num_segments, duration, image_size, dataset_name, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, vad_annotation=None):
     if dataset_name == "RAER" or dataset_name == "CAER":
          train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.2),
@@ -502,8 +521,8 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size,da
             
     
     train_data = VideoDataset(root_dir=root_dir, list_file=list_file,
-                              num_segments=num_segments, #16
-                              duration=duration, #1
+                              num_segments=num_segments,
+                              duration=duration,
                               mode='train',
                               transform=train_transforms,
                               image_size=image_size,
@@ -511,12 +530,13 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size,da
                               bounding_box_body=bounding_box_body,
                               crop_body=crop_body,
                               num_classes=num_classes,
-                              dataset_name=dataset_name
+                              dataset_name=dataset_name,
+                              vad_annotation=vad_annotation
                               )
     return train_data
 
 
-def test_data_loader(root_dir, list_file, num_segments, duration, image_size,bounding_box_face,bounding_box_body, crop_body=False, num_classes=8, dataset_name=""):
+def test_data_loader(root_dir, list_file, num_segments, duration, image_size, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, dataset_name="", vad_annotation=None):
     if dataset_name == "EMOTIC":
         test_transform = torchvision.transforms.Compose([GroupResize(image_size),
                                                          Stack(),
@@ -526,7 +546,7 @@ def test_data_loader(root_dir, list_file, num_segments, duration, image_size,bou
         test_transform = torchvision.transforms.Compose([GroupResize(image_size),
                                                          Stack(),
                                                          ToTorchFormatTensor()])
-    
+
     test_data = VideoDataset(root_dir=root_dir, list_file=list_file,
                              num_segments=num_segments,
                              duration=duration,
@@ -537,6 +557,7 @@ def test_data_loader(root_dir, list_file, num_segments, duration, image_size,bou
                              bounding_box_body=bounding_box_body,
                              crop_body=crop_body,
                              num_classes=num_classes,
-                             dataset_name=dataset_name
+                             dataset_name=dataset_name,
+                             vad_annotation=vad_annotation
                              )
     return test_data
