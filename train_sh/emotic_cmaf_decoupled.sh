@@ -41,14 +41,13 @@ python main.py \
     --epochs ${EPOCHS} \
     --optimizer AdamW \
     --lr 2e-5 \
-    --lr-image-encoder 0 \
+    --lr-image-encoder 5e-7 \
     --lr-prompt-learner 5e-6 \
     --lr-adapter 2e-5 \
     --weight-decay 0.02 \
     --scheduler cosine \
     --warmup-epochs 3 \
     --use-amp \
-    --freeze-image-encoder \
     --mixup-alpha 0.0 \
     --modality-dropout 0.1 \
     --fusion-type cmaf_decoupled \
