@@ -295,7 +295,7 @@ class Trainer:
                          moco_losses.update(moco_loss.item(), target.size(0))
 
                     # VAD auxiliary loss (EMOTIC only)
-                    lambda_vad = getattr(self.args, 'lambda_vad', 0.0)
+                    lambda_vad = getattr(self.model.args, 'lambda_vad', 0.0) if hasattr(self.model, 'args') else 0.0
                     if is_train and vad_pred is not None and lambda_vad > 0.0:
                         if vad_target is not None:
                             vad_target = vad_target.to(self.device)
