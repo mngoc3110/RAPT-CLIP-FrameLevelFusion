@@ -165,8 +165,12 @@ class Trainer:
         
         with context:
             for i, data in enumerate(pbar):
-                # Handle both 2-stream (Face, Body) and 3-stream (Face, Body, Context)
-                if len(data) == 4:
+                # Handle both 2-stream (Face, Body) and 3-stream (Face, Body, Context), now with VAD (5 elements)
+                vad_target = None
+                if len(data) == 5:
+                    images_face, images_body, images_context, target, vad_target = data
+                    images_context = images_context.to(self.device)
+                elif len(data) == 4:
                     images_face, images_body, images_context, target = data
                     images_context = images_context.to(self.device)
                 else:
@@ -293,9 +297,8 @@ class Trainer:
                     # VAD auxiliary loss (EMOTIC only)
                     lambda_vad = getattr(self.args, 'lambda_vad', 0.0)
                     if is_train and vad_pred is not None and lambda_vad > 0.0:
-                        # vad_target comes as 5th element in batch (if dataloader provides it)
-                        vad_target = batch[4].to(self.device) if len(batch) > 4 else None
                         if vad_target is not None:
+                            vad_target = vad_target.to(self.device)
                             vad_loss = torch.nn.functional.mse_loss(vad_pred, vad_target.float())
                             loss += lambda_vad * vad_loss
 
