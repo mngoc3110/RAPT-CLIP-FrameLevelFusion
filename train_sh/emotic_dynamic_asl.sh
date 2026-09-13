@@ -45,7 +45,7 @@ python main.py \
     --image-size 224 \
     --temperature 1.0 \
   --loss-type dynamic_asl \
-    --drop-path-rate 0.1 \
+    --drop-path-rate 0.0 \
     --grad-clip 1.0 \
     --lambda_mi 0.0 \
     --lambda_dc 0.0 \

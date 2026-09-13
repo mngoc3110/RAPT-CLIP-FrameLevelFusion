@@ -15,7 +15,7 @@
 #   - Dynamic weights: per-batch → global frequency
 
 EXP_NAME="EMOTIC_CMAF_DECOUPLED_v6"
-BATCH_SIZE=16
+BATCH_SIZE=26
 EPOCHS=35
 
 # Kaggle Dataset Paths
