@@ -4,7 +4,7 @@
 # (Tăng tốc I/O, nạp toàn bộ ma trận ảnh thẳng vào RAM)
 
 EXP_NAME="EMOTIC_NPY"
-BATCH_SIZE=26
+BATCH_SIZE=16
 EPOCHS=25
 
 echo "Starting EMOTIC training with preprocessed .npy files..."
