@@ -173,7 +173,8 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
     
     if hasattr(args, 'use_npy') and args.use_npy and args.dataset == 'EMOTIC':
         import torchvision
-        from dataloader.video_transform import GroupResize, GroupRandomHorizontalFlip, Stack, ToTorchFormatTensor, GroupNormalize, ColorJitter, GroupRandomGrayscale, RandomRotation, GroupRandomErasing
+        from dataloader.video_transform import GroupResize, GroupRandomHorizontalFlip, Stack, ToTorchFormatTensor, GroupNormalize, ColorJitter, RandomRotation, GroupRandomErasing
+        from dataloader.video_dataloader import GroupRandomGrayscale
         print(f"Bypassing standard dataloader. Using EmoticNpyDataset from {args.npy_dir}")
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
