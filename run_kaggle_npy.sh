@@ -9,15 +9,15 @@ KAGGLE_DATA_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn/c
 WORKING_DIR="/kaggle/working/emotic_pre"
 
 echo "=== BƯỚC 1: TIỀN XỬ LÝ (TẠO FILE NPY) ==="
-# Chỉ tạo NPY nếu thư mục chưa tồn tại (để tránh tạo lại nhiều lần nếu bạn chạy lại cell)
-if [ ! -d "$WORKING_DIR" ]; then
+# Chỉ tạo NPY nếu file thực sự chưa được tạo ra
+if [ ! -f "$WORKING_DIR/train_context_arr.npy" ]; then
     echo "Đang khởi tạo các file NPY. Quá trình này sẽ mất một lúc..."
     python3 mat2py.py \
         --data_dir "$KAGGLE_DATA_DIR" \
         --save_dir "$WORKING_DIR" \
         --generate_npy
 else
-    echo "Thư mục $WORKING_DIR đã tồn tại. Bỏ qua bước tiền xử lý!"
+    echo "File NPY đã tồn tại trong $WORKING_DIR. Bỏ qua bước tiền xử lý!"
 fi
 
 echo "=== BƯỚC 2: BẮT ĐẦU HUẤN LUYỆN (TRAINING) ==="
@@ -32,7 +32,7 @@ python3 main.py \
     --dataset EMOTIC \
     --use-npy \
     --npy-dir "$WORKING_DIR" \
-    --gpu cuda \
+    --gpu 0 \
     --workers 4 \
     --batch-size ${BATCH_SIZE} \
     --epochs ${EPOCHS} \
