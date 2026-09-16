@@ -261,7 +261,12 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     ann_path_src = os.path.join(args.data_dir, 'CVPR17_Annotations.mat')
-    data_path_src = os.path.join(args.data_dir, 'cvpr_emotic') # Kaggle usually nests this once more if downloaded as archive, but let's assume it points to the folder containing 'cvpr_emotic' subfolder.
+    
+    # Kaggle sometimes nests the image folder twice: cvpr_emotic/cvpr_emotic
+    data_path_src = os.path.join(args.data_dir, 'cvpr_emotic')
+    if os.path.exists(os.path.join(data_path_src, 'cvpr_emotic')):
+        data_path_src = os.path.join(data_path_src, 'cvpr_emotic')
+        
     save_path = args.save_dir
     if not os.path.exists(save_path):
       os.makedirs(save_path)
