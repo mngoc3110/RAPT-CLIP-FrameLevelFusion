@@ -250,7 +250,7 @@ def prepare_data(data_mat, data_path_src, save_dir, dataset_type='train', genera
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, required=True, help='Path to Emotic data and annotations')
-    parser.add_argument('--save_dir_name', type=str, default='emotic_pre', help='Directory name in which preprocessed data will be stored')
+    parser.add_argument('--save_dir', type=str, default='./emotic_pre', help='Directory path where preprocessed data will be stored')
     parser.add_argument('--label', type=str,  default='all', choices=['train', 'val', 'test', 'all'])
     parser.add_argument('--generate_npy', action='store_true', help='Generate npy files')
     parser.add_argument('--debug_mode', action='store_true', help='Debug mode. Will only save a small subset of the data')
@@ -261,8 +261,8 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     ann_path_src = os.path.join(args.data_dir, 'CVPR17_Annotations.mat')
-    data_path_src = os.path.join(args.data_dir, 'cvpr_emotic')
-    save_path = os.path.join(args.data_dir, args.save_dir_name)
+    data_path_src = os.path.join(args.data_dir, 'cvpr_emotic') # Kaggle usually nests this once more if downloaded as archive, but let's assume it points to the folder containing 'cvpr_emotic' subfolder.
+    save_path = args.save_dir
     if not os.path.exists(save_path):
       os.makedirs(save_path)
     
