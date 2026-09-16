@@ -65,6 +65,8 @@ path_group.add_argument('--test-annotation', type=str, default='RAER/annotation/
 path_group.add_argument('--clip-path', type=str, default='ViT-B/16', help='Path to the pretrained CLIP model.')
 path_group.add_argument('--bounding-box-face', type=str, default='RAER/bounding_box/face.json', help='Absolute path to face bounding box JSON. E.g., /kaggle/input/raer-annot/annotation/bounding_box/face_abs.json')
 path_group.add_argument('--bounding-box-body', type=str, default='RAER/bounding_box/body.json', help='Absolute path to body bounding box JSON. E.g., /kaggle/input/raer-annot/annotation/bounding_box/body_abs.json')
+path_group.add_argument('--use-npy', action='store_true', help='Use preprocessed .npy files instead of raw images (EMOTIC only).')
+path_group.add_argument('--npy-dir', type=str, default='emotic_dataset/emotic_pre', help='Path to the directory containing .npy files.')
 
 # --- Training Control ---
 train_group = parser.add_argument_group('Training Control', 'Parameters to control the training process')

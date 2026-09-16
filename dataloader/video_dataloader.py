@@ -49,6 +49,49 @@ class VideoRecord(object):
             return [int(self._data[3]), int(self._data[4]), int(self._data[5]), int(self._data[6])]
         return None
 
+class EmoticNpyDataset(data.Dataset):
+    def __init__(self, npy_dir, mode='train', transform=None, num_classes=26):
+        self.mode = mode
+        self.transform = transform
+        
+        # Load npy files
+        print(f"Loading {mode} NPY files from {npy_dir}...")
+        self.context_arr = np.load(os.path.join(npy_dir, f'{mode}_context_arr.npy'))
+        self.body_arr = np.load(os.path.join(npy_dir, f'{mode}_body_arr.npy'))
+        self.cat_arr = np.load(os.path.join(npy_dir, f'{mode}_cat_arr.npy'))
+        self.cont_arr = np.load(os.path.join(npy_dir, f'{mode}_cont_arr.npy'))
+        
+    def __len__(self):
+        return len(self.cat_arr)
+        
+    def __getitem__(self, index):
+        context_img = self.context_arr[index]
+        body_img = self.body_arr[index]
+        
+        # Convert to PIL Image for transforms (arrays are RGB (H, W, 3))
+        context_pil = Image.fromarray(context_img)
+        body_pil = Image.fromarray(body_img)
+        
+        # Artificial face crop (60% center crop from context) to satisfy Triple-Stream
+        w, h = context_pil.size
+        face_pil = context_pil.crop((int(w * 0.2), int(h * 0.2), int(w * 0.8), int(h * 0.8)))
+        
+        if self.transform:
+            # Transform expects a list of PIL Images (for video segments)
+            # We wrap single images in a list, then reshape back to (T, C, H, W) where T=1
+            context_tensor = self.transform([context_pil]).view(-1, 3, 224, 224)
+            body_tensor = self.transform([body_pil]).view(-1, 3, 224, 224)
+            face_tensor = self.transform([face_pil]).view(-1, 3, 224, 224)
+        else:
+            context_tensor = torch.zeros((1, 3, 224, 224))
+            body_tensor = torch.zeros((1, 3, 224, 224))
+            face_tensor = torch.zeros((1, 3, 224, 224))
+            
+        target_tensor = torch.tensor(self.cat_arr[index], dtype=torch.float32)
+        vad_tensor = torch.tensor(self.cont_arr[index], dtype=torch.float32) / 10.0
+        
+        return face_tensor, body_tensor, context_tensor, target_tensor, vad_tensor
+
 class VideoDataset(data.Dataset):
     def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", vad_annotation=None):
         self.list_file = list_file

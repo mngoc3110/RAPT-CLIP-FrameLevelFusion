@@ -7,7 +7,7 @@ import torch
 import torch.utils.data
 from models.clip import clip
 
-from dataloader.video_dataloader import train_data_loader, test_data_loader
+from dataloader.video_dataloader import train_data_loader, test_data_loader, EmoticNpyDataset
 from models.Generate_Model import GenerateModel
 from models.Text import *
 from utils.utils import *
@@ -170,6 +170,33 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
 
     print(f"Total number of training images: {len(train_data)}")
     print("Creating DataLoader instances...")
+    
+    if hasattr(args, 'use_npy') and args.use_npy and args.dataset == 'EMOTIC':
+        import torchvision
+        from dataloader.video_transform import GroupResize, GroupRandomHorizontalFlip, Stack, ToTorchFormatTensor, GroupNormalize, ColorJitter, GroupRandomGrayscale, RandomRotation, GroupRandomErasing
+        print(f"Bypassing standard dataloader. Using EmoticNpyDataset from {args.npy_dir}")
+        train_transforms = torchvision.transforms.Compose([
+            ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+            GroupRandomGrayscale(p=0.1),
+            RandomRotation(10),
+            GroupResize(args.image_size),
+            GroupRandomHorizontalFlip(),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
+            GroupRandomErasing(p=0.4, scale=(0.02, 0.2))
+        ])
+        test_transform = torchvision.transforms.Compose([
+            GroupResize(args.image_size),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+        ])
+        
+        train_data = EmoticNpyDataset(npy_dir=args.npy_dir, mode='train', transform=train_transforms, num_classes=num_classes)
+        val_data = EmoticNpyDataset(npy_dir=args.npy_dir, mode='val', transform=test_transform, num_classes=num_classes)
+        test_data = EmoticNpyDataset(npy_dir=args.npy_dir, mode='test', transform=test_transform, num_classes=num_classes)
+        print(f"NPY Dataset Sizes -> Train: {len(train_data)}, Val: {len(val_data)}, Test: {len(test_data)}")
     
     sampler = None
     shuffle = True

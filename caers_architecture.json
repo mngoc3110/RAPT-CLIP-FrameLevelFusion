@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "RAPT-CLIP Architecture for CAER-S",
+    "subtitle": "Context-Aware Emotion Recognition (Static Images)"
+  },
+  "components": [
+    {
+      "id": "input",
+      "type": "external",
+      "label": "Image Input",
+      "pos": [50, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "class_names",
+      "type": "external",
+      "label": "Class Names",
+      "sublabel": "+ Raw Text",
+      "pos": [50, 430],
+      "size": [140, 60]
+    },
+    {
+      "id": "face_crop",
+      "type": "backend",
+      "label": "Face Crop",
+      "pos": [250, 50],
+      "size": [140, 60]
+    },
+    {
+      "id": "body_crop",
+      "type": "backend",
+      "label": "Body Crop",
+      "pos": [250, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "context_crop",
+      "type": "backend",
+      "label": "Context Crop",
+      "pos": [250, 250],
+      "size": [140, 60]
+    },
+    {
+      "id": "face_encoder",
+      "type": "backend",
+      "label": "Image Encoder",
+      "sublabel": "ViT-B/16 (Face)",
+      "pos": [450, 50],
+      "size": [140, 60]
+    },
+    {
+      "id": "body_encoder",
+      "type": "backend",
+      "label": "Image Encoder",
+      "sublabel": "ViT-B/16 (Body)",
+      "pos": [450, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "context_encoder",
+      "type": "backend",
+      "label": "Image Encoder",
+      "sublabel": "ViT-B/16 (Context)",
+      "pos": [450, 250],
+      "size": [140, 60]
+    },
+    {
+      "id": "face_adapter",
+      "type": "security",
+      "label": "Face Adapter",
+      "sublabel": "Emotion-Aware (EAA)",
+      "pos": [650, 50],
+      "size": [140, 60]
+    },
+    {
+      "id": "learnable_prompts",
+      "type": "frontend",
+      "label": "Prompt Learner",
+      "sublabel": "CoOp Optimization",
+      "pos": [250, 400],
+      "size": [140, 60]
+    },
+    {
+      "id": "handcrafted_prompts",
+      "type": "backend",
+      "label": "Manual Prompts",
+      "sublabel": "Fixed Templates",
+      "pos": [250, 500],
+      "size": [140, 60]
+    },
+    {
+      "id": "text_encoder",
+      "type": "backend",
+      "label": "Text Encoder",
+      "sublabel": "CLIP Text (Shared)",
+      "pos": [450, 450],
+      "size": [140, 60]
+    },
+    {
+      "id": "prompt_ensemble",
+      "type": "frontend",
+      "label": "Prompt Ensemble",
+      "sublabel": "Learnable Features",
+      "pos": [650, 400],
+      "size": [140, 60]
+    },
+    {
+      "id": "handcrafted_features",
+      "type": "backend",
+      "label": "Fixed Features",
+      "sublabel": "For Semantic Anchor",
+      "pos": [650, 500],
+      "size": [140, 60]
+    },
+    {
+      "id": "cmaf",
+      "type": "messagebus",
+      "label": "CMAF Fusion",
+      "sublabel": "Cross-Modal Attention",
+      "pos": [850, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "temporal",
+      "type": "backend",
+      "label": "Temporal Net",
+      "pos": [1050, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "classifier",
+      "type": "cloud",
+      "label": "Classifier Head",
+      "sublabel": "Cosine Similarity",
+      "pos": [1050, 300],
+      "size": [140, 60]
+    },
+    {
+      "id": "loss",
+      "type": "security",
+      "label": "Loss Functions",
+      "sublabel": "LDAM + MI/DC",
+      "pos": [1050, 450],
+      "size": [140, 60]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Visual Branch",
+      "wraps": ["face_crop", "body_crop", "context_crop", "face_encoder", "body_encoder", "context_encoder", "face_adapter"]
+    },
+    {
+      "kind": "region",
+      "label": "Text Branch (Dual-Stream)",
+      "wraps": ["learnable_prompts", "handcrafted_prompts", "text_encoder", "prompt_ensemble", "handcrafted_features"]
+    }
+  ],
+  "connections": [
+    { "from": "input", "to": "face_crop", "fromSide": "top", "toSide": "left" },
+    { "from": "input", "to": "body_crop", "fromSide": "right", "toSide": "left" },
+    { "from": "input", "to": "context_crop", "fromSide": "bottom", "toSide": "left" },
+    
+    { "from": "class_names", "to": "learnable_prompts", "fromSide": "top", "toSide": "left" },
+    { "from": "class_names", "to": "handcrafted_prompts", "fromSide": "bottom", "toSide": "left" },
+    
+    { "from": "learnable_prompts", "to": "text_encoder", "fromSide": "right", "toSide": "left" },
+    { "from": "handcrafted_prompts", "to": "text_encoder", "fromSide": "right", "toSide": "left" },
+    
+    { "from": "text_encoder", "to": "prompt_ensemble", "fromSide": "right", "toSide": "left" },
+    { "from": "text_encoder", "to": "handcrafted_features", "fromSide": "right", "toSide": "left" },
+    
+    { "from": "face_crop", "to": "face_encoder", "fromSide": "right", "toSide": "left" },
+    { "from": "body_crop", "to": "body_encoder", "fromSide": "right", "toSide": "left" },
+    { "from": "context_crop", "to": "context_encoder", "fromSide": "right", "toSide": "left" },
+    { "from": "face_encoder", "to": "face_adapter", "fromSide": "right", "toSide": "left" },
+    
+    { "from": "face_adapter", "to": "cmaf", "fromSide": "right", "toSide": "top" },
+    { "from": "body_encoder", "to": "cmaf", "fromSide": "right", "toSide": "left" },
+    { "from": "context_encoder", "to": "cmaf", "fromSide": "right", "toSide": "bottom" },
+    { "from": "prompt_ensemble", "to": "cmaf", "fromSide": "right", "toSide": "bottom" },
+    
+    { "from": "cmaf", "to": "temporal", "fromSide": "right", "toSide": "left" },
+    { "from": "temporal", "to": "classifier", "fromSide": "bottom", "toSide": "top" },
+    
+    { "from": "prompt_ensemble", "to": "classifier", "label": "Text Features", "fromSide": "right", "toSide": "left", "labelAt": [985, 315] },
+    { "from": "classifier", "to": "loss", "label": "Logits", "fromSide": "bottom", "toSide": "top", "labelAt": [1135, 405] },
+    
+    { "from": "prompt_ensemble", "to": "loss", "label": "Learnable Feats", "fromSide": "right", "toSide": "left", "labelAt": [985, 465] },
+    { "from": "handcrafted_features", "to": "loss", "label": "Handcrafted Feats (MI Anchor)", "fromSide": "right", "toSide": "left", "labelAt": [955, 530] }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "CAER-S Specifics",
+      "items": [
+        "Uses Face, Body, and Context crops",
+        "Processes static images (t=1), Temporal Net acts as self-attention layer"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Text Branch (Dual-Stream)",
+      "items": [
+        "Learnable Prompts via CoOp",
+        "Fixed Prompts as anchors to prevent semantic drift",
+        "Shared CLIP Text Encoder weights"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Fusion & Loss",
+      "items": [
+        "Cosine Similarity computes alignment between modalities",
+        "MI & DC Loss apply on text features to guide prompt learning"
+      ]
+    }
+  ]
+}

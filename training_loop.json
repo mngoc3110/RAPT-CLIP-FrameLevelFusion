@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "RAPT-CLIP Training Optimization Loop",
+    "subtitle": "Detailing the Forward Pass, Backward Pass, and Optimizer Steps"
+  },
+  "components": [
+    {
+      "id": "features",
+      "type": "external",
+      "label": "Network Features",
+      "sublabel": "Embeddings",
+      "pos": [50, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "classifier",
+      "type": "cloud",
+      "label": "Classifier Head",
+      "sublabel": "Forward Pass",
+      "pos": [250, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "loss",
+      "type": "security",
+      "label": "Loss Functions",
+      "sublabel": "Error Calculation",
+      "pos": [450, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "metrics",
+      "type": "cloud",
+      "label": "Evaluation Metrics",
+      "sublabel": "Accuracy / mAP",
+      "pos": [650, 150],
+      "size": [140, 60]
+    },
+    {
+      "id": "backward",
+      "type": "messagebus",
+      "label": "Backpropagation",
+      "sublabel": "loss.backward()",
+      "pos": [450, 300],
+      "size": [140, 60]
+    },
+    {
+      "id": "optimizer",
+      "type": "backend",
+      "label": "AdamW Optimizer",
+      "sublabel": "optimizer.step()",
+      "pos": [250, 300],
+      "size": [140, 60]
+    },
+    {
+      "id": "weights",
+      "type": "frontend",
+      "label": "Learnable Parameters",
+      "sublabel": "Prompts & Adapters",
+      "pos": [50, 300],
+      "size": [140, 60]
+    }
+  ],
+  "boundaries": [],
+  "connections": [
+    { "from": "features", "to": "classifier", "fromSide": "right", "toSide": "left" },
+    { "from": "classifier", "to": "loss", "label": "Logits", "fromSide": "right", "toSide": "left", "labelAt": [420, 180] },
+    { "from": "classifier", "to": "metrics", "label": "Predictions", "fromSide": "top", "toSide": "top", "labelAt": [450, 110] },
+    { "from": "loss", "to": "backward", "label": "Loss Value", "fromSide": "bottom", "toSide": "top", "labelAt": [520, 255] },
+    { "from": "backward", "to": "optimizer", "label": "Gradients", "fromSide": "left", "toSide": "right", "labelAt": [420, 330] },
+    { "from": "optimizer", "to": "weights", "label": "Weight Update", "fromSide": "left", "toSide": "right", "labelAt": [220, 290] }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Training Cycle",
+      "items": [
+        "1. Forward Pass: Features -> Classifier -> Loss & Metrics",
+        "2. Backward Pass: Loss calculates gradients for all weights",
+        "3. Optimizer Step: Gradients are used to update Prompts and Adapters"
+      ]
+    }
+  ]
+}
