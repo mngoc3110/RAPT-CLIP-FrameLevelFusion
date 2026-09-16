@@ -3,7 +3,7 @@
 # Script huấn luyện RAPT-CLIP sử dụng trực tiếp các file .npy 
 # (Tăng tốc I/O, nạp toàn bộ ma trận ảnh thẳng vào RAM)
 
-EXP_NAME="EMOTIC_NPY_Dynamic_ASL"
+EXP_NAME="EMOTIC_NPY"
 BATCH_SIZE=26
 EPOCHS=25
 

@@ -36,7 +36,7 @@ fi
 echo "=== BƯỚC 2: BẮT ĐẦU HUẤN LUYỆN (TRAINING) ==="
 
 EXP_NAME="EMOTIC_KAGGLE_NPY"
-BATCH_SIZE=16
+BATCH_SIZE=26
 EPOCHS=25
 
 python3 main.py \
