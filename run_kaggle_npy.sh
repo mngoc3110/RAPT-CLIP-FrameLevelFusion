@@ -2,8 +2,8 @@
 
 # Script chuyên dụng để chạy trên KAGGLE
 
-# 1. Đường dẫn thư mục Dataset trên Kaggle
-KAGGLE_DATA_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn"
+# 1. Đường dẫn thư mục Dataset trên Kaggle (Lưu ý: phải trỏ vào trong thư mục con cvpr_emotic vì dataset bị lồng 2 lớp)
+KAGGLE_DATA_DIR="/kaggle/input/datasets/bearmn/emotic-dataset-rapt-clip-bearmn/cvpr_emotic"
 
 # 2. Thư mục Output (có quyền ghi) trên Kaggle
 WORKING_DIR="/kaggle/working/emotic_pre"
