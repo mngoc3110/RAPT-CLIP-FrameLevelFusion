@@ -42,7 +42,7 @@ python3 main.py \
     --grad-clip 1.0 \
     --lambda_mi 0.0 \
     --lambda_dc 0.0 \
-    --lambda_vad 0.1 \
+    --lambda_vad 0.0 \
     --mi-warmup 7 \
     --mi-ramp 5 \
     --dc-warmup 7 \

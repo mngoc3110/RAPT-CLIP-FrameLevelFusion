@@ -69,7 +69,7 @@ python3 main.py \
     --loss-type dynamic_asl \
     --drop-path-rate 0.0 \
     --grad-clip 1.0 \
-    --lambda_vad 0.1 \
+    --lambda_vad 0.0 \
     --mi-warmup 7 \
     --mi-ramp 5 \
     --dc-warmup 7 \
