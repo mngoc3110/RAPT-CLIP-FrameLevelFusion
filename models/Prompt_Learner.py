@@ -34,12 +34,15 @@ class PromptLearner(nn.Module):
         ctx_dim = clip_model.ln_final.weight.shape[0]
 
         # random initialization
-        if args.class_specific_contexts=='True':
-            if args.load_and_tune_prompt_learner=='True':
+        is_class_specific = str(getattr(args, 'class_specific_contexts', False)).lower() in ['true', '1']
+        is_load_and_tune = str(getattr(args, 'load_and_tune_prompt_learner', True)).lower() in ['true', '1']
+
+        if is_class_specific:
+            if is_load_and_tune:
                 print("Initializing class-specific contexts")
             ctx_vectors = torch.empty(n_cls, n_ctx, ctx_dim, dtype=dtype)
         else:
-            if args.load_and_tune_prompt_learner=='True':
+            if is_load_and_tune:
                 print("Initializing a generic context")
             ctx_vectors = torch.empty(n_ctx, ctx_dim, dtype=dtype)
         nn.init.normal_(ctx_vectors, std=0.02)

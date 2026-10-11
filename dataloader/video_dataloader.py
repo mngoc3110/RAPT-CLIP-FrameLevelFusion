@@ -524,7 +524,7 @@ class VideoDataset(data.Dataset):
                     vad_tensor = torch.tensor(vad_val, dtype=torch.float32)
             return process_data_face, process_data, process_data_context, target_tensor, vad_tensor
         else:
-            return process_data_face, process_data, process_data_context, record.label - 1, None
+            return process_data_face, process_data, process_data_context, record.label - 1
 
     def __len__(self):
         return len(self.video_list)
