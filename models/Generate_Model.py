@@ -9,6 +9,36 @@ import copy
 import itertools
 
 class GenerateModel(nn.Module):
+    """
+    RAPT-CLIP Unified Multimodal Emotion & Engagement Architecture.
+    
+    Dataset Mapping & Workflow Guide:
+    ---------------------------------
+    1. RAER (Video Classroom Emotion - 5 classes):
+       - Stream: Dual-stream (Face + Body) -> use_context=False
+       - Fusion: CMAF (CrossModalAttentionFusion) -> Unified Temporal Transformer (AttnPool)
+       - Loss: LDAM Loss + MI/DC Loss
+       - Script: train_sh/raer_cmaf.sh
+
+    2. DAiSEE (Video Engagement - 4 dimensions / multi-class):
+       - Stream: Dual-stream (Face + Body / Webcam) -> use_context=False
+       - Fusion: CMAF -> Unified Temporal Transformer (AttnPool)
+       - Loss: LDAM / CrossEntropy + MI Loss
+       - Script: train_sh/daisee_run.sh
+
+    3. CAER / CAER-S (Context-Aware Emotion - 7 classes):
+       - Stream: Triple-stream (Face + Body + Context) -> use_context=True
+       - Fusion: Tridirectional CMAF -> Unified Temporal Net (T=1 for CAER-S)
+       - Loss: CrossEntropy / LDAM
+       - Script: train_sh/caer_s_run.sh
+
+    4. EMOTIC (Multi-label Context Emotion - 26 classes + 3 VAD):
+       - Stream: Triple-stream (Face + Body + Context) -> use_context=True
+       - Fusion: CMAF / Q2L (Query2Label) / CMAF-Decoupled Router
+       - Heads: Classification Head + Optional VAD Auxiliary Head (lambda_vad > 0)
+       - Loss: Dynamic ASL (Asymmetric Loss) + VAD MSE Loss
+       - Script: train_sh/emotic_cmaf.sh, train_sh/emotic_q2l.sh
+    """
     def __init__(self, input_text, clip_model, args):
         super().__init__()
         self.args = args
@@ -38,20 +68,19 @@ class GenerateModel(nn.Module):
         # For EAA
         self.face_adapter = Adapter(c_in=512, reduction=4)
 
-        # For MI Loss
+        # For MI Loss (Supported datasets: RAER, CAER/CAER-S, DAiSEE, EMOTIC)
         if args.dataset == "RAER":
             hand_crafted_prompts = class_descriptor_5_only_face
-        elif args.dataset == "CK+":
-            from models.Text import class_descriptor_ckplus
-            hand_crafted_prompts = class_descriptor_ckplus
         elif args.dataset == "DAiSEE":
             from models.Text import class_descriptor_daisee
             hand_crafted_prompts = class_descriptor_daisee
         elif args.dataset == "EMOTIC":
             from models.Text import class_descriptor_emotic_26
             hand_crafted_prompts = class_descriptor_emotic_26
+        elif args.dataset in ["CAER", "CAER-S"]:
+            from models.Text import class_descriptor_7_only_face
+            hand_crafted_prompts = class_descriptor_7_only_face
         else:
-            # Fallback to some generic or 7-class descriptors if available
             from models.Text import class_descriptor_7_only_face
             hand_crafted_prompts = class_descriptor_7_only_face
             
@@ -96,12 +125,27 @@ class GenerateModel(nn.Module):
         else:
             in_dim = 1536 if self.use_context else 1024
 
-        self.unified_temporal_net = Temporal_Transformer_AttnPool(num_patches=16,
-                                                     input_dim=in_dim,
-                                                     depth=args.temporal_layers,
-                                                     heads=8,
-                                                     mlp_dim=1024,
-                                                     dim_head=64)
+        # Fusion Stage: 'frame' (CMAF before Temporal, Default SOTA) vs 'video' (Temporal before CMAF)
+        self.fusion_stage = getattr(args, 'fusion_stage', 'frame')
+        print(f"=> Fusion Stage: {self.fusion_stage}")
+
+        if self.fusion_stage == 'video':
+            # Video-level fusion: Separate Temporal Transformers operate on individual streams first (512-d)
+            self.temporal_net_face = Temporal_Transformer_AttnPool(
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+            )
+            self.temporal_net_body = Temporal_Transformer_AttnPool(
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+            )
+            if self.use_context:
+                self.temporal_net_context = Temporal_Transformer_AttnPool(
+                    num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                )
+        else:
+            # Frame-level fusion: Unified Temporal Transformer operates on fused multi-modal frames (1536-d or 1024-d)
+            self.unified_temporal_net = Temporal_Transformer_AttnPool(
+                num_patches=16, input_dim=in_dim, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+            )
 
         # Store clip_model_ as a plain Python attribute (NOT an nn.Module submodule).
         object.__setattr__(self, 'clip_model_', clip_model)
@@ -132,120 +176,6 @@ class GenerateModel(nn.Module):
         else:
             self.cmaf = CrossModalAttentionFusion(dim=512, num_heads=4, dropout=0.1, use_context=self.use_context)
 
-        # MoCo Initialization
-        if hasattr(args, 'use_moco') and args.use_moco:
-            print("=> Initializing MoCoRank...")
-            self.moco_dim = 512
-            self.moco_k = args.moco_k
-            self.moco_m = args.moco_m
-            self.moco_t = args.moco_t
-
-            # Create momentum encoders
-            self.image_encoder_m = copy.deepcopy(self.image_encoder)
-            self.face_adapter_m = copy.deepcopy(self.face_adapter)
-            self.unified_temporal_net_m = copy.deepcopy(self.unified_temporal_net)
-            self.project_fc_m = copy.deepcopy(self.project_fc)
-            
-            if self.fusion_type == 'gfi':
-                self.gate_fc_m = copy.deepcopy(self.gate_fc)
-            else:
-                self.cmaf_m = copy.deepcopy(self.cmaf)
-
-            # Freeze momentum encoders
-            for param in self.image_encoder_m.parameters(): param.requires_grad = False
-            for param in self.face_adapter_m.parameters(): param.requires_grad = False
-            for param in self.unified_temporal_net_m.parameters(): param.requires_grad = False
-            for param in self.project_fc_m.parameters(): param.requires_grad = False
-            
-            if self.fusion_type == 'gfi':
-                for param in self.gate_fc_m.parameters(): param.requires_grad = False
-            else:
-                for param in self.cmaf_m.parameters(): param.requires_grad = False
-
-            # Create queue
-            self.register_buffer("queue", torch.randn(self.moco_dim, self.moco_k))
-            self.queue = nn.functional.normalize(self.queue, dim=0)
-            self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
-
-    @torch.no_grad()
-    def _momentum_update_key_encoder(self):
-        """
-        Momentum update of the key encoder
-        """
-        for param_q, param_k in zip(self.image_encoder.parameters(), self.image_encoder_m.parameters()):
-            param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
-        for param_q, param_k in zip(self.face_adapter.parameters(), self.face_adapter_m.parameters()):
-            param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
-        for param_q, param_k in zip(self.unified_temporal_net.parameters(), self.unified_temporal_net_m.parameters()):
-            param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
-        for param_q, param_k in zip(self.project_fc.parameters(), self.project_fc_m.parameters()):
-            param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
-        
-        if self.fusion_type == 'gfi':
-            for param_q, param_k in zip(self.gate_fc.parameters(), self.gate_fc_m.parameters()):
-                param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
-        else:
-            for param_q, param_k in zip(self.cmaf.parameters(), self.cmaf_m.parameters()):
-                param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
-
-    @torch.no_grad()
-    def _dequeue_and_enqueue(self, keys):
-        # gather keys before updating queue
-        # keys = concat_all_gather(keys) # Removed distributed gather for single GPU simplicity
-
-        batch_size = keys.shape[0]
-        ptr = int(self.queue_ptr)
-        
-        # replace the keys at ptr (dequeue and enqueue)
-        if ptr + batch_size > self.moco_k: # Handle wrap-around if batch size > remaining space
-             batch_size = self.moco_k - ptr # truncate to fit
-             keys = keys[:batch_size]
-        
-        self.queue[:, ptr:ptr + batch_size] = keys.T
-        ptr = (ptr + batch_size) % self.moco_k  # move pointer
-
-        self.queue_ptr[0] = ptr
-
-    @torch.no_grad()
-    def forward_momentum(self, image_face, image_body, image_context=None):
-        n, t, c, h, w = image_face.shape
-
-        # Face Part
-        image_face = image_face.contiguous().view(-1, c, h, w)
-        image_face_features = self.image_encoder_m(image_face.type(self.dtype))
-        image_face_features = self.face_adapter_m(image_face_features)
-        
-        # Body Part
-        image_body = image_body.contiguous().view(-1, c, h, w)
-        image_body_features = self.image_encoder_m(image_body.type(self.dtype))
-
-        # Context Part
-        if self.use_context:
-            assert image_context is not None
-            image_context = image_context.contiguous().view(-1, c, h, w)
-            image_context_features = self.image_encoder_m(image_context.type(self.dtype))
-
-        # Frame-Level Fusion (momentum)
-        if self.fusion_type == 'gfi':
-            features_to_concat = [image_face_features, image_body_features]
-            if self.use_context:
-                features_to_concat.append(image_context_features)
-            fused_frame_features = torch.cat(features_to_concat, dim=-1)
-            gate = self.gate_fc_m(fused_frame_features)
-            fused_frame_features = fused_frame_features * gate
-        else:
-            if self.use_context:
-                fused_frame_features = self.cmaf_m(image_face_features, image_body_features, image_context_features)
-            else:
-                fused_frame_features = self.cmaf_m(image_face_features, image_body_features)
-            
-        # Unified Temporal Transformer (momentum)
-        fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
-        video_features = self.unified_temporal_net_m(fused_frame_features)
-        
-        video_features = self.project_fc_m(video_features)
-        video_features = video_features / video_features.norm(dim=-1, keepdim=True)
-        return video_features
         
     def forward(self, image_face, image_body, image_context=None):
         ################# Text Part ###################
@@ -364,45 +294,39 @@ class GenerateModel(nn.Module):
             # Pack the decoupled features into a tuple to be handled by the trainer
             video_features = tuple(video_features_list)
         else:
-            if self.use_context:
-                fused_frame_features = self.cmaf(image_face_features, image_body_features, image_context_features)
+            if self.fusion_stage == 'video':
+                # Video-Level Fusion: Temporal Transformers operate on each stream first, then CMAF
+                video_face = self.temporal_net_face(image_face_features.contiguous().view(n, t, -1))
+                video_body = self.temporal_net_body(image_body_features.contiguous().view(n, t, -1))
+                if self.use_context:
+                    video_context = self.temporal_net_context(image_context_features.contiguous().view(n, t, -1))
+                    fused_video = self.cmaf(video_face, video_body, video_context)
+                else:
+                    fused_video = self.cmaf(video_face, video_body)
+                
+                video_features = self.project_fc(fused_video)
+                video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
             else:
-                fused_frame_features = self.cmaf(image_face_features, image_body_features)
-            
-            # Unified Temporal Transformer
-            fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
-            video_features = self.unified_temporal_net(fused_frame_features)
+                # Frame-Level Fusion (Default SOTA): CMAF on each frame, then Unified Temporal
+                if self.use_context:
+                    fused_frame_features = self.cmaf(image_face_features, image_body_features, image_context_features)
+                else:
+                    fused_frame_features = self.cmaf(image_face_features, image_body_features)
+                
+                # Unified Temporal Transformer
+                fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
+                video_features = self.unified_temporal_net(fused_frame_features)
 
-            video_features = self.project_fc(video_features)
-            # Robust normalization to avoid NaN on MPS
-            video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
+                video_features = self.project_fc(video_features)
+                # Robust normalization to avoid NaN on MPS
+                video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
         
         # Save video features for feature-level knowledge distillation
         self.last_video_features = video_features
 
         # Text features are already computed above.
 
-        ################# MoCo Updates ###################
         moco_logits = None
-        if self.training and hasattr(self.args, 'use_moco') and self.args.use_moco:
-            with torch.no_grad():
-                self._momentum_update_key_encoder()
-                k_video_features = self.forward_momentum(image_face, image_body)
-            
-            # If decoupled, average the modalities just for MoCo contrastive learning
-            vf_moco = torch.stack(video_features, dim=-1).mean(dim=-1) if isinstance(video_features, tuple) else video_features
-
-            # Compute MoCo Logits
-            # Positive logits: similarity between query and key
-            l_pos = torch.einsum('nc,nc->n', [vf_moco, k_video_features]).unsqueeze(-1)
-            # Negative logits: similarity between query and queue
-            l_neg = torch.einsum('nc,ck->nk', [vf_moco, self.queue.clone().detach()])
-
-            # logits: Nx(1+K)
-            moco_logits = torch.cat([l_pos, l_neg], dim=1)
-            moco_logits /= self.moco_t
-
-            self._dequeue_and_enqueue(k_video_features)
 
         ################# Classification ###################
         # Calculate logits

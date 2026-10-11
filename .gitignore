@@ -40,4 +40,6 @@ emotic_dataset/
 outputs/
 scratch/
 .gemini/
+*.zip
+CAER_Video/
 

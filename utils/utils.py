@@ -276,7 +276,10 @@ def evaluate_emotic_map(test_loader, model, device, class_names, log_txt_path):
 
     with torch.no_grad():
         for batch in tqdm.tqdm(test_loader, desc="[EMOTIC Test] Calculating mAP"):
-            if len(batch) == 4:
+            if len(batch) == 5:
+                images_face, images_body, images_context, target, vad_target = batch
+                images_context = images_context.to(device)
+            elif len(batch) == 4:
                 images_face, images_body, images_context, target = batch
                 images_context = images_context.to(device)
             else:
@@ -287,9 +290,9 @@ def evaluate_emotic_map(test_loader, model, device, class_names, log_txt_path):
             images_body = images_body.to(device)
 
             if images_context is not None:
-                output, _, _, _ = model(images_face, images_body, images_context)
+                output = model(images_face, images_body, images_context)[0]
             else:
-                output, _, _, _ = model(images_face, images_body)
+                output = model(images_face, images_body)[0]
 
             probs = torch.sigmoid(output).cpu()
             all_preds.append(probs)

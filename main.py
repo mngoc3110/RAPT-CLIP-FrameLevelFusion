@@ -140,9 +140,9 @@ model_group.add_argument('--moco-t', type=float, default=0.07, help='Temperature
 model_group.add_argument('--drop-path-rate', type=float, default=0.0, help='Drop Path rate for Stochastic Depth.')
 model_group.add_argument('--freeze-image-encoder', action='store_true', help='Freeze the image encoder.')
 model_group.add_argument('--ablation-no-text', action='store_true', help='Use Visual-Only ablation architecture.')
-model_group.add_argument('--use-v2', action='store_true', help='Use V2 Triple-Stream Architecture.')
 model_group.add_argument('--modality-dropout', type=float, default=0.3, help='Modality Dropout probability.')
 model_group.add_argument('--fusion-type', type=str, default='cmaf', choices=['gfi', 'cmaf', 'cmaf_decoupled', 'q2l'], help='Fusion method: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion).')
+model_group.add_argument('--fusion-stage', type=str, default='frame', choices=['frame', 'video'], help='Stage of fusion: frame (Frame-Level Fusion: CMAF before Temporal Transformer, SOTA) or video (Video-Level Fusion: Temporal Transformer before CMAF).')
 model_group.add_argument('--use-context', action='store_true', help='Enable context stream (Triple Stream: Face, Body, Context).')
 
 # ==================== Helper Functions ====================
@@ -308,18 +308,25 @@ def run_training(args: argparse.Namespace) -> None:
         ]
     else:
         if hasattr(model, 'temporal_net_face'):
-            # V2 Architecture
+            # Video-Level Fusion (or V2 Architecture)
             optimizer_grouped_parameters = [
                 {"params": model.temporal_net_face.parameters(), "lr": args.lr},
                 {"params": model.temporal_net_body.parameters(), "lr": args.lr},
-                {"params": model.temporal_net_context.parameters(), "lr": args.lr},
                 {"params": model.image_encoder.parameters(), "lr": args.lr_image_encoder},
                 {"params": model.prompt_learner.parameters(), "lr": args.lr_prompt_learner},
                 {"params": model.project_fc.parameters(), "lr": args.lr},
                 {"params": model.face_adapter.parameters(), "lr": args.lr_adapter},
-                {"params": model.cross_attn_fb.parameters(), "lr": args.lr},
-                {"params": model.cross_attn_fbc.parameters(), "lr": args.lr}
             ]
+            if hasattr(model, 'temporal_net_context'):
+                optimizer_grouped_parameters.append({"params": model.temporal_net_context.parameters(), "lr": args.lr})
+            if hasattr(model, 'cmaf'):
+                optimizer_grouped_parameters.append({"params": model.cmaf.parameters(), "lr": args.lr})
+            if hasattr(model, 'gate_fc'):
+                optimizer_grouped_parameters.append({"params": model.gate_fc.parameters(), "lr": args.lr})
+            if hasattr(model, 'cross_attn_fb'):
+                optimizer_grouped_parameters.append({"params": model.cross_attn_fb.parameters(), "lr": args.lr})
+            if hasattr(model, 'cross_attn_fbc'):
+                optimizer_grouped_parameters.append({"params": model.cross_attn_fbc.parameters(), "lr": args.lr})
             if hasattr(model, 'q2l_attention'):
                 optimizer_grouped_parameters.append({"params": model.q2l_attention.parameters(), "lr": args.lr})
             if hasattr(model, 'q2l_norm'):
@@ -327,7 +334,7 @@ def run_training(args: argparse.Namespace) -> None:
             if hasattr(model, 'classifier'):
                 optimizer_grouped_parameters.append({"params": model.classifier.parameters(), "lr": args.lr})
         else:
-            # V1 Architecture
+            # Frame-Level Fusion (Default SOTA)
             optimizer_grouped_parameters = [
                 {"params": model.unified_temporal_net.parameters(), "lr": args.lr},
                 {"params": model.image_encoder.parameters(), "lr": args.lr_image_encoder},
