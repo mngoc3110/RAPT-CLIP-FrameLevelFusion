@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="image/model.png" width="100%" alt="RAPT-CLIP Architecture" />
+  <img src="image/model.png" width="100%" alt="RAPT-CLIP-FrameLevelFusion Architecture Diagram" />
 </p>
 
 <h1 align="center">RAPT-CLIP-FrameLevelFusion</h1>
@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Backbone-CLIP_ViT--B%2F16-4285F4?style=flat-square" />
   <img src="https://img.shields.io/badge/Best_Valid_UAR-77.06%25_(RAER)-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/Valid_WAR-78.79%25_(RAER)-brightgreen?style=flat-square" />
-  <img src="https://img.shields.io/badge/Architecture-Triple--Stream_CMAF-blueviolet?style=flat-square" />
+  <img src="https://img.shields.io/badge/Fusion-Tridirectional_CMAF-blueviolet?style=flat-square" />
   <img src="https://img.shields.io/badge/License-Academic-blue?style=flat-square" />
 </p>
 
@@ -22,54 +22,91 @@
 
 ## 📌 Overview
 
-**RAPT-CLIP-FrameLevelFusion** is a state-of-the-art multimodal video emotion recognition framework tailored for educational environments. The system recognizes five key academic emotions from student classroom videos in the **RAER dataset**:
+**RAPT-CLIP-FrameLevelFusion** is a multimodal video emotion recognition framework specifically designed for classroom analytics. The framework identifies five fine-grained academic emotion states from classroom video recordings in the **RAER dataset**:
 1. **Neutrality** (Bình thản / Thụ động)
-2. **Enjoyment** (Hào hứng / Hứng thú)
+2. **Enjoyment** (Hào hứng / Thích thú)
 3. **Confusion** (Bối rối / Khó hiểu)
 4. **Fatigue** (Mệt mỏi / Buồn ngủ)
 5. **Distraction** (Mất tập trung / Xao nhãng)
 
-### 🌟 Key Innovations & Contributions
-
-- **Triple-Stream Vision Encoder**: Concurrently processes **Face Crop** (with an Expression-Aware Bottleneck Adapter — EAA), **Body Crop** (postural cues), and **Context Crop** (classroom spatial setting) extracted via CLIP ViT-B/16.
-- **Frame-Level Tridirectional CMAF**: Computes mutual cross-attention ($\text{Face} \leftrightarrow \text{Body} \leftrightarrow \text{Context}$) on **every individual frame** ($f_t \in \mathbb{R}^{1536}$) before temporal aggregation, preserving instantaneous micro-expression and behavioral synchrony.
-- **Unified Temporal Transformer with Attention Pooling**: Dynamically scores frame significance ($\alpha_t$) across 16 temporal segments to spotlight peak emotion frames without smoothing away fleeting micro-expressions.
-- **Dual-View Prompt Learning (CoOp + Ensemble)**: Combines hand-crafted descriptive anchors with 8 learnable class-specific context tokens.
-- **Regularized Margin Optimization**: Optimized via **LDAM Loss** ($s=30, m_{\max}=0.5$) for severe long-tailed imbalance, combined with **Mutual Information (MI)** and **Decorrelation (DC)** constraints to prevent prompt drift and feature collapse.
-- **Configurable Fusion Stages**: Supports `--fusion-stage frame` (Frame-Level CMAF $\to$ Temporal Transformer, SOTA) and `--fusion-stage video` (Stream-Level Temporal $\to$ Video-Level CMAF) for controlled architectural ablation.
-
 ---
 
-## 🏛 Architecture Summary
+## 🏛 System Architecture
 
+The framework consists of a **Triple-Stream Visual Branch** fused at the frame level and a **Dual-View Prompt Learning Text Branch**:
+
+```mermaid
+flowchart TB
+    subgraph Input["Input Video Stream (16 Segments)"]
+        F["Face Crop<br/><code>[B×T, 3, 224, 224]</code>"]
+        B["Body Crop<br/><code>[B×T, 3, 224, 224]</code>"]
+        C["Context Crop<br/><code>[B×T, 3, 224, 224]</code>"]
+    end
+
+    subgraph VisualBackbone["Visual Feature Extraction"]
+        VF["CLIP ViT-B/16<br/><i>(lr = 1e-6)</i>"]
+        VB["CLIP ViT-B/16<br/><i>(lr = 1e-6)</i>"]
+        VC["CLIP ViT-B/16<br/><i>(lr = 1e-6)</i>"]
+        EAA["Face Adapter (EAA)<br/>Bottleneck 512→128→512<br/><i>(lr = 1e-4)</i>"]
+        Drop["Modality Dropout<br/><i>(p = 0.3)</i>"]
+    end
+
+    F --> VF --> EAA --> Drop
+    B --> VB
+    C --> VC
+
+    subgraph FrameFusion["Frame-Level Cross-Modal Fusion"]
+        CMAF["Tridirectional CMAF<br/>Face ↔ Body ↔ Context<br/>Residual + LayerNorm<br/><code>f_t ∈ ℝ^1536</code>"]
+    end
+
+    Drop --> CMAF
+    VB --> CMAF
+    VC --> CMAF
+
+    subgraph TemporalModeling["Temporal Modeling & Aggregation"]
+        TT["Unified Temporal Transformer<br/>1 Layer, 8 Heads, MLP=1024<br/><i>(lr = 2e-5)</i><br/><code>[B, T, 1536]</code>"]
+        AttnPool["Attention Pooling<br/>Dynamic Frame Weights α_t<br/><code>[B, 1536]</code>"]
+        ProjFC["Linear Projection FC<br/>1536 → 512, L2-Norm<br/><code>v ∈ ℝ^512</code>"]
+    end
+
+    CMAF --> TT --> AttnPool --> ProjFC
+
+    subgraph TextBranch["Dual-View Prompt Learning (Text Stream)"]
+        PE["Prompt Ensemble<br/>(3 descriptors × 5 classes)"]
+        CoOp["Learnable Context Tokens<br/>CoOp (N_ctx = 8, lr = 3e-4)"]
+        TE1["CLIP Text Encoder"]
+        V1["View 1 Text Features<br/><code>[5, 512]</code>"]
+
+        PD["Hand-Crafted Anchors<br/>(Detailed Descriptors)"]
+        TE2["CLIP Text Encoder"]
+        V2["View 2 Text Anchors<br/><code>[5, 512]</code>"]
+    end
+
+    PE --> CoOp --> TE1 --> V1
+    PD --> TE2 --> V2
+
+    subgraph LossObjectives["Multi-Objective Optimization"]
+        CosSim["Cosine Similarity<br/>Logits = (v · View 1) / τ<br/><i>(τ = 0.07)</i>"]
+        LDAM["LDAM Loss<br/>Margin m_max=0.5, s=30.0<br/>Weighted Random Sampler"]
+        MIDC["Mutual Information (MI: 0.1)<br/>+ Decorrelation (DC: 0.1)"]
+    end
+
+    ProjFC --> CosSim
+    V1 --> CosSim
+    CosSim --> LDAM
+    V1 --> MIDC
+    V2 --> MIDC
 ```
-[Video Segment: T=16]
-        │
-  ┌─────┴───────────────────────┬────────────────────────┐
-  ▼                             ▼                        ▼
-Face Stream (224x224)         Body Stream (224x224)    Context Stream (224x224)
-  │                             │                        │
-CLIP ViT-B/16 (lr=1e-6)       CLIP ViT-B/16 (lr=1e-6)  CLIP ViT-B/16 (lr=1e-6)
-  │                             │                        │
-Face Adapter EAA (512→128→512)  │                        │
-  │                             │                        │
-  └─────────────────────────────┼────────────────────────┘
-                                ▼
-         Tridirectional CMAF at Frame-Level (f_t ∈ R^1536)
-                                │
-                                ▼
-         Unified Temporal Transformer (1 layer, 8 heads)
-                                │
-                                ▼
-             Attention Pooling (Dynamic peak weights α_t)
-                                │
-                                ▼
-               Project FC (1536 → 512, L2-normalized)
-                                │
-            Cosine Similarity (τ = 0.07) with Text Stream
-                                │
-            LDAM Loss (s=30, m=0.5) + MI Loss + DC Loss
-```
+
+### Architectural Highlights
+- **Face Adapter (EAA)**: Lightweight bottleneck ($512 \to 128 \to 512$) inserted after the face encoder to capture subtle micro-expressions (furrowed brows, eye squints).
+- **Tridirectional CMAF**: Fully symmetric cross-attention where each visual modality attends to the other two:
+  $$\text{Face}' = \text{Attn}(\text{Face}, [\text{Body}, \text{Context}])$$
+  $$\text{Body}' = \text{Attn}(\text{Body}, [\text{Face}, \text{Context}])$$
+  $$\text{Context}' = \text{Attn}(\text{Context}, [\text{Face}, \text{Body}])$$
+  $$f_t = [\text{Face}' \,\|\, \text{Body}' \,\|\, \text{Context}'] \in \mathbb{R}^{1536}$$
+- **Unified Temporal Transformer + Attention Pooling**: Aggregates temporal segments with learnable weights $\alpha_t = \text{Softmax}(w^\top \tanh(W f_t + b))$, isolating peak affective moments.
+- **Configurable Fusion Stages**: Supports both `--fusion-stage frame` (Frame-Level CMAF $\to$ Temporal Transformer, SOTA) and `--fusion-stage video` (Stream-Level Temporal $\to$ Video-Level CMAF) for controlled architectural ablation.
 
 ---
 
@@ -77,85 +114,76 @@ Face Adapter EAA (512→128→512)  │                        │
 
 ```
 RAPT-CLIP-FrameLevelFusion/
-├── main.py                          # Core entry point: training, validation, CLI flags
-├── trainer.py                       # Training loop, LDAM/MI/DC losses, evaluation metrics
+├── main.py                             # Core entry point: training, validation, CLI flags
+├── trainer.py                          # Training loop, LDAM/MI/DC losses, evaluation metrics
 ├── models/
-│   ├── Generate_Model.py            # Primary model: Triple-Stream, CMAF, Temporal Transformer
-│   ├── CrossModalAttentionFusion.py # Bidirectional & Tridirectional CMAF module
-│   ├── Temporal_Model.py            # Temporal Transformer + Dynamic Attention Pooling
-│   ├── Prompt_Learner.py            # CoOp-style learnable prompt module
-│   ├── Text.py                      # Hand-crafted emotion prompt descriptors & anchors
-│   ├── Adapter.py                   # Expression-Aware Adapter (EAA) bottleneck module
-│   └── clip/                        # CLIP ViT-B/16 backbone
+│   ├── Generate_Model.py               # Complete architecture (Triple-Stream, CMAF, Temporal)
+│   ├── CrossModalAttentionFusion.py    # Bidirectional & Tridirectional CMAF module
+│   ├── Temporal_Model.py               # Temporal Transformer + Attention Pooling
+│   ├── Prompt_Learner.py               # CoOp-style learnable prompt learner
+│   ├── Text.py                         # Emotion prompt templates, descriptors & anchors
+│   ├── Adapter.py                      # Expression-Aware Adapter (EAA) bottleneck
+│   └── clip/                           # CLIP ViT-B/16 backbone
 ├── dataloader/
-│   ├── video_dataloader.py          # Video dataset loader with Face/Body/Context cropping
-│   └── video_transform.py           # Group augmentations (ColorJitter, Rotation, Flipping)
+│   ├── video_dataloader.py             # RAER video loader with Face/Body/Context cropping
+│   └── video_transform.py              # Group augmentations (ColorJitter, Rotation, Flipping)
 ├── utils/
-│   ├── builders.py                  # Model instantiator & optimizer parameter grouping
-│   ├── loss.py                      # LDAM Loss, MI Loss, DC Loss, LDL Loss implementations
-│   └── utils.py                     # Metric calculations (WAR/UAR), logging, confusion matrix
+│   ├── builders.py                     # Model factory & optimizer parameter grouping
+│   ├── loss.py                         # LDAM Loss, MI Loss, DC Loss, LDL Loss
+│   └── utils.py                        # Metric calculations (WAR/UAR), logging, confusion matrix
 ├── train_sh/
-│   ├── raer_framelevelfusion.sh      # ⭐ SOTA Training script (Triple-Stream Frame-Level Fusion)
-│   ├── raer_cmaf.sh                 # Dual-stream CMAF baseline script
+│   ├── raer_framelevelfusion.sh         # ⭐ Proposed SOTA training script (77.06% UAR)
+│   ├── raer_cmaf.sh                    # Dual-stream CMAF training script
 │   └── ablation/
-│       ├── raer_video_level_fusion.sh # 🔬 Architectural ablation (Temporal before CMAF)
-│       ├── raer_full.sh             # V1 Dual-stream baseline (73.76% UAR)
-│       ├── raer_no_attn-pooling.sh  # Ablation: CLS Token instead of Attention Pooling
-│       ├── raer_no_prompt_tuning.sh # Ablation: Class descriptor prompts only
-│       ├── raer_no_ldam.sh          # Ablation: Cross-Entropy instead of LDAM Loss
-│       ├── raer_no_sampler.sh       # Ablation: Uniform sampler instead of Weighted sampler
-│       ├── raer_freeze_encoder.sh   # Ablation: Frozen CLIP visual encoder
-│       └── raer_drop_path.sh        # Ablation: DropPath stochastic depth
+│       ├── raer_video_level_fusion.sh    # 🔬 Architectural ablation: Video-Level Fusion
+│       ├── raer_full.sh                # V1 Dual-stream baseline (73.76% UAR)
+│       ├── raer_no_attn-pooling.sh     # Ablation: CLS Token instead of Attention Pooling
+│       ├── raer_no_prompt_tuning.sh    # Ablation: Class descriptor prompts only
+│       ├── raer_no_ldam.sh             # Ablation: Cross-Entropy instead of LDAM Loss
+│       ├── raer_no_sampler.sh          # Ablation: Uniform sampler instead of Weighted sampler
+│       ├── raer_freeze_encoder.sh      # Ablation: Frozen CLIP visual encoder
+│       └── raer_drop_path.sh           # Ablation: DropPath stochastic depth
 ├── valid_sh/
-│   └── eval_local_mac.sh            # Local validation script
+│   ├── valid_raer_framelevelfusion.sh  # Validation script for FrameLevelFusion model
+│   └── ablation/                       # Validation scripts for ablations
 ├── RAER/
-│   ├── annotation/                  # train.txt, test.txt (video_path num_frames label)
-│   └── bounding_box/                # face.json, body.json
-├── outputs/                         # Experimental results & checkpoints
-│   ├── RAER-FrameLevelFusion-[06-07]-[03:06]/ # Best model (UAR 77.06%, model_best.pth)
-│   ├── confusion_matrix/            # Confusion matrices for RAER
-│   ├── robustness/                  # Noise, structural disturbance & modality ablation
-│   └── tsne_rampdown/               # Pretrained vs Fine-tuned t-SNE cluster plots
-├── run_realtime.py                  # Live webcam emotion inference with face detection
-├── run_thesis_gradcam_v2.py         # GradCAM token similarity heatmap generator
-├── run_tsne_rampdown.py             # t-SNE feature space visualizer
-├── evaluate_advanced_robustness.py  # Robustness evaluator (noise, occlusion, shuffling)
-├── eval_tta.py                      # Test-Time Augmentation (TTA) evaluation
+│   ├── annotation/                     # train.txt, test.txt (video_path num_frames label)
+│   └── bounding_box/                   # face.json, body.json
+├── image/
+│   ├── model.png                       # High-resolution architectural diagram
+│   ├── training_curves.png             # Loss, WAR, UAR curves across 20 epochs
+│   ├── confusion_matrix.png            # 5-class confusion matrix at peak Epoch 12/13
+│   ├── tsne_pretrained.png             # Pretrained CLIP t-SNE feature space
+│   └── tsne_finetuned.png              # Fine-tuned RAPT-CLIP t-SNE clusters
 └── RAPT_CLIP_RAER_Hyperparameters_Report.pdf # 📄 Detailed Technical PDF Report
 ```
 
 ---
 
-## ⚙️ Installation & Environment Setup
+## ⚙️ Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/mngoc3110/RAPT-CLIP-FrameLevelFusion.git
 cd RAPT-CLIP-FrameLevelFusion
 
-# Install PyTorch (adjust according to your CUDA version or Apple Silicon MPS)
+# Install PyTorch
 pip install torch torchvision
 
 # Install dependencies
 pip install ftfy regex tqdm scikit-learn matplotlib seaborn opencv-python pypdf weasyprint
-
-# (Optional) For webcam live inference with MTCNN:
-pip install facenet-pytorch
 ```
 
 ---
 
-## 🚀 Training
+## 🚀 Training & Validation
 
 ### 1. Train Proposed SOTA Model (Frame-Level Fusion)
-
-Run the full triple-stream model with Tridirectional CMAF and Attention Pooling:
 
 ```bash
 bash train_sh/raer_framelevelfusion.sh
 ```
 
-Or execute directly via Python:
+Or run via Python:
 
 ```bash
 python main.py \
@@ -191,50 +219,50 @@ python main.py \
 
 ### 2. Train Architectural Ablation: Video-Level Fusion (Temporal before CMAF)
 
-To evaluate whether temporal aggregation should happen *before* or *after* cross-modal fusion:
-
 ```bash
 bash train_sh/ablation/raer_video_level_fusion.sh
+```
+
+### 3. Evaluate Checkpoint
+
+```bash
+bash valid_sh/valid_raer_framelevelfusion.sh
 ```
 
 ---
 
 ## 📊 Experimental Results & Benchmarks
 
-### 1. Visual Modality & Robustness Analysis (Tier 1)
-
-Evaluates the contribution of individual visual streams on the RAER dataset:
+### 1. Visual Modality Analysis (Tier 1)
 
 | Model Configuration | Fusion Mechanism | Valid WAR (%) | Valid UAR (%) | $\Delta$ UAR |
 | :--- | :---: | :---: | :---: | :---: |
-| **★ Triple-Stream: Face + Body + Context (Proposed SOTA)** | **Tridirectional CMAF (1536-d)** | **78.79%** | **77.06%** | **+3.30%** |
-| Dual-Stream: Face + Body (Baseline v1) | Bidirectional CMAF (1024-d) | 79.92% | 73.76% | (Baseline) |
-| Masked Context (Loss of Classroom Context) | 2-Stream Fallback | 79.92% | 73.76% | -3.30% |
+| **★ Triple-Stream: Face + Body + Context (Ours)** | **Tridirectional CMAF (1536-d)** | **78.79%** | **77.06%** | **+3.30%** |
+| Dual-Stream: Face + Body (Baseline v1) | Bidirectional CMAF (1024-d) | 79.92% | 73.76% | (Reference) |
+| Masked Context (Loss of Classroom Setting) | 2-Stream Fallback | 79.92% | 73.76% | -3.30% |
 | Masked Face (Face Occlusion / Zeros) | Body + Context Only | 66.29% | $\approx 62.10\%$ | -14.96% |
 | Masked Body (Body Occlusion / Zeros) | Face + Context Only | 38.45% | $\approx 35.20\%$ | -41.86% |
-
-> **Key Finding**: Body posture accounts for the steepest accuracy drop when occluded (-41.86%), while the classroom context provides a +3.30% UAR boost over the dual-stream model.
 
 ---
 
 ### 2. Component Ablation Study (Tier 2)
 
-Evaluated under controlled conditions on the Dual-Stream Baseline (73.76% UAR) to isolate individual module contributions:
+*Ablations are evaluated on the Dual-Stream Baseline ($73.76\%$ UAR) to isolate individual module contributions:*
 
-| Configuration | Valid WAR (%) | Valid UAR (%) | $\Delta$ UAR | Technical Impact |
+| Configuration | Valid WAR (%) | Valid UAR (%) | $\Delta$ UAR | Technical Finding |
 | :--- | :---: | :---: | :---: | :--- |
-| **Full Baseline (Dual-Stream v1)** | **79.92%** | **73.76%** | — | Standard complete configuration |
-| w/o Attention Pooling *(w/ CLS Token)* | 77.84% | 67.45% | **-6.31%** | Fails to detect fleeting peak emotion frames |
-| w/o Prompt Ensemble *(Class Descriptors only)* | 80.49% | 68.62% | **-5.14%** | Static prompts fail to adapt to classroom domain |
-| w/o MI & DC Regularization *($\lambda = 0$)* | 77.46% | 69.30% | **-4.46%** | Learnable prompts suffer from semantic collapse |
-| w/o LDAM Loss *(w/ standard Cross-Entropy)* | 73.11% | 69.97% | **-3.79%** | Severe bias towards majority class (Neutral) |
-| w/o DropPath *(Stochastic Depth = 0.0)* | 73.30% | 70.11% | **-3.65%** | Overfitting in transformer blocks |
-| w/o Weighted Random Sampler *(Uniform)* | 83.90% | 71.20% | **-2.56%** | Artificial WAR inflation, rare classes neglected |
+| **Full Baseline (Dual-Stream v1)** | **79.92%** | **73.76%** | — | Standard reference model |
+| w/o Attention Pooling *(w/ CLS Token)* | 77.84% | 67.45% | **-6.31%** | Misses fleeting micro-expression peaks |
+| w/o Prompt Ensemble *(Class Descriptors only)* | 80.49% | 68.62% | **-5.14%** | Static prompts cannot adapt to domain |
+| w/o MI & DC Regularization *($\lambda = 0$)* | 77.46% | 69.30% | **-4.46%** | Prompts suffer from representation collapse |
+| w/o LDAM Loss *(w/ Cross-Entropy)* | 73.11% | 69.97% | **-3.79%** | Severe prediction bias toward Neutral |
+| w/o DropPath *(Stochastic Depth = 0.0)* | 73.30% | 70.11% | **-3.65%** | Generalization degradation in ViT blocks |
+| w/o Weighted Random Sampler *(Uniform)* | 83.90% | 71.20% | **-2.56%** | WAR artificially inflated, rare classes fail |
 | Freeze Visual Backbone *(ViT lr = 0)* | 58.33% | 71.56% | **-2.20%** | Pretrained features misaligned with video domain |
 
 ---
 
-### 3. Comparison with Prior SOTA Methods on RAER
+### 3. Comparison with Prior Methods on RAER
 
 | Method | Backbone | Modalities | Valid WAR (%) | Valid UAR (%) |
 | :--- | :---: | :---: | :---: | :---: |
@@ -249,8 +277,8 @@ Evaluated under controlled conditions on the Dual-Stream Baseline (73.76% UAR) t
 ## 📈 Learning Curves & Confusion Matrix
 
 <p align="center">
-  <img src="outputs/RAER-FrameLevelFusion-[06-07]-[03:06]/log.png" width="49%" alt="Training Curves" />
-  <img src="outputs/confusion_matrix/confusion_matrix_RAER.png" width="49%" alt="Confusion Matrix" />
+  <img src="image/training_curves.png" width="49%" alt="Training Curves" />
+  <img src="image/confusion_matrix.png" width="49%" alt="Confusion Matrix" />
 </p>
 <p align="center">
   <em>Figure 1: Training & Validation progression across 20 Epochs (left) and 5-class Confusion Matrix at peak Epoch 12/13 (right).</em>
@@ -258,52 +286,26 @@ Evaluated under controlled conditions on the Dual-Stream Baseline (73.76% UAR) t
 
 ---
 
-## 🔍 Interpretability & Visualizations
-
-### 1. t-SNE Feature Space Analysis
-Visualizes the high-dimensional feature distributions before fine-tuning vs. after fine-tuning:
-
-```bash
-python run_tsne_rampdown.py --checkpoint outputs/RAER-FrameLevelFusion-[06-07]-[03:06]/model_best.pth
-```
+## 🔍 Feature Space Representation (t-SNE)
 
 <p align="center">
-  <img src="outputs/tsne_rampdown/tsne_pretrained.png" width="48%" alt="Pretrained CLIP" />
-  <img src="outputs/tsne_rampdown/tsne_finetuned_fused.png" width="48%" alt="Fine-tuned RAPT-CLIP" />
+  <img src="image/tsne_pretrained.png" width="48%" alt="Pretrained CLIP Features" />
+  <img src="image/tsne_finetuned.png" width="48%" alt="Fine-Tuned RAPT-CLIP Features" />
 </p>
 <p align="center">
-  <em>Figure 2: Pretrained CLIP features are tangled (left); fine-tuned RAPT-CLIP yields well-separated emotion clusters (right).</em>
+  <em>Figure 2: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
 </p>
-
-### 2. GradCAM Attention Heatmaps
-Visualizes token-level attention on Face and Body crops:
-
-```bash
-python run_thesis_gradcam_v2.py
-```
-
----
-
-## 💻 Real-Time Live Webcam Demo
-
-Run real-time facial and bodily emotion inference directly on your webcam:
-
-```bash
-python run_realtime.py --checkpoint outputs/RAER-FrameLevelFusion-[06-07]-[03:06]/model_best.pth
-```
 
 ---
 
 ## 📄 Technical PDF Report
 
-A comprehensive 4-page technical specification report has been compiled directly from the model checkpoints:
-* **[RAPT_CLIP_RAER_Hyperparameters_Report.pdf](RAPT_CLIP_RAER_Hyperparameters_Report.pdf)**: Contains complete hyperparameter audit tables, loss profiles, ablation statistics, and ready-to-use LaTeX tables for thesis and paper publication.
+A comprehensive 4-page report has been compiled directly from the model checkpoints:
+* **[RAPT_CLIP_RAER_Hyperparameters_Report.pdf](RAPT_CLIP_RAER_Hyperparameters_Report.pdf)**: Contains full hyperparameter tables, loss profiles, two-tier ablation tables, and copy-pasteable LaTeX tables for paper publication.
 
 ---
 
 ## 📜 Citation
-
-If you find this repository useful in your research, please consider citing:
 
 ```bibtex
 @article{rapt_clip_framelevelfusion_2026,
@@ -319,4 +321,4 @@ If you find this repository useful in your research, please consider citing:
 
 ## ⚖️ License
 
-This project is licensed for academic and non-commercial research purposes only.
+This project is licensed for academic research purposes only.
