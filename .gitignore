@@ -38,6 +38,7 @@ RAER/clips/
 
 emotic_dataset/
 outputs/
+!outputs/robustness/*.txt
 scratch/
 .gemini/
 *.zip

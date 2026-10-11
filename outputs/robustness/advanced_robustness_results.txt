@@ -1,0 +1,10 @@
+Noise Injection Results:
+Std 0.0 (Normal): 77.65% (UAR: 77.06%)
+noise_0.1: 75.57% (UAR: 63.30%)
+noise_0.3: 61.17% (UAR: 41.79%)
+noise_0.5: 32.01% (UAR: 24.47%)
+
+Structural Disturbances:
+Normal: 77.65% (UAR: 77.06%)
+Temporal Shuffling: 77.46% (UAR: 74.28%)
+Random Erasing (Body): 76.70% (UAR: 71.66%)

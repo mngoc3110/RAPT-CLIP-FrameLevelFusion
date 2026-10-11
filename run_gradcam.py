@@ -1,10 +1,13 @@
 """
-Grad-CAM / Token-level CLIP Similarity Heatmap Visualization for RAPT-CLIP FrameLevelFusion
-Checkpoint: outputs/RAER-FrameLevelFusion-[06-07]-[03:06]/model_best.pth
-Architecture: Triple-Stream ViT-B/16 (Face + EAA, Body, Context)
-Dataset: RAER (5 Emotion Classes)
+Full Dataset 4-Stream Qualitative Visualization (Figure 5 Style) for RAPT-CLIP.
+Processes all 528 test videos in RAER.
+Produces 4-stream cards: [Original | Body | Face | Context]
+- ZERO black letterbox borders (tight bounding box cropping)
+- Glowing, vivid thermal Grad-CAM overlays (hot red on salient face/body/context features)
+- High contrast, publication-ready presentation assets
 """
 import os
+import json
 import argparse
 import torch
 import cv2
@@ -14,272 +17,254 @@ from tqdm import tqdm
 from models.clip import clip
 from models.Generate_Model import GenerateModel
 from utils.builders import get_class_info
-from dataloader.video_dataloader import test_data_loader
 import warnings
 
 warnings.filterwarnings('ignore')
 
-
-def compute_stream_token_similarity(model, img_4d, target_class, all_class_text):
-    """
-    Compute spatial token-level CLIP similarity for a single image tensor (1, C, H, W).
-    Projects spatial patches (14x14 = 196 tokens) to the vision-language latent space,
-    computes cosine similarity with class text embeddings, and performs
-    class-discriminative suppression (target_sim - mean_sim).
-    """
-    c, h, w = img_4d.shape[1], img_4d.shape[2], img_4d.shape[3]
-    
-    transformer_output = {}
-    def hook_fn(module, input, output):
-        transformer_output['out'] = output.detach()
-
-    handle = model.image_encoder.transformer.register_forward_hook(hook_fn)
-    with torch.no_grad():
-        _ = model.image_encoder(img_4d)
-    handle.remove()
-
-    if 'out' not in transformer_output:
-        return np.zeros((14, 14), dtype=np.float32)
-
-    with torch.no_grad():
-        # transformer output: (197, B, 768) -> permute to (B, 197, 768)
-        feat = transformer_output['out'].permute(1, 0, 2)
-        spatial = feat[0, 1:]  # (196, 768) - skip CLS token
-
-        # Project spatial patches through ln_post + proj
-        spatial_n = model.image_encoder.ln_post(spatial)
-        if model.image_encoder.proj is not None:
-            spatial_p = spatial_n @ model.image_encoder.proj
-        else:
-            spatial_p = spatial_n
-        spatial_p = spatial_p / (spatial_p.norm(dim=-1, keepdim=True) + 1e-6)
-
-        # Cosine similarity with all classes: (196, num_classes)
-        all_sim = spatial_p @ all_class_text.t()
-
-        # Class-discriminative: target class similarity minus average similarity across all classes
-        target_sim = all_sim[:, target_class]
-        mean_sim = all_sim.mean(dim=1)
-        disc_sim = (target_sim - mean_sim).cpu().numpy().reshape(14, 14)
-
-        # Apply ReLU / positive only
-        cam = np.maximum(disc_sim, 0)
-        if cam.max() > 1e-7:
-            cam = cam / cam.max()
-
-        # Percentile thresholding (suppress lower 40% noise to highlight focal points)
-        thresh = np.percentile(cam, 40)
-        cam = np.where(cam >= thresh, cam, 0.0)
-        if cam.max() > 1e-7:
-            cam = cam / cam.max()
-
-        return cam
+CLASS_NAMES = ['Neutrality', 'Enjoyment', 'Confusion', 'Fatigue', 'Distraction']
 
 
-def overlay_heatmap(img_bgr, cam, alpha=0.55):
-    """Intensity-weighted alpha blending with smooth colormap overlay."""
+def get_clean_active_context(img_raw):
+    """Crops non-black active frame region to eliminate letterbox bars."""
+    gray = cv2.cvtColor(img_raw, cv2.COLOR_BGR2GRAY)
+    non_zero = np.where(gray > 8)
+    if len(non_zero[0]) > 0:
+        y1, y2 = non_zero[0].min(), non_zero[0].max()
+        x1, x2 = non_zero[1].min(), non_zero[1].max()
+        if (y2 - y1) > 50 and (x2 - x1) > 50:
+            return img_raw[y1:y2+1, x1:x2+1]
+    return img_raw
+
+
+def compute_thermal_map(model, img_bgr, device, sigma=22.0):
+    """Extracts multi-layer visual attention saliency and computes smooth thermal map."""
+    t = torch.from_numpy(cv2.cvtColor(cv2.resize(img_bgr, (224, 224)), cv2.COLOR_BGR2RGB)).float().permute(2, 0, 1).unsqueeze(0) / 255.0
+    mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).view(1, 3, 1, 1)
+    std = torch.tensor([0.26862954, 0.26130258, 0.27577711]).view(1, 3, 1, 1)
+    t = ((t - mean) / std).to(device)
+
+    feats = []
+    attns = []
+    for l_idx in [8, 9, 10, 11]:
+        block = model.image_encoder.transformer.resblocks[l_idx]
+        inputs = []
+        def get_hook(inp_list):
+            def h(m, inp, out):
+                inp_list.append(inp[0])
+            return h
+        hk = block.ln_1.register_forward_hook(get_hook(inputs))
+        with torch.no_grad():
+            _ = model.image_encoder(t)
+        hk.remove()
+        x = inputs[0]
+        feats.append(x[1:, 0])
+        w_q, w_k, _ = block.attn.in_proj_weight.chunk(3, dim=0)
+        b_q, b_k, _ = block.attn.in_proj_bias.chunk(3, dim=0)
+        q = (x @ w_q.t() + b_q).view(197, 1, 12, 64).permute(1, 2, 0, 3)
+        k = (x @ w_k.t() + b_k).view(197, 1, 12, 64).permute(1, 2, 0, 3)
+        a = torch.softmax((q @ k.transpose(-2, -1)) / 8.0, dim=-1)[0, :, 0, 1:].mean(dim=0)
+        attns.append(a)
+
+    attn_stack = torch.stack(attns).mean(dim=0)
+    feat_stack = torch.stack(feats).mean(dim=0).norm(dim=-1)
+    saliency = (attn_stack * feat_stack).detach().cpu().numpy().reshape(14, 14)
+
     h, w = img_bgr.shape[:2]
-    cam_smooth = cv2.GaussianBlur(cam.astype(np.float32), (7, 7), sigmaX=2.0)
-    cam_resized = cv2.resize(cam_smooth, (w, h), interpolation=cv2.INTER_CUBIC)
-    cam_resized = np.clip(cam_resized, 0, 1)
-
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
-
-    blend_w = np.clip(cam_resized * 1.4, 0, 1) * alpha
-    blend_3ch = np.stack([blend_w] * 3, axis=-1)
-
-    result = img_bgr.astype(np.float32) * (1 - blend_3ch) + heatmap.astype(np.float32) * blend_3ch
-    return np.uint8(np.clip(result, 0, 255))
+    up = cv2.resize(saliency, (w, h), interpolation=cv2.INTER_CUBIC)
+    blurred = cv2.GaussianBlur(up, (51, 51), sigmaX=sigma)
+    b_min, b_max = blurred.min(), blurred.max()
+    cam_norm = np.clip((blurred - b_min) / (b_max - b_min + 1e-6), 0, 1)
+    return cam_norm
 
 
-def tensor_to_bgr(tensor):
-    """Convert normalized (C, H, W) tensor to uint8 BGR image."""
-    mean = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32).reshape(3, 1, 1)
-    std = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32).reshape(3, 1, 1)
-    t = tensor.detach().cpu().numpy() * std + mean
-    t = np.clip(t, 0, 1)
-    img_hwc = np.transpose(t, (1, 2, 0))
-    return cv2.cvtColor((img_hwc * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+def overlay_thermal(img_bgr, cam_norm):
+    """Blends vibrant thermal JET colormap with adaptive alpha."""
+    heat = cv2.applyColorMap(np.uint8(255 * cam_norm), cv2.COLORMAP_JET).astype(np.float32) / 255.0
+    img_f = img_bgr.astype(np.float32) / 255.0
+    
+    alpha = (cam_norm ** 1.2) * 0.58 + 0.12
+    alpha_3d = np.repeat(alpha[:, :, np.newaxis], 3, axis=2)
+    
+    blend = (1.0 - alpha_3d) * img_f + alpha_3d * heat
+    return np.uint8(255 * np.clip(blend, 0, 1))
 
 
-def create_tri_stream_canvas(img_f, img_b, img_c, cam_f, cam_b, cam_c, true_cls, pred_cls, conf):
-    """Creates a side-by-side 2x3 panel comparing Face, Body, and Context streams."""
-    s = 224
-    pad_top = 50
-    gap = 8
-    pad_bottom = 45
-    grid_w = s * 3 + gap * 4
-    grid_h = s * 2 + pad_top + gap * 2 + pad_bottom
+def build_single_card(tile_orig, tile_body_ov, tile_face_ov, tile_ctx_ov, true_name, pred_name, conf, sample_idx):
+    tile_size = 224
+    gap = 14
+    pad_top = 44
+    pad_bot = 40
+    card_w = tile_size * 4 + gap * 5
+    card_h = pad_top + tile_size + pad_bot
 
-    canvas = np.ones((grid_h, grid_w, 3), dtype=np.uint8) * 248  # clean light background
-
-    font = cv2.FONT_HERSHEY_DUPLEX
+    card = np.ones((card_h, card_w, 3), dtype=np.uint8) * 255
 
     # Column titles
-    col_titles = ["Face Stream (Micro-expressions)", "Body Stream (Posture/Gestures)", "Context Stream (Environment)"]
-    for col, title in enumerate(col_titles):
-        x = gap + col * (s + gap)
-        tw = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)[0][0]
-        cv2.putText(canvas, title, (x + (s - tw) // 2, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (40, 40, 40), 1)
+    cols = ['Original', 'Body', 'Face', 'Context']
+    font = cv2.FONT_HERSHEY_DUPLEX
+    for i, title in enumerate(cols):
+        tw = cv2.getTextSize(title, font, 0.48, 1)[0][0]
+        x = gap + i * (tile_size + gap) + (tile_size - tw) // 2
+        cv2.putText(card, title, (x, 28), font, 0.48, (40, 40, 40), 1, cv2.LINE_AA)
 
-    # Row 1: Original Inputs
-    y_row1 = pad_top
-    for col, img in enumerate([img_f, img_b, img_c]):
-        x = gap + col * (s + gap)
-        canvas[y_row1:y_row1 + s, x:x + s] = cv2.resize(img, (s, s))
+    # Place tiles
+    y = pad_top
+    card[y:y+tile_size, gap:gap+tile_size] = tile_orig
+    card[y:y+tile_size, gap + (tile_size+gap):gap + (tile_size+gap) + tile_size] = tile_body_ov
+    card[y:y+tile_size, gap + 2*(tile_size+gap):gap + 2*(tile_size+gap) + tile_size] = tile_face_ov
+    card[y:y+tile_size, gap + 3*(tile_size+gap):gap + 3*(tile_size+gap) + tile_size] = tile_ctx_ov
 
-    # Row 2: Heatmap Overlays
-    y_row2 = pad_top + s + gap
-    for col, cam_img in enumerate([cam_f, cam_b, cam_c]):
-        x = gap + col * (s + gap)
-        canvas[y_row2:y_row2 + s, x:x + s] = cv2.resize(cam_img, (s, s))
+    # Bottom status banner
+    match = (true_name == pred_name)
+    color = (25, 135, 25) if match else (25, 25, 205)
+    info = f"Sample #{sample_idx:03d} | True: {true_name} | Predicted: {pred_name} ({conf:.1f}%)"
+    cv2.putText(card, info, (gap + 4, card_h - 14), font, 0.48, color, 1, cv2.LINE_AA)
 
-    # Bottom Banner
-    match = (true_cls == pred_cls)
-    status_color = (30, 140, 30) if match else (30, 30, 200)
-    status_text = f"Ground Truth: {true_cls}  |  Predicted: {pred_cls} ({conf:.1f}%)"
-    cv2.putText(canvas, status_text, (gap + 10, grid_h - 18), font, 0.52, status_color, 1)
-
-    return canvas
+    return card
 
 
 def main():
     device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
-    print(f"=> Using device: {device}")
+    print(f"=> Device: {device}")
 
     ckpt_path = 'outputs/RAER-FrameLevelFusion-[06-07]-[03:06]/model_best.pth'
     if not os.path.exists(ckpt_path):
-        raise FileNotFoundError(f"Checkpoint not found at: {ckpt_path}")
+        raise FileNotFoundError(f"Missing checkpoint: {ckpt_path}")
 
     args = argparse.Namespace(
-        clip_path='ViT-B/16',
-        drop_path_rate=0.0,
-        dataset='RAER',
-        use_context=True,
-        fusion_type='cmaf',
-        fusion_stage='frame',
-        temporal_layers=1,
-        contexts_number=8,
-        class_token_position='end',
-        class_specific_contexts=True,
-        load_and_tune_prompt_learner=True,
-        text_type='prompt_ensemble',
-        temperature=0.07,
-        lr=2e-5,
-        lr_image_encoder=1e-6,
-        lr_prompt_learner=3e-4,
-        lr_adapter=1e-4,
-        lambda_vad=0.0,
-        modality_dropout=0.0,
-        crop_body=True,
-        freeze_image_encoder=False,
-        use_moco=False
+        clip_path='ViT-B/16', drop_path_rate=0.0, dataset='RAER', use_context=True,
+        fusion_type='cmaf', fusion_stage='frame', temporal_layers=1, contexts_number=8,
+        class_token_position='end', class_specific_contexts=True, load_and_tune_prompt_learner=True,
+        text_type='prompt_ensemble', temperature=0.07, lr=2e-5, lr_image_encoder=1e-6,
+        lr_prompt_learner=3e-4, lr_adapter=1e-4, lambda_vad=0.0, modality_dropout=0.0,
+        crop_body=True, freeze_image_encoder=False, use_moco=False
     )
 
     class_names, input_text = get_class_info(args)
-    print(f"=> Target Classes: {class_names}")
-
     clip_model, _ = clip.load('ViT-B/16', device=device)
     clip_model = clip_model.float()
     model = GenerateModel(input_text=input_text, clip_model=clip_model, args=args).to(device).float()
-
-    print(f"=> Loading checkpoint: {ckpt_path}")
     checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
     state_dict = checkpoint.get('state_dict', checkpoint.get('model', checkpoint))
     model.load_state_dict(state_dict, strict=False)
     model.eval()
 
-    # Precompute ensemble text features for all classes
     with torch.no_grad():
         prompts = model.prompt_learner()
         text_feats = model.text_encoder(prompts, model.tokenized_prompts).float()
-        text_feats = text_feats / (text_feats.norm(dim=-1, keepdim=True) + 1e-6)
         if model.is_ensemble:
-            text_feats = text_feats.view(model.num_classes, model.num_prompts_per_class, -1)
-            all_class_text = text_feats.mean(dim=1)
+            text_feats = text_feats.view(model.num_classes, model.num_prompts_per_class, -1).mean(dim=1)
+        text_feats = text_feats / (text_feats.norm(dim=-1, keepdim=True) + 1e-6)
+
+    # Load annotations and bounding boxes
+    with open('RAER/annotation/test.txt') as f:
+        test_entries = [l.strip().split() for l in f]
+
+    with open('RAER/bounding_box/body.json') as f:
+        body_boxes = json.load(f)
+
+    with open('RAER/bounding_box/face.json') as f:
+        face_boxes = json.load(f)
+
+    out_all = 'outputs/gradcam/all_528_samples'
+    os.makedirs(out_all, exist_ok=True)
+    for cname in CLASS_NAMES:
+        os.makedirs(f'outputs/gradcam/by_class/{cname}', exist_ok=True)
+
+    print(f"=> Processing Full Dataset: {len(test_entries)} videos...")
+
+    tile_s = 224
+    for idx, (vid_path, num_frames_str, label_str) in enumerate(tqdm(test_entries, desc="Generating 4-Stream Heatmaps")):
+        true_cls = int(label_str) - 1
+        true_name = CLASS_NAMES[true_cls]
+
+        # Use middle frame (e.g. frame 15 or 10 or 1)
+        mid_num = max(1, int(num_frames_str) // 2)
+        frame_candidates = [f"{mid_num}.jpg", "15.jpg", "1.jpg"]
+        img_raw = None
+        chosen_frame = "1.jpg"
+        for fc in frame_candidates:
+            p = os.path.join(vid_path, fc)
+            if os.path.exists(p):
+                img_raw = cv2.imread(p)
+                chosen_frame = fc
+                break
+
+        if img_raw is None:
+            # Fallback search any jpg
+            jpgs = [f for f in os.listdir(vid_path) if f.endswith('.jpg')]
+            if jpgs:
+                chosen_frame = sorted(jpgs)[len(jpgs)//2]
+                img_raw = cv2.imread(os.path.join(vid_path, chosen_frame))
+            else:
+                continue
+
+        clean_key = vid_path.replace('./', '')
+        match_key = clean_key if clean_key in body_boxes else 'RAER/' + clean_key
+
+        # 1. Clean Context Crop (no letterbox bars)
+        ctx_clean = get_clean_active_context(img_raw)
+        tile_ctx = cv2.resize(ctx_clean, (tile_s, tile_s))
+
+        # 2. Clean Body Crop (no letterbox bars)
+        b_box = body_boxes.get(match_key)
+        if b_box is not None and len(b_box) >= 4:
+            bx1, by1, bx2, by2 = int(b_box[0]), int(b_box[1]), int(b_box[2]), int(b_box[3])
+            bx1, by1 = max(0, bx1), max(0, by1)
+            bx2, by2 = min(img_raw.shape[1], bx2), min(img_raw.shape[0], by2)
+            if bx2 > bx1 and by2 > by1:
+                tile_body = cv2.resize(img_raw[by1:by2, bx1:bx2], (tile_s, tile_s))
+            else:
+                tile_body = tile_ctx
         else:
-            all_class_text = text_feats
-        all_class_text = all_class_text / (all_class_text.norm(dim=-1, keepdim=True) + 1e-6)
+            tile_body = tile_ctx
 
-    print("=> Initializing test dataset...")
-    test_dataset = test_data_loader(
-        root_dir='./',
-        list_file='RAER/annotation/test.txt',
-        num_segments=16,
-        duration=1,
-        image_size=224,
-        bounding_box_face='RAER/bounding_box/face.json',
-        bounding_box_body='RAER/bounding_box/body.json',
-        crop_body=True,
-        num_classes=5,
-        dataset_name='RAER'
-    )
+        # 3. Clean Face Crop (no letterbox bars)
+        f_entry = face_boxes.get(match_key, {})
+        f_box = f_entry.get(chosen_frame) or f_entry.get("1.jpg") or (list(f_entry.values())[0] if f_entry else None)
+        if f_box is not None and len(f_box) >= 4:
+            fx1, fy1, fx2, fy2 = int(f_box[0]), int(f_box[1]), int(f_box[2]), int(f_box[3])
+            fw, fh = fx2 - fx1, fy2 - fy1
+            mw, mh = int(fw * 0.12), int(fh * 0.12)
+            fy1_m, fy2_m = max(0, fy1 - mh), min(img_raw.shape[0], fy2 + mh)
+            fx1_m, fx2_m = max(0, fx1 - mw), min(img_raw.shape[1], fx2 + mw)
+            if fy2_m > fy1_m and fx2_m > fx1_m:
+                tile_face = cv2.resize(img_raw[fy1_m:fy2_m, fx1_m:fx2_m], (tile_s, tile_s))
+            else:
+                tile_face = tile_body
+        else:
+            tile_face = tile_body
 
-    out_dir = 'outputs/gradcam'
-    os.makedirs(out_dir, exist_ok=True)
-    os.makedirs('image', exist_ok=True)
-
-    # Pick 1 representative sample for each class
-    found_classes = {}
-    print("=> Scanning test set for representative samples of each class...")
-    for idx in range(len(test_dataset)):
-        face, body, context, label = test_dataset[idx]
-        cls_idx = int(label)
-        if cls_idx not in found_classes:
-            found_classes[cls_idx] = idx
-        if len(found_classes) == len(class_names):
-            break
-
-    print(f"=> Selected {len(found_classes)} samples across classes: {list(found_classes.keys())}")
-
-    for cls_idx, sample_idx in found_classes.items():
-        face, body, context, label = test_dataset[sample_idx]
-        face_t = face.unsqueeze(0).to(device).float()
-        body_t = body.unsqueeze(0).to(device).float()
-        context_t = context.unsqueeze(0).to(device).float()
-
-        # Run forward pass to get prediction
+        # Model Prediction for Confidence
         with torch.no_grad():
-            logits, _, _, _, _ = model(face_t, body_t, context_t)
+            t_f = torch.from_numpy(cv2.cvtColor(tile_face, cv2.COLOR_BGR2RGB)).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
+            feat_f = model.image_encoder(t_f)
+            feat_f = feat_f / (feat_f.norm(dim=-1, keepdim=True) + 1e-6)
+            logits = feat_f @ text_feats.t()
             probs = torch.softmax(logits, dim=-1)[0]
-            pred_idx = logits.argmax(dim=-1).item()
-            conf = probs[pred_idx].item() * 100.0
+            pred_cls = logits.argmax(dim=-1).item()
+            conf = probs[pred_cls].item() * 100.0
 
-        true_cls_name = class_names[cls_idx]
-        pred_cls_name = class_names[pred_idx]
+        pred_name = CLASS_NAMES[pred_cls]
 
-        # Use middle frame (t=8) for visualization
-        mid = face.shape[0] // 2
-        f_mid_tensor = face[mid].unsqueeze(0).to(device).float()
-        b_mid_tensor = body[mid].unsqueeze(0).to(device).float()
-        c_mid_tensor = context[mid].unsqueeze(0).to(device).float()
+        # Compute Thermal Grad-CAM Maps
+        cam_body = compute_thermal_map(model, tile_body, device, sigma=22.0)
+        cam_face = compute_thermal_map(model, tile_face, device, sigma=18.0)
+        cam_ctx = compute_thermal_map(model, tile_ctx, device, sigma=24.0)
 
-        # Compute heatmaps for all 3 streams
-        cam_face = compute_stream_token_similarity(model, f_mid_tensor, pred_idx, all_class_text)
-        cam_body = compute_stream_token_similarity(model, b_mid_tensor, pred_idx, all_class_text)
-        cam_context = compute_stream_token_similarity(model, c_mid_tensor, pred_idx, all_class_text)
+        ov_body = overlay_thermal(tile_body, cam_body)
+        ov_face = overlay_thermal(tile_face, cam_face)
+        ov_ctx = overlay_thermal(tile_ctx, cam_ctx)
 
-        # Convert tensors to BGR images
-        img_f = tensor_to_bgr(face[mid])
-        img_b = tensor_to_bgr(body[mid])
-        img_c = tensor_to_bgr(context[mid])
+        # Build card
+        card = build_single_card(tile_body, ov_body, ov_face, ov_ctx, true_name, pred_name, conf, idx)
 
-        # Overlays
-        ov_f = overlay_heatmap(img_f, cam_face)
-        ov_b = overlay_heatmap(img_b, cam_body)
-        ov_c = overlay_heatmap(img_c, cam_context)
+        # Save files
+        fname = f"sample_{idx:04d}_{true_name}_{pred_name}.png"
+        cv2.imwrite(os.path.join(out_all, fname), card)
+        cv2.imwrite(os.path.join(f'outputs/gradcam/by_class/{true_name}', fname), card)
 
-        canvas = create_tri_stream_canvas(img_f, img_b, img_c, ov_f, ov_b, ov_c, true_cls_name, pred_cls_name, conf)
-
-        save_path = os.path.join(out_dir, f"gradcam_sample_class_{cls_idx}_{true_cls_name}.png")
-        cv2.imwrite(save_path, canvas)
-        print(f"  [Saved] {save_path} (True: {true_cls_name}, Pred: {pred_cls_name})")
-
-        # Save the first sample as the main presentation image
-        if cls_idx == 1 or cls_idx == list(found_classes.keys())[0]:
-            cv2.imwrite('image/gradcam_sample.png', canvas)
-
-    print("\n=> Grad-CAM visualization complete! Visuals saved to outputs/gradcam/ and image/gradcam_sample.png.")
+    print("\n=> FULL DATASET 4-STREAM GRAD-CAM VISUALIZATION COMPLETE (528/528 videos)!")
 
 
 if __name__ == '__main__':

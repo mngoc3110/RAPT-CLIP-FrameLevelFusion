@@ -1,0 +1,4 @@
+Normal (Face + Body + Context)  : 77.65% (UAR: 77.06%)
+Masked Context (Zeros)          : 79.55% (UAR: 68.58%)
+Masked Face (Zeros)             : 73.11% (UAR: 67.84%)
+Masked Body (Zeros)             : 75.19% (UAR: 75.21%)

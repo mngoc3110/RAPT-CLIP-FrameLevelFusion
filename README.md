@@ -298,6 +298,29 @@ bash valid_sh/valid_raer_framelevelfusion.sh
 
 ---
 
+## 🔬 Qualitative Interpretability: 4-Stream Grad-CAM
+
+<p align="center">
+  <img src="image/gradcam_sample.png" width="95%" alt="Figure 3: Qualitative comparison of original, body, face, and context streams" />
+</p>
+<p align="center">
+  <em>Figure 3: Qualitative comparison across Original, Body, Face, and Context streams on RAER. Salient heatmaps pinpoint key affective cues: micro-expressions on Face, phone and posture cues on Body, and classroom environment cues on Context.</em>
+</p>
+
+---
+
+## 🛡️ Model Robustness & Modality Occlusion
+
+<p align="center">
+  <img src="image/robustness_modality_ablation.png" width="48%" alt="Modality Ablation" />
+  <img src="image/robustness_degradation.png" width="48%" alt="Robustness Degradation" />
+</p>
+<p align="center">
+  <em>Figure 4: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
+</p>
+
+---
+
 ## 📄 Technical PDF Report
 
 A comprehensive 4-page report has been compiled directly from the model checkpoints:

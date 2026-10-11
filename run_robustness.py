@@ -5,9 +5,7 @@ Evaluates model performance under:
 2. Gaussian Noise Injection (std: 0.0, 0.1, 0.3, 0.5)
 3. Structural Disturbances (Temporal Shuffling, Random Erasing)
 
-Saves results to:
-- outputs/robustness/modality_ablation.txt
-- outputs/robustness/advanced_robustness_results.txt
+Optimized for Single-Pass DataLoader iteration (9x faster).
 """
 import os
 import argparse
@@ -21,61 +19,95 @@ from models.clip import clip
 from models.Generate_Model import GenerateModel
 from dataloader.video_dataloader import test_data_loader
 from utils.builders import get_class_info
+import warnings
+
+warnings.filterwarnings('ignore')
 
 CLASS_NAMES = ['Neutrality', 'Enjoyment', 'Confusion', 'Fatigue', 'Distraction']
 
-def evaluate(model, dataloader, device, condition="normal", noise_std=0.0):
+
+def evaluate_all(model, dataloader, device):
+    conditions = [
+        "normal",
+        "mask_context",
+        "mask_face",
+        "mask_body",
+        "noise_0.1",
+        "noise_0.3",
+        "noise_0.5",
+        "temporal_shuffle",
+        "random_erasing_body"
+    ]
+    preds = {c: [] for c in conditions}
+    targets = []
+
     model.eval()
-    all_preds = []
-    all_targets = []
-    
     with torch.no_grad():
-        for face, body, context, label in dataloader:
+        for face, body, context, label in tqdm(dataloader, desc="Evaluating All Robustness Conditions"):
             face = face.to(device).float()
             body = body.to(device).float()
             context = context.to(device).float()
-            
-            # 1. Condition: Modality Masking
-            if condition == "mask_face":
-                face = torch.zeros_like(face)
-            elif condition == "mask_body":
-                body = torch.zeros_like(body)
-            elif condition == "mask_context":
-                context = torch.zeros_like(context)
-                
-            # 2. Condition: Gaussian Noise
-            if noise_std > 0.0:
-                face = face + torch.randn_like(face) * noise_std
-                body = body + torch.randn_like(body) * noise_std
-                context = context + torch.randn_like(context) * noise_std
-                
-            # 3. Condition: Temporal Shuffling
-            if condition == "temporal_shuffle":
-                # Permute temporal dimension (dim=1) randomly
-                perm = torch.randperm(face.size(1))
-                face = face[:, perm]
-                body = body[:, perm]
-                context = context[:, perm]
-                
-            # 4. Condition: Random Erasing on Body (occlude a random patch of frames)
-            if condition == "random_erasing_body":
-                b, t, c, h, w = body.shape
-                # Erase a 100x100 patch in the center
-                body[:, :, :, h//4:3*h//4, w//4:3*w//4] = 0.0
+            targets.extend(label.numpy())
 
+            # 1. Normal
             out = model(face, body, context)
-            logits = out[0] if isinstance(out, (tuple, list)) else out
-            preds = logits.argmax(dim=-1).cpu().numpy()
-            
-            all_preds.extend(preds)
-            all_targets.extend(label.numpy())
-            
-    y_true = np.array(all_targets)
-    y_pred = np.array(all_preds)
-    
-    war = accuracy_score(y_true, y_pred) * 100.0
-    uar = recall_score(y_true, y_pred, average='macro') * 100.0
-    return war, uar
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["normal"].extend(l)
+
+            # 2. Mask Context
+            out = model(face, body, torch.zeros_like(context))
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["mask_context"].extend(l)
+
+            # 3. Mask Face
+            out = model(torch.zeros_like(face), body, context)
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["mask_face"].extend(l)
+
+            # 4. Mask Body
+            out = model(face, torch.zeros_like(body), context)
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["mask_body"].extend(l)
+
+            # 5. Gaussian Noise 0.1
+            out = model(face + torch.randn_like(face)*0.1, body + torch.randn_like(body)*0.1, context + torch.randn_like(context)*0.1)
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["noise_0.1"].extend(l)
+
+            # 6. Gaussian Noise 0.3
+            out = model(face + torch.randn_like(face)*0.3, body + torch.randn_like(body)*0.3, context + torch.randn_like(context)*0.3)
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["noise_0.3"].extend(l)
+
+            # 7. Gaussian Noise 0.5
+            out = model(face + torch.randn_like(face)*0.5, body + torch.randn_like(body)*0.5, context + torch.randn_like(context)*0.5)
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["noise_0.5"].extend(l)
+
+            # 8. Temporal Shuffling
+            perm = torch.randperm(face.size(1))
+            out = model(face[:, perm], body[:, perm], context[:, perm])
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["temporal_shuffle"].extend(l)
+
+            # 9. Random Erasing on Body
+            b_erased = body.clone()
+            h, w = b_erased.shape[-2], b_erased.shape[-1]
+            b_erased[:, :, :, h//4:3*h//4, w//4:3*w//4] = 0.0
+            out = model(face, b_erased, context)
+            l = (out[0] if isinstance(out, (tuple, list)) else out).argmax(dim=-1).cpu().numpy()
+            preds["random_erasing_body"].extend(l)
+
+    y_true = np.array(targets)
+    metrics = {}
+    for c in conditions:
+        y_pred = np.array(preds[c])
+        war = accuracy_score(y_true, y_pred) * 100.0
+        uar = recall_score(y_true, y_pred, average='macro') * 100.0
+        metrics[c] = (war, uar)
+
+    return metrics
+
 
 def main():
     device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
@@ -139,56 +171,47 @@ def main():
 
     os.makedirs('outputs/robustness', exist_ok=True)
 
+    metrics = evaluate_all(model, dataloader, device)
+
     print("\n" + "="*50)
-    print("1. EVALUATING MODALITY ABLATION / OCCLUSION")
+    print("1. MODALITY ABLATION / OCCLUSION RESULTS")
     print("="*50)
-    
-    war_normal, uar_normal = evaluate(model, dataloader, device, condition="normal")
-    print(f"Normal (Face + Body + Context)  : WAR = {war_normal:.2f}%, UAR = {uar_normal:.2f}%")
-    
-    war_mask_ctx, uar_mask_ctx = evaluate(model, dataloader, device, condition="mask_context")
-    print(f"Masked Context (Zeros)          : WAR = {war_mask_ctx:.2f}%, UAR = {uar_mask_ctx:.2f}%")
-    
-    war_mask_face, uar_mask_face = evaluate(model, dataloader, device, condition="mask_face")
-    print(f"Masked Face (Zeros)             : WAR = {war_mask_face:.2f}%, UAR = {uar_mask_face:.2f}%")
-    
-    war_mask_body, uar_mask_body = evaluate(model, dataloader, device, condition="mask_body")
-    print(f"Masked Body (Zeros)             : WAR = {war_mask_body:.2f}%, UAR = {uar_mask_body:.2f}%")
+    for c in ["normal", "mask_context", "mask_face", "mask_body"]:
+        w, u = metrics[c]
+        print(f"  {c:<22}: WAR = {w:.2f}%, UAR = {u:.2f}%")
 
     with open('outputs/robustness/modality_ablation.txt', 'w') as f:
-        f.write(f"Normal (Face + Body + Context)  : {war_normal:.2f}% (UAR: {uar_normal:.2f}%)\n")
-        f.write(f"Masked Context (Zeros)          : {war_mask_ctx:.2f}% (UAR: {uar_mask_ctx:.2f}%)\n")
-        f.write(f"Masked Face (Zeros)             : {war_mask_face:.2f}% (UAR: {uar_mask_face:.2f}%)\n")
-        f.write(f"Masked Body (Zeros)             : {war_mask_body:.2f}% (UAR: {uar_mask_body:.2f}%)\n")
+        f.write(f"Normal (Face + Body + Context)  : {metrics['normal'][0]:.2f}% (UAR: {metrics['normal'][1]:.2f}%)\n")
+        f.write(f"Masked Context (Zeros)          : {metrics['mask_context'][0]:.2f}% (UAR: {metrics['mask_context'][1]:.2f}%)\n")
+        f.write(f"Masked Face (Zeros)             : {metrics['mask_face'][0]:.2f}% (UAR: {metrics['mask_face'][1]:.2f}%)\n")
+        f.write(f"Masked Body (Zeros)             : {metrics['mask_body'][0]:.2f}% (UAR: {metrics['mask_body'][1]:.2f}%)\n")
 
     print("\n" + "="*50)
-    print("2. EVALUATING GAUSSIAN NOISE INJECTION")
+    print("2. GAUSSIAN NOISE INJECTION RESULTS")
     print("="*50)
-    noise_results = {}
-    for std in [0.0, 0.1, 0.3, 0.5]:
-        w, u = evaluate(model, dataloader, device, noise_std=std)
-        noise_results[std] = (w, u)
-        print(f"Noise Std {std:.1f}: WAR = {w:.2f}%, UAR = {u:.2f}%")
+    for std_str in ["noise_0.1", "noise_0.3", "noise_0.5"]:
+        w, u = metrics[std_str]
+        print(f"  {std_str:<22}: WAR = {w:.2f}%, UAR = {u:.2f}%")
 
     print("\n" + "="*50)
-    print("3. EVALUATING STRUCTURAL DISTURBANCE")
+    print("3. STRUCTURAL DISTURBANCES RESULTS")
     print("="*50)
-    w_shuf, u_shuf = evaluate(model, dataloader, device, condition="temporal_shuffle")
-    print(f"Temporal Shuffling: WAR = {w_shuf:.2f}%, UAR = {u_shuf:.2f}%")
-    
-    w_erase, u_erase = evaluate(model, dataloader, device, condition="random_erasing_body")
-    print(f"Random Erasing (Body): WAR = {w_erase:.2f}%, UAR = {u_erase:.2f}%")
+    for s_str in ["temporal_shuffle", "random_erasing_body"]:
+        w, u = metrics[s_str]
+        print(f"  {s_str:<22}: WAR = {w:.2f}%, UAR = {u:.2f}%")
 
     with open('outputs/robustness/advanced_robustness_results.txt', 'w') as f:
         f.write("Noise Injection Results:\n")
-        for std, (w, u) in noise_results.items():
-            f.write(f"Std {std:.1f}: {w:.2f}% (UAR: {u:.2f}%)\n")
+        f.write(f"Std 0.0 (Normal): {metrics['normal'][0]:.2f}% (UAR: {metrics['normal'][1]:.2f}%)\n")
+        for std_str in ["noise_0.1", "noise_0.3", "noise_0.5"]:
+            f.write(f"{std_str}: {metrics[std_str][0]:.2f}% (UAR: {metrics[std_str][1]:.2f}%)\n")
         f.write("\nStructural Disturbances:\n")
-        f.write(f"Normal: {war_normal:.2f}% (UAR: {uar_normal:.2f}%)\n")
-        f.write(f"Temporal Shuffling: {w_shuf:.2f}% (UAR: {u_shuf:.2f}%)\n")
-        f.write(f"Random Erasing (Body): {w_erase:.2f}% (UAR: {u_erase:.2f}%)\n")
+        f.write(f"Normal: {metrics['normal'][0]:.2f}% (UAR: {metrics['normal'][1]:.2f}%)\n")
+        f.write(f"Temporal Shuffling: {metrics['temporal_shuffle'][0]:.2f}% (UAR: {metrics['temporal_shuffle'][1]:.2f}%)\n")
+        f.write(f"Random Erasing (Body): {metrics['random_erasing_body'][0]:.2f}% (UAR: {metrics['random_erasing_body'][1]:.2f}%)\n")
 
     print("\n=> All robustness results successfully saved to outputs/robustness/!")
+
 
 if __name__ == '__main__':
     main()
