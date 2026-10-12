@@ -29,6 +29,42 @@ if [ ! -f "$DATA_DIR/daisee_train.txt" ]; then
 fi
 echo "=> Using DAiSEE dataset path: $DATA_DIR"
 
+# Locate or generate Face Bounding Boxes
+FACE_BBOX_PATH="none"
+if [ -f "$DATA_DIR/daisee_face_bbox.json" ]; then
+  FACE_BBOX_PATH="$DATA_DIR/daisee_face_bbox.json"
+elif [ -f "/kaggle/working/daisee_face_bbox.json" ]; then
+  FACE_BBOX_PATH="/kaggle/working/daisee_face_bbox.json"
+elif [ -f "DAiSEE/daisee_face_bbox.json" ]; then
+  FACE_BBOX_PATH="DAiSEE/daisee_face_bbox.json"
+elif [ -f "daisee_face_bbox.json" ]; then
+  FACE_BBOX_PATH="daisee_face_bbox.json"
+else
+  # Search anywhere in /kaggle
+  DETECTED_BOX=$(find /kaggle -iname "daisee_face_bbox.json" 2>/dev/null | head -n 1)
+  if [ -n "$DETECTED_BOX" ]; then
+    FACE_BBOX_PATH="$DETECTED_BOX"
+  fi
+fi
+
+if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "$DATA_DIR/daisee_train.txt" ]; then
+  echo "=> Notice: daisee_face_bbox.json not found. Generating high-precision Face Boxes via MTCNN..."
+  OUT_BBOX="/kaggle/working/daisee_face_bbox.json"
+  if [ ! -d "/kaggle/working" ]; then
+    OUT_BBOX="DAiSEE/daisee_face_bbox.json"
+  fi
+  python tools/generate_daisee_face_boxes.py \
+    --root-dir "$DATA_DIR" \
+    --annotations "$DATA_DIR/daisee_train.txt" "$DATA_DIR/daisee_val.txt" "$DATA_DIR/daisee_test.txt" \
+    --output "$OUT_BBOX" \
+    --samples-per-video 5 \
+    --device auto
+  if [ -f "$OUT_BBOX" ]; then
+    FACE_BBOX_PATH="$OUT_BBOX"
+  fi
+fi
+echo "=> Using Face Bounding Box: $FACE_BBOX_PATH"
+
 python main.py \
   --mode train \
   --exper-name DAiSEE-CMAF \
@@ -44,7 +80,7 @@ python main.py \
   --val-annotation "$DATA_DIR/daisee_val.txt" \
   --test-annotation "$DATA_DIR/daisee_test.txt" \
   --clip-path ViT-B/16 \
-  --bounding-box-face "none" \
+  --bounding-box-face "$FACE_BBOX_PATH" \
   --bounding-box-body "none" \
   \
   --fusion-type cmaf \

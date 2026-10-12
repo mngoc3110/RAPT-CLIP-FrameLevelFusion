@@ -460,13 +460,28 @@ class VideoDataset(data.Dataset):
                                 box = raw if isinstance(raw[0], (int, float)) else raw[0]
                                 break
                 else:
-                    # RAER nested JSON: {"video_id": {"0.jpg": [x1,y1,x2,y2]}}
+                    # Video / Frames nested or flat JSON
                     video_key_full = os.path.splitext(rel_key)[0]
+                    clip_basename = os.path.basename(video_key_full)
+                    if clip_basename == 'frames':
+                        clip_basename = os.path.basename(os.path.dirname(video_key_full))
+
                     frame_key = f"{p}.jpg"
                     matched_video_key = None
-                    candidates = [video_key_full, f"CAER/{video_key_full}"]
+                    candidates = [
+                        video_key_full,
+                        rel_key,
+                        clip_basename,
+                        f"CAER/{video_key_full}",
+                        f"DAiSEE/{video_key_full}"
+                    ]
                     if video_key_full.startswith('CAER/'):
                         candidates.append(video_key_full[5:])
+                    if video_key_full.startswith('DAiSEE/'):
+                        candidates.append(video_key_full[7:])
+                    if video_key_full.startswith('DAiSEE_data/'):
+                        candidates.append(video_key_full[12:])
+
                     for c in candidates:
                         if c in self.boxs:
                             matched_video_key = c
@@ -481,8 +496,31 @@ class VideoDataset(data.Dataset):
                             elif f"CAER/{sub_key}" in self.boxs:
                                 matched_video_key = f"CAER/{sub_key}"
                                 break
-                    if matched_video_key and frame_key in self.boxs[matched_video_key]:
-                        box = self.boxs[matched_video_key][frame_key]
+                            elif f"DAiSEE/{sub_key}" in self.boxs:
+                                matched_video_key = f"DAiSEE/{sub_key}"
+                                break
+
+                    if matched_video_key:
+                        v_box_entry = self.boxs[matched_video_key]
+                        if isinstance(v_box_entry, (list, tuple)):
+                            box = v_box_entry if isinstance(v_box_entry[0], (int, float)) else v_box_entry[0]
+                        elif isinstance(v_box_entry, dict):
+                            if frame_key in v_box_entry:
+                                box = v_box_entry[frame_key]
+                            elif str(p) in v_box_entry:
+                                box = v_box_entry[str(p)]
+                            elif 'default' in v_box_entry:
+                                box = v_box_entry['default']
+                            else:
+                                try:
+                                    avail_indices = [int(k.split('.')[0]) for k in v_box_entry.keys() if k.replace('.jpg', '').isdigit()]
+                                    if avail_indices:
+                                        closest_p = min(avail_indices, key=lambda x: abs(x - p))
+                                        box = v_box_entry.get(f"{closest_p}.jpg", v_box_entry.get(str(closest_p)))
+                                except Exception:
+                                    pass
+                                if box is None and len(v_box_entry) > 0:
+                                    box = next(iter(v_box_entry.values()))
 
                 # 3. Face Detection (Crop)
                 img_pil_face = self._face_detect(img_pil, box, margin=10, mode='face')
@@ -505,9 +543,19 @@ class VideoDataset(data.Dataset):
                                     break
                     else:
                         matched_body_key = None
-                        b_candidates = [video_key_full, f"CAER/{video_key_full}"]
+                        b_candidates = [
+                            video_key_full,
+                            rel_key,
+                            clip_basename,
+                            f"CAER/{video_key_full}",
+                            f"DAiSEE/{video_key_full}"
+                        ]
                         if video_key_full.startswith('CAER/'):
                             b_candidates.append(video_key_full[5:])
+                        if video_key_full.startswith('DAiSEE/'):
+                            b_candidates.append(video_key_full[7:])
+                        if video_key_full.startswith('DAiSEE_data/'):
+                            b_candidates.append(video_key_full[12:])
                         for bc in b_candidates:
                             if bc in self.body_boxes:
                                 matched_body_key = bc
@@ -522,23 +570,35 @@ class VideoDataset(data.Dataset):
                                 elif f"CAER/{sub_key}" in self.body_boxes:
                                     matched_body_key = f"CAER/{sub_key}"
                                     break
+                                elif f"DAiSEE/{sub_key}" in self.body_boxes:
+                                    matched_body_key = f"DAiSEE/{sub_key}"
+                                    break
                         
                         if matched_body_key:
                             v_body_dict = self.body_boxes[matched_body_key]
-                            if frame_key in v_body_dict:
-                                body_box = v_body_dict[frame_key]
-                            else:
-                                nearest_5 = f"{round(p / 5) * 5}.jpg"
-                                if nearest_5 in v_body_dict:
-                                    body_box = v_body_dict[nearest_5]
+                            if isinstance(v_body_dict, (list, tuple)):
+                                body_box = v_body_dict if isinstance(v_body_dict[0], (int, float)) else v_body_dict[0]
+                            elif isinstance(v_body_dict, dict):
+                                if frame_key in v_body_dict:
+                                    body_box = v_body_dict[frame_key]
+                                elif str(p) in v_body_dict:
+                                    body_box = v_body_dict[str(p)]
+                                elif 'default' in v_body_dict:
+                                    body_box = v_body_dict['default']
                                 else:
-                                    try:
-                                        avail_indices = [int(k.split('.')[0]) for k in v_body_dict.keys() if '.' in k]
-                                        if avail_indices:
-                                            closest_p = min(avail_indices, key=lambda x: abs(x - p))
-                                            body_box = v_body_dict.get(f"{closest_p}.jpg")
-                                    except:
-                                        pass
+                                    nearest_5 = f"{round(p / 5) * 5}.jpg"
+                                    if nearest_5 in v_body_dict:
+                                        body_box = v_body_dict[nearest_5]
+                                    else:
+                                        try:
+                                            avail_indices = [int(k.split('.')[0]) for k in v_body_dict.keys() if '.' in k or k.isdigit()]
+                                            if avail_indices:
+                                                closest_p = min(avail_indices, key=lambda x: abs(x - p))
+                                                body_box = v_body_dict.get(f"{closest_p}.jpg", v_body_dict.get(str(closest_p)))
+                                        except:
+                                            pass
+                                    if body_box is None and len(v_body_dict) > 0:
+                                        body_box = next(iter(v_body_dict.values()))
                     
                     if body_box is None and record.inline_bbox is not None:
                         body_box = record.inline_bbox
@@ -552,8 +612,23 @@ class VideoDataset(data.Dataset):
                         img_pil_body = img_pil.crop((left, upper, right, lower))
                 elif self.dataset_name == 'DAiSEE':
                     # DAiSEE Upper-Body Posture Crop: Captures shoulders, head tilt, posture, and leaning
-                    w_b, h_b = img_pil.size
-                    img_pil_body = img_pil.crop((int(w_b * 0.10), int(h_b * 0.05), int(w_b * 0.90), int(h_b * 0.85)))
+                    if box is not None:
+                        fx1, fy1, fx2, fy2 = box
+                        fw = fx2 - fx1
+                        fh = fy2 - fy1
+                        # Expand horizontally to capture both shoulders, down to chest/torso
+                        bx1 = max(0, int(fx1 - fw * 0.8))
+                        by1 = max(0, int(fy1))
+                        bx2 = min(img_pil.width, int(fx2 + fw * 0.8))
+                        by2 = min(img_pil.height, int(fy2 + fh * 2.2))
+                        if bx2 > bx1 and by2 > by1:
+                            img_pil_body = img_pil.crop((bx1, by1, bx2, by2))
+                        else:
+                            w_b, h_b = img_pil.size
+                            img_pil_body = img_pil.crop((int(w_b * 0.10), int(h_b * 0.05), int(w_b * 0.90), int(h_b * 0.85)))
+                    else:
+                        w_b, h_b = img_pil.size
+                        img_pil_body = img_pil.crop((int(w_b * 0.10), int(h_b * 0.05), int(w_b * 0.90), int(h_b * 0.85)))
                 elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S']:
                     # CAER-S: If face box is available, estimate upper torso region; otherwise upper 80%
                     if box is not None:
