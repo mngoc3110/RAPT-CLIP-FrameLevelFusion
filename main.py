@@ -121,6 +121,7 @@ loss_group.add_argument('--ldam-s', type=float, default=30.0, help='Scaling fact
 loss_group.add_argument('--asl-gamma-neg', type=float, default=4.0, help='Asymmetric Loss gamma_neg. Controls negative focusing. Lower=less tail suppression.')
 loss_group.add_argument('--asl-gamma-pos', type=float, default=0.0, help='Asymmetric Loss gamma_pos. Controls positive focusing.')
 loss_group.add_argument('--asl-clip', type=float, default=0.05, help='Asymmetric Loss probability clipping for negatives.')
+loss_group.add_argument('--use-class-weight', action='store_true', default=False, help='Enable smoothed inverse-frequency class weights for LDAM/CE.')
 # Early stopping
 train_group.add_argument('--early-stopping-patience', type=int, default=0, help='Early stopping patience (0=disabled). Stop if valid metric does not improve for N epochs.')
 
@@ -130,6 +131,7 @@ model_group.add_argument('--text-type', default='prompt_ensemble', choices=['cla
 model_group.add_argument('--temporal-layers', type=int, default=1, help='Number of layers in the temporal modeling part.')
 model_group.add_argument('--no-temporal', action='store_true', help='Bypass temporal modeling (automatically bypassed for image datasets like EMOTIC).')
 model_group.add_argument('--contexts-number', type=int, default=8, help='Number of context vectors in the prompt learner.')
+model_group.add_argument('--ctx-init', type=str, default='', help='Text prompt used to semantically initialize context vectors in PromptLearner (e.g. "a video of a student in a classroom").')
 model_group.add_argument('--class-token-position', type=str, default="end", help='Position of the class token in the prompt.')
 model_group.add_argument('--class-specific-contexts', type=str, default='True', choices=['True', 'False'], help='Whether to use class-specific context prompts.')
 model_group.add_argument('--load_and_tune_prompt_learner', type=str, default='True', choices=['True', 'False'], help='Whether to load and fine-tune the prompt learner.')
@@ -293,8 +295,16 @@ def run_training(args: argparse.Namespace) -> None:
         criterion = SemanticLDLLoss(temperature=args.ldl_temperature).to(args.device)
     elif args.loss_type == 'ldam':
         if sum(cls_num_list) > 0:
+            ldam_weight = None
+            if getattr(args, 'use_class_weight', False):
+                counts = np.array(cls_num_list, dtype=np.float32)
+                # Smoothed inverse frequency: (max_count / count) ** 0.33
+                raw_weights = (np.max(counts) / np.maximum(counts, 1.0)) ** 0.33
+                norm_weights = raw_weights / np.mean(raw_weights)
+                ldam_weight = torch.tensor(norm_weights, dtype=torch.float32, device=args.device)
+                print(f"=> Using smoothed class weights for LDAM: {norm_weights.round(2).tolist()}")
             print(f"=> Using LDAM Loss with s={args.ldam_s}, max_m={args.ldam_max_m}")
-            criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=args.ldam_max_m, s=args.ldam_s).to(args.device)
+            criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=args.ldam_max_m, s=args.ldam_s, weight=ldam_weight).to(args.device)
         else:
             print("=> Error: cls_num_list is empty/zero. Cannot use LDAM. Falling back to CrossEntropy.")
             criterion = nn.CrossEntropyLoss().to(args.device)

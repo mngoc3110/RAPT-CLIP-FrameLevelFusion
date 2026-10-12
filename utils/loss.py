@@ -292,7 +292,12 @@ class LDAMLoss(nn.Module):
         # Keep m_list as a CPU tensor initially, move to device in forward
         self.register_buffer('m_list', torch.FloatTensor(m_list)) 
         self.s = s
-        self.weight = weight
+        if weight is not None:
+            if not isinstance(weight, torch.Tensor):
+                weight = torch.tensor(weight, dtype=torch.float32)
+            self.register_buffer('weight', weight.float())
+        else:
+            self.weight = None
 
     def forward(self, x, target):
         index = torch.zeros_like(x, dtype=torch.bool)
@@ -308,7 +313,8 @@ class LDAMLoss(nn.Module):
         x_m = x - batch_m
     
         output = torch.where(index, x_m, x)
-        return F.cross_entropy(self.s * output, target, weight=self.weight)
+        weight = self.weight.to(dtype=x.dtype, device=x.device) if self.weight is not None else None
+        return F.cross_entropy(self.s * output, target, weight=weight)
 
 class SemanticLDLLoss(nn.Module):
     def __init__(self, temperature=1.0, target_temperature=0.1):

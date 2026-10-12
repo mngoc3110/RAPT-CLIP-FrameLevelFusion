@@ -33,21 +33,45 @@ class PromptLearner(nn.Module):
         dtype = clip_model.dtype
         ctx_dim = clip_model.ln_final.weight.shape[0]
 
-        # random initialization
+        # initialization
         is_class_specific = str(getattr(args, 'class_specific_contexts', False)).lower() in ['true', '1']
         is_load_and_tune = str(getattr(args, 'load_and_tune_prompt_learner', True)).lower() in ['true', '1']
 
-        if is_class_specific:
-            if is_load_and_tune:
-                print("Initializing class-specific contexts")
-            ctx_vectors = torch.empty(n_cls, n_ctx, ctx_dim, dtype=dtype)
+        ctx_init = getattr(args, 'ctx_init', '')
+        if ctx_init:
+            ctx_init = ctx_init.strip()
+            prompt_tokenized = clip.tokenize(ctx_init).to(clip_model.token_embedding.weight.device)
+            with torch.no_grad():
+                init_embedding = clip_model.token_embedding(prompt_tokenized).type(dtype)
+            
+            # Count actual tokens in ctx_init
+            init_tokens = _tokenizer.encode(ctx_init)
+            n_ctx = len(init_tokens)
+            args.contexts_number = n_ctx
+            prompt_prefix = ctx_init
+            
+            # Slice embeddings: index 0 is SOS, 1..1+n_ctx are word tokens
+            init_ctx_vectors = init_embedding[0, 1 : 1 + n_ctx, :]
+            if is_class_specific:
+                if is_load_and_tune:
+                    print(f"=> Semantically initializing class-specific contexts from '{ctx_init}' ({n_ctx} tokens)")
+                ctx_vectors = init_ctx_vectors.unsqueeze(0).repeat(n_cls, 1, 1)
+            else:
+                if is_load_and_tune:
+                    print(f"=> Semantically initializing generic context from '{ctx_init}' ({n_ctx} tokens)")
+                ctx_vectors = init_ctx_vectors
         else:
-            if is_load_and_tune:
-                print("Initializing a generic context")
-            ctx_vectors = torch.empty(n_ctx, ctx_dim, dtype=dtype)
-        nn.init.normal_(ctx_vectors, std=0.02)
-        prompt_prefix = " ".join(["X"] * n_ctx)
-        
+            if is_class_specific:
+                if is_load_and_tune:
+                    print("Initializing class-specific contexts")
+                ctx_vectors = torch.empty(n_cls, n_ctx, ctx_dim, dtype=dtype)
+            else:
+                if is_load_and_tune:
+                    print("Initializing a generic context")
+                ctx_vectors = torch.empty(n_ctx, ctx_dim, dtype=dtype)
+            nn.init.normal_(ctx_vectors, std=0.02)
+            prompt_prefix = " ".join(["X"] * n_ctx)
+
         self.ctx = nn.Parameter(ctx_vectors)  # to be optimized
 
         # class_names = [name.replace("_", " ") for name in class_names]

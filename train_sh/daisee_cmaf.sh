@@ -100,7 +100,7 @@ python -u main.py \
   --optimizer AdamW \
   --lr 2e-5 \
   --lr-image-encoder 1e-6 \
-  --lr-prompt-learner 3e-4 \
+  --lr-prompt-learner 1.5e-4 \
   --lr-adapter 1e-4 \
   --weight-decay 0.005 \
   --milestones 10 15 \
@@ -109,17 +109,19 @@ python -u main.py \
   --loss-type ldam \
   --ldam-s 1.0 \
   --ldam-max-m 0.5 \
+  --use-class-weight \
   --label-smoothing 0.05 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
-  --mi-warmup 5 \
-  --mi-ramp 10 \
-  --dc-warmup 5 \
-  --dc-ramp 10 \
+  --mi-warmup 0 \
+  --mi-ramp 0 \
+  --dc-warmup 0 \
+  --dc-ramp 0 \
   --grad-clip 1.0 \
   \
   --text-type prompt_ensemble \
+  --ctx-init "a video of a student in a classroom" \
   --contexts-number 8 \
   --class-token-position end \
   --class-specific-contexts True \
