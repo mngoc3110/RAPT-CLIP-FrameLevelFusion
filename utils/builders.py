@@ -185,6 +185,48 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
     val_annotation_file_path = getattr(args, 'val_annotation', None)
     test_annotation_file_path = getattr(args, 'test_annotation', None)
 
+    # Auto-recovery if annotation file does not exist (e.g. Kaggle path casing or custom slug)
+    if train_annotation_file_path and not os.path.exists(train_annotation_file_path):
+        target_name = os.path.basename(train_annotation_file_path).lower()
+        print(f"Warning: Annotation file {train_annotation_file_path} not found. Searching for {target_name}...")
+        found_path = None
+        for base in ['/kaggle/input', '.', '..']:
+            if os.path.exists(base):
+                for root, dirs, files in os.walk(base):
+                    for f in files:
+                        if f.lower() == target_name:
+                            found_path = os.path.join(root, f)
+                            break
+                    if found_path:
+                        break
+            if found_path:
+                break
+        
+        if found_path:
+            detected_dir = os.path.dirname(found_path)
+            print(f"=> [Auto-Recovered] Found matching annotation at: {found_path}")
+            train_annotation_file_path = found_path
+            args.train_annotation = found_path
+            
+            if val_annotation_file_path:
+                val_target = os.path.basename(val_annotation_file_path).lower()
+                for f in os.listdir(detected_dir):
+                    if f.lower() == val_target:
+                        val_annotation_file_path = os.path.join(detected_dir, f)
+                        args.val_annotation = val_annotation_file_path
+                        break
+            if test_annotation_file_path:
+                test_target = os.path.basename(test_annotation_file_path).lower()
+                for f in os.listdir(detected_dir):
+                    if f.lower() == test_target:
+                        test_annotation_file_path = os.path.join(detected_dir, f)
+                        args.test_annotation = test_annotation_file_path
+                        break
+            
+            if not os.path.exists(args.root_dir):
+                args.root_dir = detected_dir
+                print(f"=> [Auto-Recovered] Updated root_dir to: {args.root_dir}")
+
     mask_context_face = getattr(args, 'mask_context_face', False)
     daisee_merge_low = getattr(args, 'daisee_merge_low', False)
     if mask_context_face:

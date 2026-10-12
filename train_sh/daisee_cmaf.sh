@@ -16,13 +16,13 @@
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
-# Exact or auto-detected Kaggle Dataset directory for DAiSEE
+# Auto-detect Kaggle Dataset directory for DAiSEE
 DATA_DIR="/kaggle/input/daisee/DAiSEE_data"
-if [ ! -d "$DATA_DIR" ]; then
-  # Fallback search if mounted under a custom slug/username path on Kaggle
-  DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "daisee_train.txt" 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
-  if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
-    DATA_DIR="$DETECTED_DIR"
+if [ ! -f "$DATA_DIR/daisee_train.txt" ]; then
+  # Fallback case-insensitive search across /kaggle/input without depth limits
+  DETECTED_FILE=$(find /kaggle/input -iname "daisee_train.txt" 2>/dev/null | head -n 1)
+  if [ -n "$DETECTED_FILE" ]; then
+    DATA_DIR=$(dirname "$DETECTED_FILE")
   elif [ -d "DAiSEE" ]; then
     DATA_DIR="DAiSEE"
   fi
