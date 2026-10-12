@@ -249,6 +249,10 @@ class VideoDataset(data.Dataset):
         # 
         self.video_list = [VideoRecord([os.path.join(self.root_dir, item[0])] + item[1:]) for item in self.sample_list]
         print(('video number:%d' % (len(self.video_list))))
+        if self.video_list:
+            s0_path = self.video_list[0].path
+            s0_exists = os.path.exists(s0_path) or os.path.isdir(s0_path)
+            print(f"[{self.dataset_name} {self.mode}] Sample 0 path: '{s0_path}' | exists: {s0_exists}")
 
         # Automatically determine label offset:
         # If min integer label is >= 1 (e.g., RAER 1..5 or CAER video 1..7), label_offset = 1
@@ -325,34 +329,28 @@ class VideoDataset(data.Dataset):
             is_valid = num_real_frames > 0
         elif self.dataset_name == 'DAiSEE':
             # Robust DAiSEE video/frame resolution
-            # 0. Check if path needs DAiSEE_data prefix toggled
-            if not os.path.exists(record.path):
-                if 'DAiSEE_data' not in record.path:
-                    cand = record.path.replace('DataSet', 'DAiSEE_data/DataSet')
-                    if os.path.exists(cand):
-                        record._data[0] = cand
-                elif '/DAiSEE_data/DAiSEE_data/' in record.path:
-                    cand = record.path.replace('/DAiSEE_data/DAiSEE_data/', '/DAiSEE_data/')
-                    if os.path.exists(cand):
-                        record._data[0] = cand
-
-            # 1. If path ends with 'frames' but does not exist, look for .avi / .mp4 in clip folder
-            if record.path.endswith('frames') and not os.path.exists(record.path):
+            if not os.path.exists(record.path) and not os.path.isdir(record.path):
+                base_no_ext, ext = os.path.splitext(record.path)
+                cands = [
+                    record.path,
+                    record.path.replace('DataSet', 'DAiSEE_data/DataSet'),
+                    record.path.replace('/DAiSEE_data/DAiSEE_data/', '/DAiSEE_data/'),
+                ]
+                for alt_ext in ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']:
+                    cands.append(base_no_ext + alt_ext)
+                    cands.append(base_no_ext.replace('DataSet', 'DAiSEE_data/DataSet') + alt_ext)
+                    cands.append(base_no_ext.replace('/DAiSEE_data/DAiSEE_data/', '/DAiSEE_data/') + alt_ext)
+                # Check frames dir
                 clip_dir = os.path.dirname(record.path)
-                clip_id = os.path.basename(clip_dir)
-                for ext in ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']:
-                    fallback_video = os.path.join(clip_dir, f"{clip_id}{ext}")
-                    if os.path.exists(fallback_video):
-                        record._data[0] = fallback_video
+                cands.append(os.path.join(clip_dir, 'frames'))
+                cands.append(os.path.join(base_no_ext, 'frames'))
+                
+                for c in cands:
+                    if os.path.exists(c) or os.path.isdir(c):
+                        record._data[0] = c
                         break
-            
-            # 2. If path is a video file that does not exist, look for 'frames' subdirectory
-            if (record.path.endswith(('.avi', '.mp4', '.mkv', '.AVI', '.MP4'))) and not os.path.exists(record.path):
-                frames_dir = os.path.join(os.path.dirname(record.path), 'frames')
-                if os.path.isdir(frames_dir):
-                    record._data[0] = frames_dir
 
-            # 3. Now evaluate the resolved path
+            # Now evaluate the resolved path
             if os.path.isdir(record.path):
                 video_frames_path = glob.glob(os.path.join(record.path, '*'))
                 video_frames_path.sort()
@@ -372,6 +370,11 @@ class VideoDataset(data.Dataset):
             is_valid = cap.isOpened() and num_real_frames > 0
 
         if not is_valid:
+            if not hasattr(self, '_missing_logged'):
+                self._missing_logged = 0
+            if self._missing_logged < 5:
+                print(f"\n[CRITICAL ERROR] [{self.dataset_name} {self.mode}] Video NOT FOUND or FAILED to open: '{record.path}'! Returning dummy zero tensors! Please verify dataset path.", flush=True)
+                self._missing_logged += 1
             dummy_shape = (self.num_segments, 3, self.image_size, self.image_size)
             if self.dataset_name == "EMOTIC":
                 multi_hot = torch.zeros(26)
