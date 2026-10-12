@@ -93,6 +93,7 @@ python -u main.py \
   --temporal-layers 1 \
   --fusion-stage frame \
   --daisee-merge-low \
+  --use-weighted-sampler \
   \
   --optimizer AdamW \
   --lr 2e-5 \
