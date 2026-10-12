@@ -10,6 +10,7 @@
 # - Loss: LDAM Loss (s=30.0, max_m=0.5)
 # ============================================================================
 
+export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 export OPENCV_LOG_LEVEL=OFF
@@ -39,13 +40,13 @@ if [ ! -f "$BODY_BOX" ] || [ $(wc -c < "$BODY_BOX" 2>/dev/null || echo 0) -lt 10
 fi
 echo "=> Using Body bounding box path: $BODY_BOX"
 
-python main.py \
+python -u main.py \
   --mode train \
   --exper-name CAER-CMAF \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
-  --batch-size 2 \
+  --batch-size 8 \
   --print-freq 50 \
   --seed 42 \
   --workers 2 \
@@ -63,6 +64,7 @@ python main.py \
   --use-context \
   --crop-body \
   --mask-context-face \
+  --use-weighted-sampler \
   \
   --optimizer AdamW \
   --lr 2e-5 \
