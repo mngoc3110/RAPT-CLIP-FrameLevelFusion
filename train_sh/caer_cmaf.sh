@@ -22,7 +22,20 @@ if [ ! -d "$DATA_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
   fi
 fi
-echo "=> Using CAER dataset path: $DATA_DIR"
+# Preprocess body bounding boxes if dataset body.json is empty ({})
+BODY_BOX="${DATA_DIR}/body.json"
+if [ ! -f "$BODY_BOX" ] || [ $(wc -c < "$BODY_BOX" 2>/dev/null || echo 0) -lt 100 ]; then
+  GENERATED_BODY="/kaggle/working/caer_body_boxes.json"
+  if [ ! -f "$GENERATED_BODY" ]; then
+    echo "=> [Preprocessing] Dataset body.json is empty ({}) or missing."
+    echo "=> Generating high-precision temporally-smoothed Body Bounding Boxes..."
+    python tools/generate_caer_body_boxes.py \
+      --face-json "${DATA_DIR}/face.json" \
+      --output "$GENERATED_BODY"
+  fi
+  BODY_BOX="$GENERATED_BODY"
+fi
+echo "=> Using Body bounding box path: $BODY_BOX"
 
 python main.py \
   --mode train \
@@ -40,7 +53,7 @@ python main.py \
   --test-annotation "${DATA_DIR}/test.txt" \
   --clip-path ViT-B/16 \
   --bounding-box-face "${DATA_DIR}/face.json" \
-  --bounding-box-body "${DATA_DIR}/body.json" \
+  --bounding-box-body "${BODY_BOX}" \
   \
   --fusion-type cmaf \
   --fusion-stage frame \

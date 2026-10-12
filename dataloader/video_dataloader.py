@@ -490,9 +490,41 @@ class VideoDataset(data.Dataset):
                                     body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
                                     break
                     else:
-                        if 'matched_video_key' in dir() and matched_video_key and matched_video_key in self.body_boxes:
-                            if 'frame_key' in dir() and frame_key in self.body_boxes[matched_video_key]:
-                                body_box = self.body_boxes[matched_video_key][frame_key]
+                        matched_body_key = None
+                        b_candidates = [video_key_full, f"CAER/{video_key_full}"]
+                        if video_key_full.startswith('CAER/'):
+                            b_candidates.append(video_key_full[5:])
+                        for bc in b_candidates:
+                            if bc in self.body_boxes:
+                                matched_body_key = bc
+                                break
+                        if matched_body_key is None:
+                            parts = video_key_full.split('/')
+                            for idx in range(1, len(parts)):
+                                sub_key = '/'.join(parts[idx:])
+                                if sub_key in self.body_boxes:
+                                    matched_body_key = sub_key
+                                    break
+                                elif f"CAER/{sub_key}" in self.body_boxes:
+                                    matched_body_key = f"CAER/{sub_key}"
+                                    break
+                        
+                        if matched_body_key:
+                            v_body_dict = self.body_boxes[matched_body_key]
+                            if frame_key in v_body_dict:
+                                body_box = v_body_dict[frame_key]
+                            else:
+                                nearest_5 = f"{round(p / 5) * 5}.jpg"
+                                if nearest_5 in v_body_dict:
+                                    body_box = v_body_dict[nearest_5]
+                                else:
+                                    try:
+                                        avail_indices = [int(k.split('.')[0]) for k in v_body_dict.keys() if '.' in k]
+                                        if avail_indices:
+                                            closest_p = min(avail_indices, key=lambda x: abs(x - p))
+                                            body_box = v_body_dict.get(f"{closest_p}.jpg")
+                                    except:
+                                        pass
                     
                     if body_box is None and record.inline_bbox is not None:
                         body_box = record.inline_bbox
