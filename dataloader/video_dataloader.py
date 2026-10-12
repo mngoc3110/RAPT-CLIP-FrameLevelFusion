@@ -209,7 +209,8 @@ class VideoDataset(data.Dataset):
                     # Case: [path, label] (e.g., EMOTIC / CAER-S images train.txt)
                     p_path = parts[0]
                     if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                        p_path = p_path.replace('DAiSEE_data/', '')
+                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                            p_path = p_path[len('DAiSEE_data/'):]
                     elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
                         if not os.path.exists(os.path.join(self.root_dir, p_path)):
                             p_path = p_path[len('CAER/'):]
@@ -223,7 +224,8 @@ class VideoDataset(data.Dataset):
                     num_frames = parts[-2]
                     label = parts[-1]
                     if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                        p_path = p_path.replace('DAiSEE_data/', '')
+                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                            p_path = p_path[len('DAiSEE_data/'):]
                     elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
                         if not os.path.exists(os.path.join(self.root_dir, p_path)):
                             p_path = p_path[len('CAER/'):]
@@ -234,7 +236,8 @@ class VideoDataset(data.Dataset):
                     num_frames = parts[1]
                     label = parts[2]
                     if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                        p_path = p_path.replace('DAiSEE_data/', '')
+                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                            p_path = p_path[len('DAiSEE_data/'):]
                     elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
                         if not os.path.exists(os.path.join(self.root_dir, p_path)):
                             p_path = p_path[len('CAER/'):]
@@ -322,6 +325,17 @@ class VideoDataset(data.Dataset):
             is_valid = num_real_frames > 0
         elif self.dataset_name == 'DAiSEE':
             # Robust DAiSEE video/frame resolution
+            # 0. Check if path needs DAiSEE_data prefix toggled
+            if not os.path.exists(record.path):
+                if 'DAiSEE_data' not in record.path:
+                    cand = record.path.replace('DataSet', 'DAiSEE_data/DataSet')
+                    if os.path.exists(cand):
+                        record._data[0] = cand
+                elif '/DAiSEE_data/DAiSEE_data/' in record.path:
+                    cand = record.path.replace('/DAiSEE_data/DAiSEE_data/', '/DAiSEE_data/')
+                    if os.path.exists(cand):
+                        record._data[0] = cand
+
             # 1. If path ends with 'frames' but does not exist, look for .avi / .mp4 in clip folder
             if record.path.endswith('frames') and not os.path.exists(record.path):
                 clip_dir = os.path.dirname(record.path)

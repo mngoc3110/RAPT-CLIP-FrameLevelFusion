@@ -16,6 +16,19 @@
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
+# Exact or auto-detected Kaggle Dataset directory for DAiSEE
+DATA_DIR="/kaggle/input/daisee/DAiSEE_data"
+if [ ! -d "$DATA_DIR" ]; then
+  # Fallback search if mounted under a custom slug/username path on Kaggle
+  DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "daisee_train.txt" 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
+  if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
+    DATA_DIR="$DETECTED_DIR"
+  elif [ -d "DAiSEE" ]; then
+    DATA_DIR="DAiSEE"
+  fi
+fi
+echo "=> Using DAiSEE dataset path: $DATA_DIR"
+
 python main.py \
   --mode train \
   --exper-name DAiSEE-CMAF \
@@ -26,13 +39,13 @@ python main.py \
   --print-freq 50 \
   --seed 42 \
   --workers 2 \
-  --root-dir DAiSEE \
-  --train-annotation DAiSEE/daisee_train.txt \
-  --val-annotation DAiSEE/daisee_val.txt \
-  --test-annotation DAiSEE/daisee_test.txt \
+  --root-dir "$DATA_DIR" \
+  --train-annotation "$DATA_DIR/daisee_train.txt" \
+  --val-annotation "$DATA_DIR/daisee_val.txt" \
+  --test-annotation "$DATA_DIR/daisee_test.txt" \
   --clip-path ViT-B/16 \
-  --bounding-box-face DAiSEE/face_bbox_dummy.json \
-  --bounding-box-body DAiSEE/body_bbox_dummy.json \
+  --bounding-box-face "none" \
+  --bounding-box-body "none" \
   \
   --fusion-type cmaf \
   --temporal-layers 1 \
