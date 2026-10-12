@@ -27,25 +27,59 @@ except:
 import torch
 from tqdm import tqdm
 
+class YuNetDetector:
+    def __init__(self, model_path):
+        self.model_path = model_path
+        self.detector = None
+        self.current_size = None
+
+    def detect(self, img_pil):
+        w, h = img_pil.size
+        if self.detector is None or self.current_size != (w, h):
+            self.detector = cv2.FaceDetectorYN.create(self.model_path, "", (w, h), score_threshold=0.75)
+            self.current_size = (w, h)
+        
+        img_np = np.array(img_pil)
+        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        _, faces = self.detector.detect(img_bgr)
+        if faces is not None and len(faces) > 0:
+            best_face = None
+            max_area = 0
+            best_prob = 0
+            for face in faces:
+                fx, fy, fw, fh = [float(v) for v in face[:4]]
+                prob = float(face[-1])
+                area = fw * fh
+                if area > max_area and prob > 0.75:
+                    max_area = area
+                    best_face = [fx, fy, fx + fw, fy + fh]
+                    best_prob = prob
+            if best_face is not None:
+                return [best_face], [best_prob]
+        return None, None
+
 def get_detector(device='cpu'):
+    # Priority 1: Built-in OpenCV YuNet Detector (Zero external dependencies, fast, never breaks Kaggle)
+    yunet_candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'face_detection_yunet_2023mar.onnx'),
+        'tools/face_detection_yunet_2023mar.onnx',
+        'face_detection_yunet_2023mar.onnx'
+    ]
+    for c in yunet_candidates:
+        if os.path.exists(c) and hasattr(cv2, 'FaceDetectorYN'):
+            print(f"=> Using ultra-fast built-in OpenCV YuNet Face Detector ({c})", flush=True)
+            return YuNetDetector(c)
+
+    # Priority 2: MTCNN if already installed without pip conflicts
     try:
         from facenet_pytorch import MTCNN
         print(f"=> Using MTCNN Face Detector on device: {device}", flush=True)
-        detector = MTCNN(
-            keep_all=False,
-            select_largest=True,
-            device=device,
-            post_process=False,
-            min_face_size=40,
-            thresholds=[0.6, 0.7, 0.7]
-        )
-        return detector
-    except ImportError:
-        print("=> Notice: facenet_pytorch not installed. Installing via pip...", flush=True)
-        import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "facenet-pytorch"])
-        from facenet_pytorch import MTCNN
         return MTCNN(keep_all=False, select_largest=True, device=device, post_process=False)
+    except Exception:
+        pass
+
+    print("=> Notice: No detector found. Using heuristic fallback.", flush=True)
+    return None
 
 def read_keyframe(clip_path, frame_idx, num_total_frames=300):
     """Reads a PIL Image at frame_idx from either a directory of frames or an .avi/.mp4 video file."""
