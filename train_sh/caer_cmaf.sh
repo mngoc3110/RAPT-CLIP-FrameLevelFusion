@@ -65,7 +65,6 @@ python -u main.py \
   --use-context \
   --crop-body \
   --mask-context-face \
-  --use-weighted-sampler \
   \
   --optimizer AdamW \
   --lr 2e-5 \
@@ -77,7 +76,7 @@ python -u main.py \
   --gamma 0.1 \
   \
   --loss-type ldam \
-  --ldam-s 30.0 \
+  --ldam-s 1.0 \
   --ldam-max-m 0.5 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
