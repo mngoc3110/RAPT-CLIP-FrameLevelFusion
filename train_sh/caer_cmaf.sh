@@ -12,6 +12,7 @@
 
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 export OPENCV_LOG_LEVEL=OFF
 export OPENCV_FFMPEG_LOGLEVEL=0
@@ -46,7 +47,7 @@ python -u main.py \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
-  --batch-size 8 \
+  --batch-size 4 \
   --print-freq 50 \
   --seed 42 \
   --workers 2 \
