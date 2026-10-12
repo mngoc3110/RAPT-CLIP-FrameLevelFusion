@@ -30,7 +30,7 @@ from tqdm import tqdm
 def get_detector(device='cpu'):
     try:
         from facenet_pytorch import MTCNN
-        print(f"=> Using MTCNN Face Detector on device: {device}")
+        print(f"=> Using MTCNN Face Detector on device: {device}", flush=True)
         detector = MTCNN(
             keep_all=False,
             select_largest=True,
@@ -41,7 +41,7 @@ def get_detector(device='cpu'):
         )
         return detector
     except ImportError:
-        print("=> Warning: facenet_pytorch not installed. Attempting pip install facenet-pytorch...")
+        print("=> Notice: facenet_pytorch not installed. Installing via pip...", flush=True)
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "facenet-pytorch"])
         from facenet_pytorch import MTCNN
@@ -125,9 +125,9 @@ def main():
         try:
             with open(args.output, 'r') as f:
                 face_boxes = json.load(f)
-            print(f"=> Resuming from existing output: {len(face_boxes)} entries already processed.")
+            print(f"=> Resuming from existing output: {len(face_boxes)} entries already processed.", flush=True)
         except Exception as e:
-            print(f"=> Warning: Could not read existing output ({e}). Starting fresh.")
+            print(f"=> Warning: Could not read existing output ({e}). Starting fresh.", flush=True)
 
     # Collect unique videos from all annotation files
     video_entries = []
@@ -139,7 +139,7 @@ def main():
             if os.path.exists(alt_annot):
                 annot = alt_annot
             else:
-                print(f"=> Notice: Annotation file {annot} not found, skipping.")
+                print(f"=> Notice: Annotation file {annot} not found, skipping.", flush=True)
                 continue
 
         with open(annot, 'r') as f:
@@ -153,7 +153,7 @@ def main():
                     seen_paths.add(v_path)
                     video_entries.append((v_path, num_frames))
 
-    print(f"=> Total unique DAiSEE videos to process: {len(video_entries)}")
+    print(f"=> Total unique DAiSEE videos to process: {len(video_entries)}", flush=True)
 
     processed_count = 0
     t0 = time.time()
@@ -231,8 +231,8 @@ def main():
         json.dump(face_boxes, f, indent=2)
 
     total_time = time.time() - t0
-    print(f"\n=> Finished! Saved {len(face_boxes)} entries to: {args.output}")
-    print(f"=> Total time: {total_time/60:.2f} minutes ({total_time/max(1, processed_count):.2f}s per video)")
+    print(f"\n=> Finished! Saved {len(face_boxes)} entries to: {args.output}", flush=True)
+    print(f"=> Total time: {total_time/60:.2f} minutes ({total_time/max(1, processed_count):.2f}s per video)", flush=True)
 
 if __name__ == '__main__':
     main()

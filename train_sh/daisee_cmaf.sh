@@ -13,18 +13,25 @@
 # - Loss: LDAM Loss with s=1.0 / 2.0 (avoiding double-scaling trap with CLIP temp 0.07)
 # ============================================================================
 
+export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
 # Auto-detect Kaggle Dataset directory for DAiSEE
 DATA_DIR="/kaggle/input/daisee/DAiSEE_data"
 if [ ! -f "$DATA_DIR/daisee_train.txt" ]; then
-  # Fallback case-insensitive search across /kaggle/input without depth limits
-  DETECTED_FILE=$(find /kaggle/input -iname "daisee_train.txt" 2>/dev/null | head -n 1)
-  if [ -n "$DETECTED_FILE" ]; then
-    DATA_DIR=$(dirname "$DETECTED_FILE")
+  if [ -d "/kaggle/input/daisee" ] && [ -f "/kaggle/input/daisee/daisee_train.txt" ]; then
+    DATA_DIR="/kaggle/input/daisee"
+  elif [ -f "/kaggle/input/DAiSEE_data/daisee_train.txt" ]; then
+    DATA_DIR="/kaggle/input/DAiSEE_data"
   elif [ -d "DAiSEE" ]; then
     DATA_DIR="DAiSEE"
+  else
+    # Fast shallow search (depth 3) only if needed
+    DETECTED_FILE=$(find /kaggle/input -maxdepth 3 -iname "daisee_train.txt" 2>/dev/null | head -n 1)
+    if [ -n "$DETECTED_FILE" ]; then
+      DATA_DIR=$(dirname "$DETECTED_FILE")
+    fi
   fi
 fi
 echo "=> Using DAiSEE dataset path: $DATA_DIR"
@@ -39,12 +46,6 @@ elif [ -f "DAiSEE/daisee_face_bbox.json" ]; then
   FACE_BBOX_PATH="DAiSEE/daisee_face_bbox.json"
 elif [ -f "daisee_face_bbox.json" ]; then
   FACE_BBOX_PATH="daisee_face_bbox.json"
-else
-  # Search anywhere in /kaggle
-  DETECTED_BOX=$(find /kaggle -iname "daisee_face_bbox.json" 2>/dev/null | head -n 1)
-  if [ -n "$DETECTED_BOX" ]; then
-    FACE_BBOX_PATH="$DETECTED_BOX"
-  fi
 fi
 
 if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "$DATA_DIR/daisee_train.txt" ]; then
@@ -53,7 +54,7 @@ if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "$DATA_DIR/daisee_train.txt" ]; then
   if [ ! -d "/kaggle/working" ]; then
     OUT_BBOX="DAiSEE/daisee_face_bbox.json"
   fi
-  python tools/generate_daisee_face_boxes.py \
+  python -u tools/generate_daisee_face_boxes.py \
     --root-dir "$DATA_DIR" \
     --annotations "$DATA_DIR/daisee_train.txt" "$DATA_DIR/daisee_val.txt" "$DATA_DIR/daisee_test.txt" \
     --output "$OUT_BBOX" \
@@ -65,7 +66,7 @@ if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "$DATA_DIR/daisee_train.txt" ]; then
 fi
 echo "=> Using Face Bounding Box: $FACE_BBOX_PATH"
 
-python main.py \
+python -u main.py \
   --mode train \
   --exper-name DAiSEE-CMAF \
   --dataset DAiSEE \
