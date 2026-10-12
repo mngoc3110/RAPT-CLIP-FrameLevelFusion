@@ -43,18 +43,21 @@ echo "=> Using DAiSEE dataset path: $DATA_DIR"
 
 # Locate or generate Face Bounding Boxes
 FACE_BBOX_PATH="none"
-if [ -f "$DATA_DIR/daisee_face_bbox.json" ]; then
-  FACE_BBOX_PATH="$DATA_DIR/daisee_face_bbox.json"
-elif [ -f "/kaggle/working/daisee_face_bbox.json" ]; then
-  FACE_BBOX_PATH="/kaggle/working/daisee_face_bbox.json"
-elif [ -f "DAiSEE/daisee_face_bbox.json" ]; then
-  FACE_BBOX_PATH="DAiSEE/daisee_face_bbox.json"
-elif [ -f "daisee_face_bbox.json" ]; then
-  FACE_BBOX_PATH="daisee_face_bbox.json"
-fi
+for f in "$DATA_DIR/daisee_face_bbox.json" "/kaggle/working/daisee_face_bbox.json" "DAiSEE/daisee_face_bbox.json" "daisee_face_bbox.json"; do
+  if [ -f "$f" ]; then
+    SIZE=$(wc -c < "$f" 2>/dev/null || echo 0)
+    if [ "$SIZE" -gt 500 ]; then
+      FACE_BBOX_PATH="$f"
+      break
+    else
+      echo "=> Notice: Found $f but it is empty/corrupt ($SIZE bytes). Removing..."
+      rm -f "$f"
+    fi
+  fi
+done
 
 if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "$DATA_DIR/daisee_train.txt" ]; then
-  echo "=> Notice: daisee_face_bbox.json not found. Generating high-precision Face Boxes via MTCNN..."
+  echo "=> Notice: daisee_face_bbox.json not found. Generating high-precision Face Boxes via YuNet..."
   OUT_BBOX="/kaggle/working/daisee_face_bbox.json"
   if [ ! -d "/kaggle/working" ]; then
     OUT_BBOX="DAiSEE/daisee_face_bbox.json"
@@ -65,7 +68,7 @@ if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "$DATA_DIR/daisee_train.txt" ]; then
     --output "$OUT_BBOX" \
     --samples-per-video 5 \
     --device auto
-  if [ -f "$OUT_BBOX" ]; then
+  if [ -f "$OUT_BBOX" ] && [ $(wc -c < "$OUT_BBOX" 2>/dev/null || echo 0) -gt 500 ]; then
     FACE_BBOX_PATH="$OUT_BBOX"
   fi
 fi
@@ -93,7 +96,6 @@ python -u main.py \
   --temporal-layers 1 \
   --fusion-stage frame \
   --daisee-merge-low \
-  --use-weighted-sampler \
   \
   --optimizer AdamW \
   --lr 2e-5 \
