@@ -90,6 +90,135 @@ class EmoticNpyDataset(data.Dataset):
         
         return face_tensor, body_tensor, context_tensor, target_tensor
 
+
+def resolve_daisee_path(raw_path, root_dir, cached_rule=None):
+    """
+    Robustly resolves a DAiSEE video or frame directory from an annotation line.
+    Handles missing 'DataSet/', '.avi'/'.mp4' extensions, case differences,
+    and nested 'DAiSEE_data' folders on Kaggle/local environments.
+    Returns (resolved_path, updated_rule).
+    """
+    clean_p = raw_path.replace('\\', '/').strip('/')
+    while clean_p.startswith(('DAiSEE_data/', './DAiSEE_data/', 'DAiSEE/')):
+        if clean_p.startswith('DAiSEE_data/'):
+            clean_p = clean_p[len('DAiSEE_data/'):]
+        elif clean_p.startswith('./DAiSEE_data/'):
+            clean_p = clean_p[len('./DAiSEE_data/'):]
+        elif clean_p.startswith('DAiSEE/'):
+            clean_p = clean_p[len('DAiSEE/'):]
+
+    parts = [p for p in clean_p.split('/') if p and p != '.']
+    if parts and parts[-1] == 'frames':
+        parts = parts[:-1]
+    clip_id = parts[-1] if parts else ''
+    user_id = parts[-2] if len(parts) >= 2 else ''
+    split_name = parts[-3] if len(parts) >= 3 else ''
+
+    # Fast path: check cached rule first
+    if cached_rule is not None and clip_id:
+        cand = cached_rule(split_name, user_id, clip_id)
+        if os.path.exists(cand) or os.path.isdir(cand):
+            return cand, cached_rule
+
+    clean_root = root_dir.rstrip('/')
+    while clean_root.endswith('/DAiSEE_data') or clean_root.endswith('/DAiSEE'):
+        if clean_root.endswith('/DAiSEE_data'):
+            clean_root = clean_root[:-len('/DAiSEE_data')]
+        elif clean_root.endswith('/DAiSEE'):
+            clean_root = clean_root[:-len('/DAiSEE')]
+
+    search_roots = [
+        root_dir,
+        os.path.join(root_dir, 'DataSet'),
+        clean_root,
+        os.path.join(clean_root, 'DataSet'),
+        os.path.join(clean_root, 'DAiSEE_data'),
+        os.path.join(clean_root, 'DAiSEE_data', 'DataSet'),
+    ]
+    if '/kaggle/input' in root_dir and '/kaggle/input' not in search_roots:
+        search_roots.append('/kaggle/input')
+
+    splits = [split_name]
+    if split_name.lower() in ['validation', 'val']:
+        splits = ['Validation', 'validation', 'Val', 'val']
+    elif split_name.lower() == 'train':
+        splits = ['Train', 'train']
+    elif split_name.lower() == 'test':
+        splits = ['Test', 'test']
+
+    exts = ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']
+
+    for r in search_roots:
+        if not os.path.exists(r):
+            continue
+        for s in splits:
+            for sub in ['', 'DataSet/', 'DAiSEE_data/', 'DAiSEE_data/DataSet/']:
+                base_dir = os.path.normpath(os.path.join(r, sub, s, user_id, clip_id))
+                # 1. Frames dir
+                cand_frames = os.path.join(base_dir, 'frames')
+                if os.path.isdir(cand_frames) and len(os.listdir(cand_frames)) > 0:
+                    base_prefix = os.path.normpath(os.path.join(r, sub))
+                    def make_rule(prefix=base_prefix, split_choice=s):
+                        return lambda sp, uid, cid: os.path.join(prefix, split_choice if sp.lower() == split_choice.lower() else sp, uid, cid, 'frames')
+                    return cand_frames, make_rule()
+
+                # 2. Video file
+                for ext in exts:
+                    cand_video = os.path.join(base_dir, f"{clip_id}{ext}")
+                    if os.path.isfile(cand_video):
+                        base_prefix = os.path.normpath(os.path.join(r, sub))
+                        def make_rule(prefix=base_prefix, split_choice=s, e=ext):
+                            return lambda sp, uid, cid: os.path.join(prefix, split_choice if sp.lower() == split_choice.lower() else sp, uid, cid, f"{cid}{e}")
+                        return cand_video, make_rule()
+
+                # 3. Direct base_dir if it exists
+                if os.path.isdir(base_dir):
+                    files = os.listdir(base_dir)
+                    for f in files:
+                        if f.lower().endswith(('.avi', '.mp4', '.mkv')):
+                            cand_video = os.path.join(base_dir, f)
+                            ext_found = os.path.splitext(f)[1]
+                            base_prefix = os.path.normpath(os.path.join(r, sub))
+                            def make_rule(prefix=base_prefix, split_choice=s, e=ext_found):
+                                return lambda sp, uid, cid: os.path.join(prefix, split_choice if sp.lower() == split_choice.lower() else sp, uid, cid, f"{cid}{e}")
+                            return cand_video, make_rule()
+                    img_files = [f for f in files if f.lower().endswith(('.jpg', '.png', '.jpeg'))]
+                    if len(img_files) > 0:
+                        base_prefix = os.path.normpath(os.path.join(r, sub))
+                        def make_rule(prefix=base_prefix, split_choice=s):
+                            return lambda sp, uid, cid: os.path.join(prefix, split_choice if sp.lower() == split_choice.lower() else sp, uid, cid)
+                        return base_dir, make_rule()
+
+    # Fallback search using os.walk if Sample 0 was not located in common candidates
+    if clip_id:
+        search_dirs = [root_dir, clean_root]
+        if os.path.exists('/kaggle/input'):
+            search_dirs.append('/kaggle/input')
+        for s_dir in search_dirs:
+            if not os.path.exists(s_dir):
+                continue
+            for w_root, dirs, files in os.walk(s_dir):
+                for f in files:
+                    if f.startswith(clip_id) and f.lower().endswith(('.avi', '.mp4', '.mkv')):
+                        found_v = os.path.join(w_root, f)
+                        return found_v, None
+                if clip_id in dirs:
+                    cand_c_dir = os.path.join(w_root, clip_id)
+                    try:
+                        c_files = os.listdir(cand_c_dir)
+                        for f in c_files:
+                            if f.lower().endswith(('.avi', '.mp4', '.mkv')):
+                                return os.path.join(cand_c_dir, f), None
+                            if f == 'frames':
+                                return os.path.join(cand_c_dir, 'frames'), None
+                        return cand_c_dir, None
+                    except Exception:
+                        pass
+
+    # If truly not found, return default path
+    return os.path.join(root_dir, raw_path), None
+
+
 class VideoDataset(data.Dataset):
     def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", mask_context_face=False, daisee_merge_low=False):
         self.list_file = list_file
@@ -247,7 +376,24 @@ class VideoDataset(data.Dataset):
         # 
         # Data Form: [video_id, num_frames, class_idx]
         # 
-        self.video_list = [VideoRecord([os.path.join(self.root_dir, item[0])] + item[1:]) for item in self.sample_list]
+        if self.dataset_name == 'DAiSEE':
+            # Pre-resolve DAiSEE paths to actual existing videos/frames on disk
+            cached_rule = None
+            resolved_samples = []
+            for item in self.sample_list:
+                rel_p = item[0]
+                full_cand = os.path.join(self.root_dir, rel_p)
+                if os.path.exists(full_cand) or os.path.isdir(full_cand):
+                    resolved_samples.append([full_cand] + item[1:])
+                else:
+                    real_p, new_rule = resolve_daisee_path(rel_p, self.root_dir, cached_rule)
+                    if new_rule is not None:
+                        cached_rule = new_rule
+                    resolved_samples.append([real_p] + item[1:])
+            self.video_list = [VideoRecord(item) for item in resolved_samples]
+        else:
+            self.video_list = [VideoRecord([os.path.join(self.root_dir, item[0])] + item[1:]) for item in self.sample_list]
+
         print(('video number:%d' % (len(self.video_list))))
         if self.video_list:
             s0_path = self.video_list[0].path
@@ -330,25 +476,9 @@ class VideoDataset(data.Dataset):
         elif self.dataset_name == 'DAiSEE':
             # Robust DAiSEE video/frame resolution
             if not os.path.exists(record.path) and not os.path.isdir(record.path):
-                base_no_ext, ext = os.path.splitext(record.path)
-                cands = [
-                    record.path,
-                    record.path.replace('DataSet', 'DAiSEE_data/DataSet'),
-                    record.path.replace('/DAiSEE_data/DAiSEE_data/', '/DAiSEE_data/'),
-                ]
-                for alt_ext in ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']:
-                    cands.append(base_no_ext + alt_ext)
-                    cands.append(base_no_ext.replace('DataSet', 'DAiSEE_data/DataSet') + alt_ext)
-                    cands.append(base_no_ext.replace('/DAiSEE_data/DAiSEE_data/', '/DAiSEE_data/') + alt_ext)
-                # Check frames dir
-                clip_dir = os.path.dirname(record.path)
-                cands.append(os.path.join(clip_dir, 'frames'))
-                cands.append(os.path.join(base_no_ext, 'frames'))
-                
-                for c in cands:
-                    if os.path.exists(c) or os.path.isdir(c):
-                        record._data[0] = c
-                        break
+                real_p, _ = resolve_daisee_path(record.path, self.root_dir)
+                if os.path.exists(real_p) or os.path.isdir(real_p):
+                    record._data[0] = real_p
 
             # Now evaluate the resolved path
             if os.path.isdir(record.path):
@@ -360,8 +490,11 @@ class VideoDataset(data.Dataset):
             elif os.path.exists(record.path):
                 is_video_file = True
                 cap = cv2.VideoCapture(record.path)
-                num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if cap.isOpened() else 0
                 is_valid = cap.isOpened() and num_real_frames > 0
+            else:
+                is_video_file = True
+                is_valid = False
         else:
             # Assume it's a video file
             is_video_file = True

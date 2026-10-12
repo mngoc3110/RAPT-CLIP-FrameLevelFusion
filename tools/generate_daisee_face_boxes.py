@@ -27,6 +27,12 @@ except:
 import torch
 from tqdm import tqdm
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from dataloader.video_dataloader import resolve_daisee_path
+except ImportError:
+    resolve_daisee_path = None
+
 class YuNetDetector:
     def __init__(self, model_path):
         self.model_path = model_path
@@ -107,8 +113,10 @@ def read_keyframe(clip_path, frame_idx, num_total_frames=300):
             return None
     return None
 
-def resolve_video_path(root_dir, raw_path):
+def resolve_video_path(root_dir, raw_path, cached_rule=None):
     """Resolves potential relative / frames / avi paths for DAiSEE."""
+    if resolve_daisee_path is not None:
+        return resolve_daisee_path(raw_path, root_dir, cached_rule)
     clean_p = raw_path
     while clean_p.startswith(('DAiSEE_data/', './DAiSEE_data/', 'DAiSEE/')):
         if clean_p.startswith('DAiSEE_data/'):
@@ -135,7 +143,7 @@ def resolve_video_path(root_dir, raw_path):
     ]
     for c in candidates:
         if os.path.exists(c):
-            return c
+            return c, None
         # If points to 'frames' but does not exist, check .avi / .mp4
         if c.endswith('frames'):
             clip_dir = os.path.dirname(c)
@@ -143,13 +151,13 @@ def resolve_video_path(root_dir, raw_path):
             for ext in ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']:
                 cand_v = os.path.join(clip_dir, f"{clip_id}{ext}")
                 if os.path.exists(cand_v):
-                    return cand_v
+                    return cand_v, None
         # If points to video but does not exist, check 'frames' dir
         if c.endswith(('.avi', '.mp4', '.mkv', '.AVI', '.MP4')):
             f_dir = os.path.join(os.path.dirname(c), 'frames')
             if os.path.isdir(f_dir):
-                return f_dir
-    return candidates[0]
+                return f_dir, None
+    return candidates[0], None
 
 def main():
     parser = argparse.ArgumentParser(description="Generate DAiSEE Face Bounding Boxes with MTCNN")
@@ -207,6 +215,7 @@ def main():
     t0 = time.time()
     
     pbar = tqdm(video_entries, desc="Detecting DAiSEE Faces")
+    cached_rule = None
     for raw_path, num_frames in pbar:
         # Check if already processed
         clip_id = os.path.basename(raw_path.rstrip('/'))
@@ -217,8 +226,10 @@ def main():
         if clip_id_no_ext in face_boxes or raw_path in face_boxes:
             continue
 
-        resolved_path = resolve_video_path(args.root_dir, raw_path)
-        if not os.path.exists(resolved_path):
+        resolved_path, new_rule = resolve_video_path(args.root_dir, raw_path, cached_rule)
+        if new_rule is not None:
+            cached_rule = new_rule
+        if not os.path.exists(resolved_path) and not os.path.isdir(resolved_path):
             continue
 
         # Sample K frame indices evenly across video duration
@@ -253,8 +264,12 @@ def main():
             # Register under clip_id and relative keys
             face_boxes[clip_id_no_ext] = frame_dict
             face_boxes[raw_path] = frame_dict
+            face_boxes[resolved_path] = frame_dict
             
             # Additional alias for DataSet relative path
+            if 'DataSet/' in resolved_path:
+                rel_ds = resolved_path[resolved_path.index('DataSet/'):]
+                face_boxes[rel_ds] = frame_dict
             if 'DataSet/' in raw_path:
                 rel_ds = raw_path[raw_path.index('DataSet/'):]
                 face_boxes[rel_ds] = frame_dict
@@ -265,6 +280,7 @@ def main():
             fallback_dict = {'default': default_fallback}
             face_boxes[clip_id_no_ext] = fallback_dict
             face_boxes[raw_path] = fallback_dict
+            face_boxes[resolved_path] = fallback_dict
 
         processed_count += 1
         if processed_count % args.save_freq == 0:

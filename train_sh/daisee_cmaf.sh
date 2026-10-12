@@ -15,6 +15,7 @@
 
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
 # Auto-detect Kaggle Dataset directory for DAiSEE
@@ -40,6 +41,14 @@ if [ ! -f "$DATA_DIR/daisee_train.txt" ]; then
   fi
 fi
 echo "=> Using DAiSEE dataset path: $DATA_DIR"
+if [ -d "$DATA_DIR" ]; then
+  echo "=> Directory listing of $DATA_DIR:"
+  ls -la "$DATA_DIR" 2>/dev/null | head -n 10
+  if [ -d "$DATA_DIR/DataSet" ]; then
+    echo "=> Confirmed DataSet directory: $DATA_DIR/DataSet"
+    ls -la "$DATA_DIR/DataSet" 2>/dev/null | head -n 10
+  fi
+fi
 
 # Locate or generate Face Bounding Boxes
 FACE_BBOX_PATH="none"
