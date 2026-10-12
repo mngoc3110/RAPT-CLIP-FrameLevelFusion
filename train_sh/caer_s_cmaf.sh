@@ -26,8 +26,8 @@ echo "=> Using CAER-S dataset path: $DATA_DIR"
 
 python main.py \
   --mode train \
-  --exper-name CAER-S-CMAF \
-  --dataset CAER-S \
+  --exper-name CAER-CMAF \
+  --dataset CAER \
   --gpu 0 \
   --epochs 20 \
   --batch-size 8 \
@@ -43,8 +43,9 @@ python main.py \
   --bounding-box-body "${DATA_DIR}/body.json" \
   \
   --fusion-type cmaf \
+  --fusion-stage frame \
+  --temporal-layers 1 \
   --use-context \
-  --no-temporal \
   --crop-body \
   --mask-context-face \
   \
@@ -74,7 +75,7 @@ python main.py \
   --class-token-position end \
   --class-specific-contexts True \
   --load_and_tune_prompt_learner True \
-  --num-segments 1 \
+  --num-segments 8 \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \

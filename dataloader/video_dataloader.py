@@ -203,29 +203,42 @@ class VideoDataset(data.Dataset):
         with open(self.list_file, 'r') as f:
             for line in f:
                 parts = line.strip().split(' ')
+                if not parts or not parts[0]:
+                    continue
                 if len(parts) == 2:
                     # Case: [path, label] (e.g., EMOTIC / CAER-S images train.txt)
-                    # We inject num_frames = 1
-                    if self.dataset_name == 'DAiSEE' and parts[0].startswith('DAiSEE_data/'):
-                        parts[0] = parts[0].replace('DAiSEE_data/', '')
-                    self.sample_list.append([parts[0], 1, parts[1]])
+                    p_path = parts[0]
+                    if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
+                        p_path = p_path.replace('DAiSEE_data/', '')
+                    elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
+                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                            p_path = p_path[len('CAER/'):]
+                    self.sample_list.append([p_path, 1, parts[1]])
                 elif len(parts) == 6 and ',' in parts[1]:
                     # Case: [path, label, x1, y1, x2, y2] (e.g., EMOTIC train_bbox.txt)
-                    # We inject num_frames = 1 and keep the inline bbox coordinates
                     self.sample_list.append([parts[0], 1, parts[1], parts[2], parts[3], parts[4], parts[5]])
                 elif len(parts) > 3:
                     # Path contains spaces, join all parts except the last two
-                    path = ' '.join(parts[:-2])
+                    p_path = ' '.join(parts[:-2])
                     num_frames = parts[-2]
                     label = parts[-1]
-                    if self.dataset_name == 'DAiSEE' and path.startswith('DAiSEE_data/'):
-                        path = path.replace('DAiSEE_data/', '')
-                    self.sample_list.append([path, num_frames, label])
+                    if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
+                        p_path = p_path.replace('DAiSEE_data/', '')
+                    elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
+                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                            p_path = p_path[len('CAER/'):]
+                    self.sample_list.append([p_path, num_frames, label])
                 else:
-                    # Case: [path, num_frames, label] (e.g., standard RAER / DAiSEE)
-                    if self.dataset_name == 'DAiSEE' and parts[0].startswith('DAiSEE_data/'):
-                        parts[0] = parts[0].replace('DAiSEE_data/', '')
-                    self.sample_list.append(parts)
+                    # Case: [path, num_frames, label] (e.g., standard RAER / DAiSEE / CAER video)
+                    p_path = parts[0]
+                    num_frames = parts[1]
+                    label = parts[2]
+                    if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
+                        p_path = p_path.replace('DAiSEE_data/', '')
+                    elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
+                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                            p_path = p_path[len('CAER/'):]
+                    self.sample_list.append([p_path, num_frames, label])
 
     def _parse_list(self):
         # 
@@ -235,26 +248,23 @@ class VideoDataset(data.Dataset):
         print(('video number:%d' % (len(self.video_list))))
 
         # Automatically determine label offset:
-        # If dataset is 0-based (e.g., CAER-S 0..6 or DAiSEE 0..3), label_offset = 0
-        # If dataset is 1-based (e.g., RAER 1..5 or DAiSEE 1..4), label_offset = 1
-        if self.dataset_name in ['CAER', 'CAER-S', 'CAER_S']:
-            self.label_offset = 0
+        # If min integer label is >= 1 (e.g., RAER 1..5 or CAER video 1..7), label_offset = 1
+        # If min integer label is 0 (e.g., CAER-S 0..6 or DAiSEE 0..3), label_offset = 0
+        int_labels = []
+        for item in self.sample_list:
+            lbl_val = item[-1]
+            if isinstance(lbl_val, str) and ',' not in lbl_val:
+                try:
+                    int_labels.append(int(lbl_val))
+                except ValueError:
+                    pass
+            elif isinstance(lbl_val, int):
+                int_labels.append(lbl_val)
+        if int_labels:
+            min_l = min(int_labels)
+            self.label_offset = 1 if min_l >= 1 else 0
         else:
-            int_labels = []
-            for item in self.sample_list:
-                lbl_val = item[-1]
-                if isinstance(lbl_val, str) and ',' not in lbl_val:
-                    try:
-                        int_labels.append(int(lbl_val))
-                    except ValueError:
-                        pass
-                elif isinstance(lbl_val, int):
-                    int_labels.append(lbl_val)
-            if int_labels:
-                min_l = min(int_labels)
-                self.label_offset = 1 if min_l >= 1 else 0
-            else:
-                self.label_offset = 0
+            self.label_offset = 0
         print(f"[{self.dataset_name}] Detected label_offset: {self.label_offset} (min integer label in split: {min(int_labels) if 'int_labels' in locals() and int_labels else 'N/A'})")
 
     def _get_train_indices(self, record):
@@ -440,14 +450,22 @@ class VideoDataset(data.Dataset):
                     video_key_full = os.path.splitext(rel_key)[0]
                     frame_key = f"{p}.jpg"
                     matched_video_key = None
-                    if video_key_full in self.boxs:
-                        matched_video_key = video_key_full
+                    candidates = [video_key_full, f"CAER/{video_key_full}"]
+                    if video_key_full.startswith('CAER/'):
+                        candidates.append(video_key_full[5:])
+                    for c in candidates:
+                        if c in self.boxs:
+                            matched_video_key = c
+                            break
                     if matched_video_key is None:
                         parts = video_key_full.split('/')
                         for idx in range(1, len(parts)):
                             sub_key = '/'.join(parts[idx:])
                             if sub_key in self.boxs:
                                 matched_video_key = sub_key
+                                break
+                            elif f"CAER/{sub_key}" in self.boxs:
+                                matched_video_key = f"CAER/{sub_key}"
                                 break
                     if matched_video_key and frame_key in self.boxs[matched_video_key]:
                         box = self.boxs[matched_video_key][frame_key]
