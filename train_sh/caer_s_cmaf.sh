@@ -13,16 +13,16 @@
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
-# Auto-detect or specify Kaggle Dataset directory
-DATA_DIR="/kaggle/input/caer-s-dataset-rapt-clip"
+# Exact Kaggle Dataset directory for CAER
+DATA_DIR="/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
 if [ ! -d "$DATA_DIR" ]; then
   # Fallback search if mounted under a custom slug/username path on Kaggle
-  DETECTED_DIR=$(find /kaggle/input -maxdepth 3 -type f -name "train.txt" 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null)
+  DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "train.txt" 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
   fi
 fi
-echo "=> Using CAER-S dataset path: $DATA_DIR"
+echo "=> Using CAER dataset path: $DATA_DIR"
 
 python main.py \
   --mode train \
