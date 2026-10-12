@@ -71,8 +71,12 @@ class GenerateModel(nn.Module):
         if args.dataset == "RAER":
             hand_crafted_prompts = class_descriptor_5_only_face
         elif args.dataset == "DAiSEE":
-            from models.Text import class_descriptor_daisee
-            hand_crafted_prompts = class_descriptor_daisee
+            if getattr(args, 'daisee_merge_low', False):
+                from models.Text import class_descriptor_daisee_3class
+                hand_crafted_prompts = class_descriptor_daisee_3class
+            else:
+                from models.Text import class_descriptor_daisee
+                hand_crafted_prompts = class_descriptor_daisee
         elif args.dataset == "EMOTIC":
             from models.Text import class_descriptor_emotic_26
             hand_crafted_prompts = class_descriptor_emotic_26

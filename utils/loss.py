@@ -76,11 +76,12 @@ class MILoss(nn.Module):
         logits = torch.matmul(learnable_text_features, hand_crafted_text_features.T) / self.T
         
         # Create labels for positive pairs (diagonal elements)
-        labels = torch.arange(logits.shape[0], device=logits.device)
+        n = min(logits.shape[0], logits.shape[1])
+        labels = torch.arange(n, device=logits.device)
         
         # Calculate loss in both directions and average
-        loss_l2h = self.criterion(logits, labels)
-        loss_h2l = self.criterion(logits.T, labels)
+        loss_l2h = self.criterion(logits[:n, :n], labels)
+        loss_h2l = self.criterion(logits[:n, :n].T, labels)
         
         return (loss_l2h + loss_h2l) / 2
 

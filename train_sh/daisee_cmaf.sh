@@ -18,17 +18,22 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
 # Auto-detect Kaggle Dataset directory for DAiSEE
-DATA_DIR="/kaggle/input/daisee/DAiSEE_data"
+DATA_DIR="/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data"
 if [ ! -f "$DATA_DIR/daisee_train.txt" ]; then
-  if [ -d "/kaggle/input/daisee" ] && [ -f "/kaggle/input/daisee/daisee_train.txt" ]; then
-    DATA_DIR="/kaggle/input/daisee"
-  elif [ -f "/kaggle/input/DAiSEE_data/daisee_train.txt" ]; then
-    DATA_DIR="/kaggle/input/DAiSEE_data"
-  elif [ -d "DAiSEE" ]; then
-    DATA_DIR="DAiSEE"
-  else
-    # Fast shallow search (depth 3) only if needed
-    DETECTED_FILE=$(find /kaggle/input -maxdepth 3 -iname "daisee_train.txt" 2>/dev/null | head -n 1)
+  CANDIDATES=(
+    "/kaggle/input/daisee/DAiSEE_data"
+    "/kaggle/input/daisee"
+    "/kaggle/input/DAiSEE_data"
+    "DAiSEE"
+  )
+  for c in "${CANDIDATES[@]}"; do
+    if [ -f "$c/daisee_train.txt" ]; then
+      DATA_DIR="$c"
+      break
+    fi
+  done
+  if [ ! -f "$DATA_DIR/daisee_train.txt" ]; then
+    DETECTED_FILE=$(find /kaggle/input -maxdepth 6 -iname "daisee_train.txt" 2>/dev/null | head -n 1)
     if [ -n "$DETECTED_FILE" ]; then
       DATA_DIR=$(dirname "$DETECTED_FILE")
     fi
