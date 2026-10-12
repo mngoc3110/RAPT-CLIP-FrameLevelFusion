@@ -110,28 +110,42 @@ def read_keyframe(clip_path, frame_idx, num_total_frames=300):
 def resolve_video_path(root_dir, raw_path):
     """Resolves potential relative / frames / avi paths for DAiSEE."""
     clean_p = raw_path
-    if clean_p.startswith('DAiSEE_data/'):
-        clean_p = clean_p[len('DAiSEE_data/'):]
+    while clean_p.startswith(('DAiSEE_data/', './DAiSEE_data/', 'DAiSEE/')):
+        if clean_p.startswith('DAiSEE_data/'):
+            clean_p = clean_p[len('DAiSEE_data/'):]
+        elif clean_p.startswith('./DAiSEE_data/'):
+            clean_p = clean_p[len('./DAiSEE_data/'):]
+        elif clean_p.startswith('DAiSEE/'):
+            clean_p = clean_p[len('DAiSEE/'):]
     
+    clean_root = root_dir
+    while clean_root.endswith('/DAiSEE_data') or clean_root.endswith('/DAiSEE'):
+        if clean_root.endswith('/DAiSEE_data'):
+            clean_root = clean_root[:-len('/DAiSEE_data')]
+        elif clean_root.endswith('/DAiSEE'):
+            clean_root = clean_root[:-len('/DAiSEE')]
+
     candidates = [
         os.path.join(root_dir, raw_path),
         os.path.join(root_dir, clean_p),
         os.path.join(root_dir, 'DAiSEE_data', clean_p),
+        os.path.join(clean_root, 'DAiSEE_data', clean_p),
+        os.path.join(clean_root, clean_p),
         raw_path
     ]
     for c in candidates:
         if os.path.exists(c):
             return c
-        # If points to 'frames' but does not exist, check .avi
+        # If points to 'frames' but does not exist, check .avi / .mp4
         if c.endswith('frames'):
             clip_dir = os.path.dirname(c)
             clip_id = os.path.basename(clip_dir)
-            for ext in ['.avi', '.mp4', '.AVI', '.MP4']:
+            for ext in ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']:
                 cand_v = os.path.join(clip_dir, f"{clip_id}{ext}")
                 if os.path.exists(cand_v):
                     return cand_v
         # If points to video but does not exist, check 'frames' dir
-        if c.endswith(('.avi', '.mp4', '.AVI', '.MP4')):
+        if c.endswith(('.avi', '.mp4', '.mkv', '.AVI', '.MP4')):
             f_dir = os.path.join(os.path.dirname(c), 'frames')
             if os.path.isdir(f_dir):
                 return f_dir
