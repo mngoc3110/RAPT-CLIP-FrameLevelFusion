@@ -30,10 +30,10 @@ python main.py \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
-  --batch-size 8 \
+  --batch-size 2 \
   --print-freq 50 \
   --seed 42 \
-  --workers 4 \
+  --workers 2 \
   --root-dir "${DATA_DIR}" \
   --train-annotation "${DATA_DIR}/train.txt" \
   --val-annotation "${DATA_DIR}/validation.txt" \
