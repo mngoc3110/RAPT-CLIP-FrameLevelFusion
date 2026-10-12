@@ -98,9 +98,9 @@ python -u main.py \
   --daisee-merge-low \
   \
   --optimizer AdamW \
-  --lr 2e-5 \
-  --lr-image-encoder 1e-6 \
-  --lr-prompt-learner 1.5e-4 \
+  --lr 5e-5 \
+  --lr-image-encoder 5e-6 \
+  --lr-prompt-learner 1e-4 \
   --lr-adapter 1e-4 \
   --weight-decay 0.005 \
   --milestones 10 15 \
