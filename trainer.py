@@ -400,6 +400,7 @@ class Trainer:
             cm = f"Multi-label EMOTIC mAP: {macro_map:.2f}%"
             
             prefix = f"{mode_str} Epoch: [{epoch_str}]"
+            print(f"\n=> {prefix} * mAP: {macro_map:.2f}% | Loss: {losses.avg:.4f}")
             logging.info(f"{prefix} * mAP: {macro_map:.3f}")
             with open(self.log_txt_path, 'a') as f:
                 f.write(f'Current mAP: {macro_map:.3f}\n')
@@ -432,6 +433,7 @@ class Trainer:
             uar = np.nanmean(class_acc) * 100
 
             prefix = f"{mode_str} Epoch: [{epoch_str}]"
+            print(f"\n=> {prefix} * WAR: {war:.2f}% | UAR: {uar:.2f}% | Loss: {losses.avg:.4f}")
             logging.info(f"{prefix} * WAR: {war:.3f} | UAR: {uar:.3f}")
             with open(self.log_txt_path, 'a') as f:
                 f.write('Current WAR: {war:.3f}'.format(war=war) + '\n')

@@ -12,6 +12,8 @@
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
+export OPENCV_LOG_LEVEL=OFF
+export OPENCV_FFMPEG_LOGLEVEL=0
 
 # Exact Kaggle Dataset directory for CAER
 DATA_DIR="/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"

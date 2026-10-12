@@ -7,8 +7,15 @@ import shutil
 import time
 
 # Suppress OpenCV and FFmpeg warnings
-os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "0"
 os.environ["OPENCV_FFMPEG_DEBUG_LOG_LEVEL"] = "0"
+try:
+    import cv2
+    if hasattr(cv2, 'setLogLevel'):
+        cv2.setLogLevel(0)
+except Exception:
+    pass
 
 import matplotlib
 import numpy as np
@@ -450,6 +457,18 @@ def run_training(args: argparse.Namespace) -> None:
         best_val_war = max(val_war, best_val_war)
         best_train_uar = max(train_uar, best_train_uar)
         best_train_war = max(train_war, best_train_war)
+
+        summary_msg = (
+            f"\n============================================================\n"
+            f"📊 [EPOCH {epoch} SUMMARY]\n"
+            f"  • Train: Loss = {train_los:.4f} | WAR = {train_war:.2f}% | UAR = {train_uar:.2f}%\n"
+            f"  • Valid: Loss = {val_los:.4f}   | WAR = {val_war:.2f}%   | UAR = {val_uar:.2f}%\n"
+            f"  • Best Valid UAR: {best_val_uar:.2f}% {'(NEW BEST! 🏆)' if is_best else ''}\n"
+            f"============================================================\n"
+        )
+        print(summary_msg)
+        with open(log_txt_path, 'a') as f:
+            f.write(summary_msg + '\n')
 
         # 1. Save full checkpoint (with optimizer) → model.pth, used for --resume
         save_checkpoint({
