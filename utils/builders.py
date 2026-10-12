@@ -87,10 +87,17 @@ def get_class_info(args: argparse.Namespace) -> Tuple[list, list]:
         class_descriptor = class_descriptor_sfer
         ensemble_prompts = prompt_ensemble_sfer
     elif dataset_name == "DAiSEE":
-        class_names = class_names_daisee
-        class_names_with_context = class_names_with_context_daisee
-        class_descriptor = class_descriptor_daisee
-        ensemble_prompts = prompt_ensemble_daisee
+        if getattr(args, 'daisee_merge_low', False):
+            print("=> Using DAiSEE 3-Class Merged Setup (Low, High, Very High)")
+            class_names = class_names_daisee_3class
+            class_names_with_context = class_names_with_context_daisee_3class
+            class_descriptor = class_descriptor_daisee_3class
+            ensemble_prompts = prompt_ensemble_daisee_3class
+        else:
+            class_names = class_names_daisee
+            class_names_with_context = class_names_with_context_daisee
+            class_descriptor = class_descriptor_daisee
+            ensemble_prompts = prompt_ensemble_daisee
     elif dataset_name in ["CAER", "CAER_S", "CAER-S"]:
         class_names = class_names_caer
         class_names_with_context = class_names_with_context_caer
@@ -126,56 +133,17 @@ def get_class_info(args: argparse.Namespace) -> Tuple[list, list]:
 
 
 def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]: 
-    train_annotation_file_path = args.train_annotation
-    val_annotation_file_path = args.val_annotation
-    test_annotation_file_path = args.test_annotation
-    
     class_names, _ = get_class_info(args)
     num_classes = len(class_names)
 
     # Debug print
     print(f"DEBUG: args.dataset = '{args.dataset}'")
 
-    print(f"Loading train data (Standard) for {args.dataset}...")
-    train_data = train_data_loader(
-        root_dir=args.root_dir, list_file=train_annotation_file_path, num_segments=args.num_segments,
-        duration=args.duration, image_size=args.image_size, dataset_name=args.dataset,
-        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
-        crop_body=args.crop_body,
-        num_classes=num_classes,
-        vad_annotation=getattr(args, 'train_vad_annotation', None)
-    )
-    
-    print(f"Loading validation data (Standard) for {args.dataset}...")
-    val_data = test_data_loader(
-        root_dir=args.root_dir, list_file=val_annotation_file_path, num_segments=args.num_segments,
-        duration=args.duration, image_size=args.image_size,
-        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
-        crop_body=args.crop_body,
-        num_classes=num_classes,
-        dataset_name=args.dataset,
-        vad_annotation=getattr(args, 'val_vad_annotation', None)
-    )
-
-    print(f"Loading test data (Standard) for {args.dataset}...")
-    test_data = test_data_loader(
-        root_dir=args.root_dir, list_file=test_annotation_file_path, num_segments=args.num_segments,
-        duration=args.duration, image_size=args.image_size,
-        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
-        crop_body=args.crop_body,
-        num_classes=num_classes,
-        dataset_name=args.dataset,
-        vad_annotation=getattr(args, 'test_vad_annotation', None)
-    )
-
-    print(f"Total number of training images: {len(train_data)}")
-    print("Creating DataLoader instances...")
-    
     if hasattr(args, 'use_npy') and args.use_npy and args.dataset == 'EMOTIC':
         import torchvision
         from dataloader.video_transform import GroupResize, GroupRandomHorizontalFlip, Stack, ToTorchFormatTensor, GroupNormalize, ColorJitter, RandomRotation, GroupRandomErasing
         from dataloader.video_dataloader import GroupRandomGrayscale
-        print(f"Bypassing standard dataloader. Using EmoticNpyDataset from {args.npy_dir}")
+        print(f"Bypassing standard video dataloader. Using EmoticNpyDataset from {args.npy_dir}")
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
             GroupRandomGrayscale(p=0.1),
@@ -198,20 +166,94 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         val_data = EmoticNpyDataset(npy_dir=args.npy_dir, mode='val', transform=test_transform, num_classes=num_classes)
         test_data = EmoticNpyDataset(npy_dir=args.npy_dir, mode='test', transform=test_transform, num_classes=num_classes)
         print(f"NPY Dataset Sizes -> Train: {len(train_data)}, Val: {len(val_data)}, Test: {len(test_data)}")
+        
+        train_loader = torch.utils.data.DataLoader(
+            train_data, batch_size=args.batch_size, shuffle=True,
+            num_workers=args.workers, pin_memory=True, drop_last=True
+        )
+        val_loader = torch.utils.data.DataLoader(
+            val_data, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True
+        )
+        test_loader = torch.utils.data.DataLoader(
+            test_data, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True
+        )
+        return train_loader, val_loader, test_loader
+
+    train_annotation_file_path = getattr(args, 'train_annotation', None)
+    val_annotation_file_path = getattr(args, 'val_annotation', None)
+    test_annotation_file_path = getattr(args, 'test_annotation', None)
+
+    mask_context_face = getattr(args, 'mask_context_face', False)
+    daisee_merge_low = getattr(args, 'daisee_merge_low', False)
+    if mask_context_face:
+        print("=> Option enabled: Masking face region in Context Stream to prevent leakage.")
+    if daisee_merge_low:
+        print("=> Option enabled: Merging DAiSEE Low engagement classes.")
+
+    print(f"Loading train data (Standard) for {args.dataset}...")
+    train_data = train_data_loader(
+        root_dir=args.root_dir, list_file=train_annotation_file_path, num_segments=args.num_segments,
+        duration=args.duration, image_size=args.image_size, dataset_name=args.dataset,
+        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
+        crop_body=args.crop_body,
+        num_classes=num_classes,
+        mask_context_face=mask_context_face,
+        daisee_merge_low=daisee_merge_low
+    )
+    
+    print(f"Loading validation data (Standard) for {args.dataset}...")
+    val_data = test_data_loader(
+        root_dir=args.root_dir, list_file=val_annotation_file_path, num_segments=args.num_segments,
+        duration=args.duration, image_size=args.image_size,
+        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
+        crop_body=args.crop_body,
+        num_classes=num_classes,
+        dataset_name=args.dataset,
+        mask_context_face=mask_context_face,
+        daisee_merge_low=daisee_merge_low
+    )
+
+    print(f"Loading test data (Standard) for {args.dataset}...")
+    test_data = test_data_loader(
+        root_dir=args.root_dir, list_file=test_annotation_file_path, num_segments=args.num_segments,
+        duration=args.duration, image_size=args.image_size,
+        bounding_box_face=args.bounding_box_face, bounding_box_body=args.bounding_box_body,
+        crop_body=args.crop_body,
+        num_classes=num_classes,
+        dataset_name=args.dataset,
+        mask_context_face=mask_context_face,
+        daisee_merge_low=daisee_merge_low
+    )
+
+    print(f"Total number of training images: {len(train_data)}")
+    print("Creating DataLoader instances...")
     
     sampler = None
     shuffle = True
     if args.use_weighted_sampler:
         print("=> Using WeightedRandomSampler.")
-        class_counts = get_class_counts(train_annotation_file_path)
+        daisee_merge_low = getattr(args, 'daisee_merge_low', False) and args.dataset == 'DAiSEE'
+        class_counts = get_class_counts(train_annotation_file_path, daisee_merge_low=daisee_merge_low)
         class_weights = 1. / torch.tensor(class_counts, dtype=torch.float)
         
         # Create a weight for each sample
         sample_weights = []
+        offset = getattr(train_data, 'label_offset', 0 if args.dataset in ['CAER', 'CAER-S', 'CAER_S'] else 1)
         with open(train_annotation_file_path, 'r') as f:
             for line in f:
-                label = int(line.strip().split()[2]) -1 # label is 1-based
-                sample_weights.append(class_weights[label])
+                parts = line.strip().split()
+                if not parts:
+                    continue
+                lbl_str = parts[-1] if not (len(parts) == 7 and ',' in parts[2]) else parts[2]
+                label = int(lbl_str) - offset
+                if daisee_merge_low:
+                    label = 0 if label <= 1 else (1 if label == 2 else 2)
+                if 0 <= label < len(class_weights):
+                    sample_weights.append(class_weights[label])
+                else:
+                    sample_weights.append(torch.tensor(1.0))
         
         sampler = torch.utils.data.WeightedRandomSampler(sample_weights, len(sample_weights))
         shuffle = False # Sampler and shuffle are mutually exclusive

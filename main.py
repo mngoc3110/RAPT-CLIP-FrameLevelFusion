@@ -95,10 +95,7 @@ loss_group = parser.add_argument_group('Loss & Imbalance Handling', 'Parameters 
 loss_group.add_argument('--loss-type', type=str, default='ce', choices=['ce', 'ldl', 'ldam', 'asl', 'discrete', 'dynamic_asl'], help='Type of primary classification loss.')
 loss_group.add_argument('--lambda_mi', type=float, default=0.1, help='Weight for the Mutual Information loss.')
 loss_group.add_argument('--lambda_dc', type=float, default=0.1, help='Weight for the Decorrelation loss.')
-loss_group.add_argument('--lambda_vad', type=float, default=0.0, help='Weight for the VAD (Valence-Arousal-Dominance) auxiliary loss. 0=disabled.')
-loss_group.add_argument('--train-vad-annotation', type=str, default=None, help='Path to train VAD JSON (train_vad.json).')
-loss_group.add_argument('--val-vad-annotation',   type=str, default=None, help='Path to val VAD JSON (val_vad.json).')
-loss_group.add_argument('--test-vad-annotation',  type=str, default=None, help='Path to test VAD JSON (test_vad.json).')
+
 loss_group.add_argument('--mi-warmup', type=int, default=5, help='Warmup epochs for MI loss.')
 loss_group.add_argument('--mi-ramp', type=int, default=10, help='Ramp-up epochs for MI loss.')
 loss_group.add_argument('--mi-ramp-type', type=str, default='ramp_up', choices=['ramp_up', 'ramp_down'], help='Type of ramp for MI loss weight (ramp_up or ramp_down).')
@@ -124,6 +121,7 @@ train_group.add_argument('--early-stopping-patience', type=int, default=0, help=
 model_group = parser.add_argument_group('Model & Input', 'Parameters for model architecture and data handling')
 model_group.add_argument('--text-type', default='prompt_ensemble', choices=['class_names', 'class_names_with_context', 'class_descriptor', 'prompt_ensemble', 'au_guided_prompts'], help='Type of text prompts to use.')
 model_group.add_argument('--temporal-layers', type=int, default=1, help='Number of layers in the temporal modeling part.')
+model_group.add_argument('--no-temporal', action='store_true', help='Bypass temporal modeling (automatically bypassed for image datasets like EMOTIC).')
 model_group.add_argument('--contexts-number', type=int, default=8, help='Number of context vectors in the prompt learner.')
 model_group.add_argument('--class-token-position', type=str, default="end", help='Position of the class token in the prompt.')
 model_group.add_argument('--class-specific-contexts', type=str, default='True', choices=['True', 'False'], help='Whether to use class-specific context prompts.')
@@ -144,6 +142,8 @@ model_group.add_argument('--modality-dropout', type=float, default=0.3, help='Mo
 model_group.add_argument('--fusion-type', type=str, default='cmaf', choices=['gfi', 'cmaf', 'cmaf_decoupled', 'q2l'], help='Fusion method: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion).')
 model_group.add_argument('--fusion-stage', type=str, default='frame', choices=['frame', 'video'], help='Stage of fusion: frame (Frame-Level Fusion: CMAF before Temporal Transformer, SOTA) or video (Video-Level Fusion: Temporal Transformer before CMAF).')
 model_group.add_argument('--use-context', action='store_true', help='Enable context stream (Triple Stream: Face, Body, Context).')
+model_group.add_argument('--mask-context-face', action='store_true', help='Mask out face region in Context Stream to prevent shortcut face leakage (CAER-S SOTA).')
+model_group.add_argument('--daisee-merge-low', action='store_true', help='Merge DAiSEE Very Low (34 clips) and Low (213 clips) into Low Engagement (3-class SOTA).')
 
 # ==================== Helper Functions ====================
 def setup_environment(args: argparse.Namespace) -> argparse.Namespace:
@@ -242,13 +242,16 @@ def run_training(args: argparse.Namespace) -> None:
             for idx, l in enumerate(labels):
                 if l.strip() == '1' and idx < len(cls_num_list):
                     cls_num_list[idx] += 1
+    elif hasattr(train_loader.dataset, 'cat_arr'):
+        print(f"=> Calculating class distribution from EmoticNpyDataset cat_arr...")
+        cls_num_list = train_loader.dataset.cat_arr.sum(axis=0).astype(int).tolist()
     elif hasattr(train_loader.dataset, 'video_list'):
         print(f"=> Calculating class distribution from video_list...")
+        offset = getattr(train_loader.dataset, 'label_offset', 0 if args.dataset in ['CAER', 'CAER-S', 'CAER_S'] else 1)
         for record in train_loader.dataset.video_list:
-            # Labels in RAER/CAER annotations are typically 1-based (e.g., 1..8)
-            # VideoDataset.__getitem__ returns label-1.
-            # So we map record.label (1-based) to 0-based index.
-            label_idx = record.label - 1
+            label_idx = record.label - offset
+            if getattr(args, 'daisee_merge_low', False) and args.dataset == 'DAiSEE':
+                label_idx = 0 if label_idx <= 1 else (1 if label_idx == 2 else 2)
             if 0 <= label_idx < len(cls_num_list):
                 cls_num_list[label_idx] += 1
     else:
@@ -300,12 +303,13 @@ def run_training(args: argparse.Namespace) -> None:
     
     if hasattr(args, 'ablation_no_text') and args.ablation_no_text:
         optimizer_grouped_parameters = [
-            {"params": model.unified_temporal_net.parameters(), "lr": args.lr},
             {"params": model.image_encoder.parameters(), "lr": args.lr_image_encoder},
             {"params": model.project_fc.parameters(), "lr": args.lr},
             {"params": model.face_adapter.parameters(), "lr": args.lr_adapter},
             {"params": model.classifier.parameters(), "lr": args.lr}
         ]
+        if hasattr(model, 'unified_temporal_net') and model.unified_temporal_net is not None:
+            optimizer_grouped_parameters.append({"params": model.unified_temporal_net.parameters(), "lr": args.lr})
     else:
         if hasattr(model, 'temporal_net_face'):
             # Video-Level Fusion (or V2 Architecture)
@@ -336,12 +340,13 @@ def run_training(args: argparse.Namespace) -> None:
         else:
             # Frame-Level Fusion (Default SOTA)
             optimizer_grouped_parameters = [
-                {"params": model.unified_temporal_net.parameters(), "lr": args.lr},
                 {"params": model.image_encoder.parameters(), "lr": args.lr_image_encoder},
                 {"params": model.prompt_learner.parameters(), "lr": args.lr_prompt_learner},
                 {"params": model.project_fc.parameters(), "lr": args.lr},
                 {"params": model.face_adapter.parameters(), "lr": args.lr_adapter},
             ]
+            if hasattr(model, 'unified_temporal_net') and model.unified_temporal_net is not None:
+                optimizer_grouped_parameters.append({"params": model.unified_temporal_net.parameters(), "lr": args.lr})
             if hasattr(model, 'cmaf'):
                 optimizer_grouped_parameters.append({"params": model.cmaf.parameters(), "lr": args.lr})
             if hasattr(model, 'gate_fc'):

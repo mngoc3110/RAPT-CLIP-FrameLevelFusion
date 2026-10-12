@@ -136,7 +136,7 @@ def main():
         fusion_type='cmaf', fusion_stage='frame', temporal_layers=1, contexts_number=8,
         class_token_position='end', class_specific_contexts=True, load_and_tune_prompt_learner=True,
         text_type='prompt_ensemble', temperature=0.07, lr=2e-5, lr_image_encoder=1e-6,
-        lr_prompt_learner=3e-4, lr_adapter=1e-4, lambda_vad=0.0, modality_dropout=0.0,
+        lr_prompt_learner=3e-4, lr_adapter=1e-4, modality_dropout=0.0,
         crop_body=True, freeze_image_encoder=False, use_moco=False
     )
 

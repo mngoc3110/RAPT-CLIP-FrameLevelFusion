@@ -45,7 +45,6 @@ def setup_model(device, ckpt_path):
         lr_image_encoder=1e-6,
         lr_prompt_learner=3e-4,
         lr_adapter=1e-4,
-        lambda_vad=0.0,
         modality_dropout=0.0,
         crop_body=True,
         freeze_image_encoder=False,

@@ -334,7 +334,7 @@ prompt_ensemble_caer = [
     ],
     [ # Neutral
         "A photo of a person showing a neutral expression.",
-        "A calm face with no strong emotion.",
+        "A calm, composed face with relaxed facial muscles and impassive gaze.",
         "A neutral facial expression."
     ],
     [ # Sad
@@ -714,6 +714,34 @@ prompt_ensemble_daisee = [
     [
         "A student looking away from the screen, distracted and showing low engagement.",
         "A student with unfocused eyes, looking bored or confused."
+    ],
+    [
+        "A student's face with steady eye contact toward the camera and a neutral attentive expression.",
+        "A student looking at the screen with high engagement."
+    ],
+    [
+        "A close-up of a student's face with wide alert eyes showing intense focus and interest.",
+        "A student highly engaged and deeply focused on the online classroom."
+    ]
+]
+
+
+# DAiSEE 3-Class Merged (Merging Very Low + Low into Low Engagement to solve rare class imbalance)
+class_names_daisee_3class = ['Low Engagement', 'High Engagement', 'Very High Engagement']
+class_names_with_context_daisee_3class = [
+    'A student showing low engagement, distracted or disengaged in an online classroom.',
+    'A student showing high engagement in an online classroom.',
+    'A student highly engaged and deeply focused on the online classroom.'
+]
+class_descriptor_daisee_3class = [
+    "A student looking away from the screen or with eyes closed, distracted, bored, or showing disengagement.",
+    "A student's face with steady eye contact toward the camera and a neutral attentive expression.",
+    "A close-up of a student's face with wide alert eyes showing intense focus and interest."
+]
+prompt_ensemble_daisee_3class = [
+    [
+        "A student looking away from the screen, distracted and showing low engagement.",
+        "A close-up of a student with eyes closed or distracted during an online lesson."
     ],
     [
         "A student's face with steady eye contact toward the camera and a neutral attentive expression.",

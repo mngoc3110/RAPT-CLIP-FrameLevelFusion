@@ -54,12 +54,11 @@ class EmoticNpyDataset(data.Dataset):
         self.mode = mode
         self.transform = transform
         
-        # Load npy files
+        # Load npy files (using mmap_mode='r' for images to avoid loading gigabytes into RAM)
         print(f"Loading {mode} NPY files from {npy_dir}...")
-        self.context_arr = np.load(os.path.join(npy_dir, f'{mode}_context_arr.npy'))
-        self.body_arr = np.load(os.path.join(npy_dir, f'{mode}_body_arr.npy'))
+        self.context_arr = np.load(os.path.join(npy_dir, f'{mode}_context_arr.npy'), mmap_mode='r')
+        self.body_arr = np.load(os.path.join(npy_dir, f'{mode}_body_arr.npy'), mmap_mode='r')
         self.cat_arr = np.load(os.path.join(npy_dir, f'{mode}_cat_arr.npy'))
-        self.cont_arr = np.load(os.path.join(npy_dir, f'{mode}_cont_arr.npy'))
         
     def __len__(self):
         return len(self.cat_arr)
@@ -88,12 +87,11 @@ class EmoticNpyDataset(data.Dataset):
             face_tensor = torch.zeros((1, 3, 224, 224))
             
         target_tensor = torch.tensor(self.cat_arr[index], dtype=torch.float32)
-        vad_tensor = torch.tensor(self.cont_arr[index], dtype=torch.float32) / 10.0
         
-        return face_tensor, body_tensor, context_tensor, target_tensor, vad_tensor
+        return face_tensor, body_tensor, context_tensor, target_tensor
 
 class VideoDataset(data.Dataset):
-    def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", vad_annotation=None):
+    def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", mask_context_face=False, daisee_merge_low=False):
         self.list_file = list_file
         self.duration = duration
         self.num_segments = num_segments
@@ -105,13 +103,8 @@ class VideoDataset(data.Dataset):
         self.crop_body = crop_body
         self.root_dir = root_dir
         self.dataset_name = dataset_name
-
-        # Load VAD lookup (optional, EMOTIC only)
-        self.vad_lookup = {}
-        if vad_annotation and os.path.exists(vad_annotation):
-            with open(vad_annotation, 'r') as f:
-                self.vad_lookup = json.load(f)
-            print(f"  VAD annotations loaded: {len(self.vad_lookup)} entries from {vad_annotation}")
+        self.mask_context_face = mask_context_face
+        self.daisee_merge_low = daisee_merge_low
         
         # Debugging: Initialize for saving sample images
         self.debug_samples_path = 'debug_samples'
@@ -167,10 +160,18 @@ class VideoDataset(data.Dataset):
         im = cv2.copyMakeBorder(im, top, bottom, left, right, borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
         return im, r
 
-    def _face_detect(self,img,box,margin,mode = 'face'):
+    def _face_detect(self, img, box, margin=10, mode='face'):
         if box is None:
             if mode == 'face':
-                if self.dataset_name == 'EMOTIC':
+                if self.dataset_name == 'DAiSEE':
+                    # DAiSEE Center Crop (50%): Student facing webcam, focus on eye gaze, eyebrows, and mouth
+                    w, h = img.size
+                    return img.crop((int(w * 0.25), int(h * 0.15), int(w * 0.75), int(h * 0.75)))
+                elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S']:
+                    # CAER-S fallback when face box is missing: Center crop 50%
+                    w, h = img.size
+                    return img.crop((int(w * 0.25), int(h * 0.15), int(w * 0.75), int(h * 0.75)))
+                elif self.dataset_name == 'EMOTIC':
                     # Fallback for EMOTIC: Center crop 60% to avoid copying full context
                     w, h = img.size
                     return img.crop((int(w * 0.2), int(h * 0.2), int(w * 0.8), int(h * 0.8)))
@@ -188,7 +189,8 @@ class VideoDataset(data.Dataset):
             right = min(img.width, right + margin)
             lower = min(img.height, lower + margin)
             if mode == 'face':
-                img = img.crop((left, upper, right, lower))
+                if right > left and lower > upper:
+                    return img.crop((left, upper, right, lower))
                 return img
             elif mode == 'body':
                 occluded_image = img.copy()
@@ -202,8 +204,10 @@ class VideoDataset(data.Dataset):
             for line in f:
                 parts = line.strip().split(' ')
                 if len(parts) == 2:
-                    # Case: [path, label] (e.g., EMOTIC images train.txt)
+                    # Case: [path, label] (e.g., EMOTIC / CAER-S images train.txt)
                     # We inject num_frames = 1
+                    if self.dataset_name == 'DAiSEE' and parts[0].startswith('DAiSEE_data/'):
+                        parts[0] = parts[0].replace('DAiSEE_data/', '')
                     self.sample_list.append([parts[0], 1, parts[1]])
                 elif len(parts) == 6 and ',' in parts[1]:
                     # Case: [path, label, x1, y1, x2, y2] (e.g., EMOTIC train_bbox.txt)
@@ -214,13 +218,14 @@ class VideoDataset(data.Dataset):
                     path = ' '.join(parts[:-2])
                     num_frames = parts[-2]
                     label = parts[-1]
+                    if self.dataset_name == 'DAiSEE' and path.startswith('DAiSEE_data/'):
+                        path = path.replace('DAiSEE_data/', '')
                     self.sample_list.append([path, num_frames, label])
                 else:
-                    # Case: [path, num_frames, label] (e.g., standard RAER)
+                    # Case: [path, num_frames, label] (e.g., standard RAER / DAiSEE)
                     if self.dataset_name == 'DAiSEE' and parts[0].startswith('DAiSEE_data/'):
                         parts[0] = parts[0].replace('DAiSEE_data/', '')
                     self.sample_list.append(parts)
-
 
     def _parse_list(self):
         # 
@@ -228,6 +233,29 @@ class VideoDataset(data.Dataset):
         # 
         self.video_list = [VideoRecord([os.path.join(self.root_dir, item[0])] + item[1:]) for item in self.sample_list]
         print(('video number:%d' % (len(self.video_list))))
+
+        # Automatically determine label offset:
+        # If dataset is 0-based (e.g., CAER-S 0..6 or DAiSEE 0..3), label_offset = 0
+        # If dataset is 1-based (e.g., RAER 1..5 or DAiSEE 1..4), label_offset = 1
+        if self.dataset_name in ['CAER', 'CAER-S', 'CAER_S']:
+            self.label_offset = 0
+        else:
+            int_labels = []
+            for item in self.sample_list:
+                lbl_val = item[-1]
+                if isinstance(lbl_val, str) and ',' not in lbl_val:
+                    try:
+                        int_labels.append(int(lbl_val))
+                    except ValueError:
+                        pass
+                elif isinstance(lbl_val, int):
+                    int_labels.append(lbl_val)
+            if int_labels:
+                min_l = min(int_labels)
+                self.label_offset = 1 if min_l >= 1 else 0
+            else:
+                self.label_offset = 0
+        print(f"[{self.dataset_name}] Detected label_offset: {self.label_offset} (min integer label in split: {min(int_labels) if 'int_labels' in locals() and int_labels else 'N/A'})")
 
     def _get_train_indices(self, record):
         # 
@@ -265,50 +293,61 @@ class VideoDataset(data.Dataset):
         # Check if record.path is a directory (frames) or a file (video/image)
         IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
         is_image_file = record.path.lower().endswith(IMAGE_EXTS)
-        
-        if os.path.isdir(record.path):
+        is_video_file = False
+        is_valid = False
+        num_real_frames = 0
+        cap = None
+        video_frames_path = []
+
+        if is_image_file:
+            # Static image (CAER-S / EMOTIC): read directly with PIL, treat as single frame
+            is_video_file = False
+            num_real_frames = 1
+            is_valid = os.path.exists(record.path)
+        elif os.path.isdir(record.path):
             video_frames_path = glob.glob(os.path.join(record.path, '*'))
             video_frames_path.sort()
             num_real_frames = len(video_frames_path)
             is_video_file = False
             is_valid = num_real_frames > 0
-        elif self.dataset_name == 'DAiSEE' and record.path.endswith('frames') and not os.path.exists(record.path):
-            clip_id = os.path.basename(os.path.dirname(record.path))
-            fallback_video = os.path.join(os.path.dirname(record.path), f"{clip_id}.avi")
-            if not os.path.exists(fallback_video):
-                fallback_video = os.path.join(os.path.dirname(record.path), f"{clip_id}.mp4")
-            record._data[0] = fallback_video  # Update path
-            is_video_file = True
-            cap = cv2.VideoCapture(fallback_video)
-            num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            is_valid = cap.isOpened() and num_real_frames > 0
-            if not is_valid:
-                # print(f"Warning: DAiSEE video fallback failed for {fallback_video}")
-                pass
-        elif is_image_file:
-            # Static image (EMOTIC): read directly with PIL, treat as single frame
-            is_video_file = False
-            num_real_frames = 1
-            is_valid = os.path.exists(record.path)
-            if not is_valid:
-                # print(f"Warning: Image not found: {record.path}, returning zeros.")
-                pass
+        elif self.dataset_name == 'DAiSEE':
+            # Robust DAiSEE video/frame resolution
+            # 1. If path ends with 'frames' but does not exist, look for .avi / .mp4 in clip folder
+            if record.path.endswith('frames') and not os.path.exists(record.path):
+                clip_dir = os.path.dirname(record.path)
+                clip_id = os.path.basename(clip_dir)
+                for ext in ['.avi', '.mp4', '.mkv', '.AVI', '.MP4']:
+                    fallback_video = os.path.join(clip_dir, f"{clip_id}{ext}")
+                    if os.path.exists(fallback_video):
+                        record._data[0] = fallback_video
+                        break
+            
+            # 2. If path is a video file that does not exist, look for 'frames' subdirectory
+            if (record.path.endswith(('.avi', '.mp4', '.mkv', '.AVI', '.MP4'))) and not os.path.exists(record.path):
+                frames_dir = os.path.join(os.path.dirname(record.path), 'frames')
+                if os.path.isdir(frames_dir):
+                    record._data[0] = frames_dir
+
+            # 3. Now evaluate the resolved path
+            if os.path.isdir(record.path):
+                video_frames_path = glob.glob(os.path.join(record.path, '*'))
+                video_frames_path.sort()
+                num_real_frames = len(video_frames_path)
+                is_video_file = False
+                is_valid = num_real_frames > 0
+            elif os.path.exists(record.path):
+                is_video_file = True
+                cap = cv2.VideoCapture(record.path)
+                num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                is_valid = cap.isOpened() and num_real_frames > 0
         else:
             # Assume it's a video file
             is_video_file = True
             cap = cv2.VideoCapture(record.path)
             num_real_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             is_valid = cap.isOpened() and num_real_frames > 0
-            if not is_valid:
-                # print(f"Warning: Could not open video file {record.path}, returning zeros.")
-                pass
-
-        # For frame-directory datasets, is_valid is based on whether frames exist
-        if not is_video_file and not is_image_file:
-            is_valid = num_real_frames > 0
 
         if not is_valid:
-            # print(f"Warning: No frames found for video {record.path}, returning zeros.")
             dummy_shape = (self.num_segments, 3, self.image_size, self.image_size)
             if self.dataset_name == "EMOTIC":
                 multi_hot = torch.zeros(26)
@@ -319,7 +358,10 @@ class VideoDataset(data.Dataset):
                     multi_hot[record.label] = 1.0
                 return torch.zeros(dummy_shape), torch.zeros(dummy_shape), torch.zeros(dummy_shape), multi_hot
             else:
-                return torch.zeros(dummy_shape), torch.zeros(dummy_shape), torch.zeros(dummy_shape), record.label - 1
+                raw_label = record.label - self.label_offset
+                if self.daisee_merge_low and self.dataset_name == 'DAiSEE':
+                    raw_label = 0 if raw_label <= 1 else (1 if raw_label == 2 else 2)
+                return torch.zeros(dummy_shape), torch.zeros(dummy_shape), torch.zeros(dummy_shape), raw_label
 
         # Clamp indices to be valid
         indices = np.clip(indices, 0, num_real_frames - 1)
@@ -335,9 +377,8 @@ class VideoDataset(data.Dataset):
                 img_pil = None
                 box = None
                 
-                # 1. Read Image — smart sequential seek to avoid expensive cap.set() on every frame
+                # 1. Read Image
                 if is_image_file:
-                    # Static image file (EMOTIC): just open with PIL directly
                     try:
                         img_pil = Image.open(record.path).convert('RGB')
                     except Exception as e:
@@ -345,15 +386,12 @@ class VideoDataset(data.Dataset):
                 elif is_video_file:
                     gap = p - current_frame_idx
                     if gap == 1:
-                        # Next consecutive frame: just read directly
                         ret, frame = cap.read()
                     elif 1 < gap <= 5:
-                        # Small gap: use grab() to skip without decoding (much faster than seek)
                         for _ in range(gap - 1):
                             cap.grab()
                         ret, frame = cap.read()
                     else:
-                        # Large gap or backward jump: forced seek
                         cap.set(cv2.CAP_PROP_POS_FRAMES, p)
                         ret, frame = cap.read()
                     current_frame_idx = p
@@ -362,7 +400,6 @@ class VideoDataset(data.Dataset):
                         img_cv_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         img_pil = Image.fromarray(img_cv_rgb)
                     else:
-                        # Failed to read frame, use black image
                         img_pil = Image.new('RGB', (self.image_size, self.image_size))
                 else:
                     img_path = video_frames_path[p]
@@ -372,14 +409,11 @@ class VideoDataset(data.Dataset):
                         img_pil = Image.new('RGB', (self.image_size, self.image_size))
 
                 # 2. Key Lookup Strategy for Bounding Box
-                # Normalize path separators to forward slash
                 rel_path = record.path.replace('./', '').replace('\\', '/')
-                # Remove root_dir prefix to get relative key
                 if self.root_dir and rel_path.startswith(self.root_dir.replace('\\', '/')):
                     rel_key = rel_path[len(self.root_dir.rstrip('/')) + 1:]
                 else:
                     rel_key = rel_path
-                    # Also try stripping any common leading path
                     parts_full = rel_key.split('/')
                     for start in range(1, len(parts_full)):
                         candidate = '/'.join(parts_full[start:])
@@ -389,16 +423,11 @@ class VideoDataset(data.Dataset):
 
                 box = None
                 if is_image_file:
-                    # EMOTIC flat JSON: {"mscoco/images/xxx.jpg": [x1,y1,x2,y2]}
+                    # Flat JSON: {"train/Angry/1769.png": [x1,y1,x2,y2]} or {"mscoco/xxx.jpg": [x1,y1,x2,y2]}
                     if rel_key in self.boxs:
                         raw = self.boxs[rel_key]
-                        # Value can be [x1,y1,x2,y2] directly or a list of lists
-                        if isinstance(raw[0], (int, float)):
-                            box = raw
-                        else:
-                            box = raw[0]  # take first bbox
+                        box = raw if isinstance(raw[0], (int, float)) else raw[0]
                     else:
-                        # Try suffix-match fallback
                         rel_key_parts = rel_key.split('/')
                         for start in range(1, len(rel_key_parts)):
                             candidate = '/'.join(rel_key_parts[start:])
@@ -423,23 +452,18 @@ class VideoDataset(data.Dataset):
                     if matched_video_key and frame_key in self.boxs[matched_video_key]:
                         box = self.boxs[matched_video_key][frame_key]
 
-                # 4. Face Detection (Crop)
-                # Reduce margin to 10 (Tight Crop) to zoom in on micro-expressions (eyebrows/eyes)
-                # This helps separate Neutral vs Confusion
-                # IMPORTANT FIX: Return full image if no box found (Fallback)
+                # 3. Face Detection (Crop)
                 img_pil_face = self._face_detect(img_pil, box, margin=10, mode='face')
 
-                # 5. Body Crop (Optional)
-                img_pil_body = img_pil # Default to full image
+                # 4. Body Stream Preprocessing
+                img_pil_body = img_pil
+                body_box = None
                 if self.crop_body:
-                    body_box = None
                     if is_image_file:
-                        # EMOTIC flat JSON: {"mscoco/images/xxx.jpg": [x1,y1,x2,y2]}
                         if rel_key in self.body_boxes:
                             raw = self.body_boxes[rel_key]
                             body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
                         else:
-                            # suffix-match fallback
                             rel_key_parts = rel_key.split('/')
                             for start in range(1, len(rel_key_parts)):
                                 candidate = '/'.join(rel_key_parts[start:])
@@ -448,38 +472,57 @@ class VideoDataset(data.Dataset):
                                     body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
                                     break
                     else:
-                        # RAER nested JSON lookup (uses matched_video_key/frame_key from above)
                         if 'matched_video_key' in dir() and matched_video_key and matched_video_key in self.body_boxes:
                             if 'frame_key' in dir() and frame_key in self.body_boxes[matched_video_key]:
                                 body_box = self.body_boxes[matched_video_key][frame_key]
                     
-                    # Fallback to inline bbox from train_bbox.txt if JSON is missing
                     if body_box is None and record.inline_bbox is not None:
                         body_box = record.inline_bbox
-                    
-                    if body_box is not None:
-                        left, upper, right, lower = body_box
-                        # Ensure coordinates are within image bounds
-                        left = max(0, left); upper = max(0, upper)
-                        right = min(img_pil.width, right); lower = min(img_pil.height, lower)
-                        if right > left and lower > upper:
-                            img_pil_body = img_pil.crop((left, upper, right, lower))
 
-                # 6. Resize and Stack
-                # Resize Body
-                img_cv_body = self._pil2cv(img_pil_body)
-                img_cv_body, _ = self._resize_image(img_cv_body, self.image_size, self.image_size)
-                img_pil_body = self._cv2pil(img_cv_body)
-                
-                # Resize Face (face_detect returns cropped image, we need to resize it too?)
-                # Wait, _face_detect returns cropped image but doesn't resize it to self.image_size?
-                # The original code didn't resize face explicitly here, but transform does GroupResize.
-                # However, for consistency, let's trust the transform pipeline which includes GroupResize.
-                # But wait, `img_pil_face` might be tiny.
-                
+                # Specialized crops for body/posture when body bbox is missing
+                if body_box is not None:
+                    left, upper, right, lower = body_box
+                    left = max(0, int(left)); upper = max(0, int(upper))
+                    right = min(img_pil.width, int(right)); lower = min(img_pil.height, int(lower))
+                    if right > left and lower > upper:
+                        img_pil_body = img_pil.crop((left, upper, right, lower))
+                elif self.dataset_name == 'DAiSEE':
+                    # DAiSEE Upper-Body Posture Crop: Captures shoulders, head tilt, posture, and leaning
+                    w_b, h_b = img_pil.size
+                    img_pil_body = img_pil.crop((int(w_b * 0.10), int(h_b * 0.05), int(w_b * 0.90), int(h_b * 0.85)))
+                elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S']:
+                    # CAER-S: If face box is available, estimate upper torso region; otherwise upper 80%
+                    if box is not None:
+                        fx1, fy1, fx2, fy2 = box
+                        face_w = fx2 - fx1
+                        face_h = fy2 - fy1
+                        bx1 = max(0, int(fx1 - face_w * 0.8))
+                        by1 = max(0, int(fy1))
+                        bx2 = min(img_pil.width, int(fx2 + face_w * 0.8))
+                        by2 = min(img_pil.height, int(fy2 + face_h * 2.5))
+                        if bx2 > bx1 and by2 > by1:
+                            img_pil_body = img_pil.crop((bx1, by1, bx2, by2))
+                        else:
+                            w_b, h_b = img_pil.size
+                            img_pil_body = img_pil.crop((int(w_b * 0.10), int(h_b * 0.05), int(w_b * 0.90), int(h_b * 0.85)))
+                    else:
+                        w_b, h_b = img_pil.size
+                        img_pil_body = img_pil.crop((int(w_b * 0.10), int(h_b * 0.05), int(w_b * 0.90), int(h_b * 0.85)))
+
+                # 5. Context Stream Preprocessing (with Face Masking option to prevent face leakage)
+                img_pil_context = img_pil
+                if self.mask_context_face and box is not None:
+                    img_pil_context = img_pil.copy()
+                    draw = ImageDraw.Draw(img_pil_context)
+                    fx1, fy1, fx2, fy2 = box
+                    draw.rectangle([max(0, int(fx1) - 5), max(0, int(fy1) - 5),
+                                    min(img_pil.width, int(fx2) + 5), min(img_pil.height, int(fy2) + 5)],
+                                   fill=(0, 0, 0))
+
+                # Append streams (Face, Body, Context)
                 images.append(img_pil_body)
                 images_face.append(img_pil_face)
-                images_context.append(img_pil)
+                images_context.append(img_pil_context)
                 
                 if p < num_real_frames - 1:
                     p += 1
@@ -487,21 +530,12 @@ class VideoDataset(data.Dataset):
         if is_video_file and 'cap' in dir() and cap is not None:
             cap.release()
 
-        # Transforms take a list of PIL images
-        # images_face: List[PIL.Image]
-        # images: List[PIL.Image]
-        
         # Apply transforms
-        # Note: self.transform usually expects a list and returns a Tensor of shape (T*C, H, W)
-        # ToTorchFormatTensor returns (C*T, H, W) because Stack concatenates on axis 2.
-        
         process_data = self.transform(images) # (C*T, H, W)
         process_data_face = self.transform(images_face) # (C*T, H, W)
         process_data_context = self.transform(images_context) # (C*T, H, W)
 
         # Reshape to (T, C, H, W)
-        # Since Stack concatenated [img1, img2, ...] -> [R1,G1,B1, R2,G2,B2, ...]
-        # Reshaping to (-1, 3, H, W) correctly separates frames.
         process_data = process_data.view(-1, 3, self.image_size, self.image_size)
         process_data_face = process_data_face.view(-1, 3, self.image_size, self.image_size)
         process_data_context = process_data_context.view(-1, 3, self.image_size, self.image_size)
@@ -509,60 +543,74 @@ class VideoDataset(data.Dataset):
         # Process target to multi-hot if it's a list (EMOTIC)
         if isinstance(record.label, list):
             target_tensor = torch.tensor(record.label, dtype=torch.float32)
-            # VAD lookup
-            vad_tensor = torch.full((3,), 0.5)  # neutral fallback
-            if self.vad_lookup:
-                vad_val = self.vad_lookup.get(rel_key)
-                if vad_val is None:
-                    # suffix-match fallback
-                    for start in range(1, len(rel_key.split('/')) + 1):
-                        cand = '/'.join(rel_key.split('/')[start:])
-                        if cand in self.vad_lookup:
-                            vad_val = self.vad_lookup[cand]
-                            break
-                if vad_val is not None:
-                    vad_tensor = torch.tensor(vad_val, dtype=torch.float32)
-            return process_data_face, process_data, process_data_context, target_tensor, vad_tensor
+            return process_data_face, process_data, process_data_context, target_tensor
         else:
-            return process_data_face, process_data, process_data_context, record.label - 1
+            final_label = record.label - self.label_offset
+            if self.daisee_merge_low and self.dataset_name == 'DAiSEE':
+                # 3-class merge: Very Low (0) & Low (1) -> 0 (Low); High (2) -> 1; Very High (3) -> 2
+                final_label = 0 if final_label <= 1 else (1 if final_label == 2 else 2)
+            return process_data_face, process_data, process_data_context, final_label
 
     def __len__(self):
         return len(self.video_list)
 
 
-def train_data_loader(root_dir, list_file, num_segments, duration, image_size, dataset_name, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, vad_annotation=None):
-    if dataset_name == "RAER" or dataset_name == "CAER":
-         train_transforms = torchvision.transforms.Compose([
+def train_data_loader(root_dir, list_file, num_segments, duration, image_size, dataset_name, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, mask_context_face=False, daisee_merge_low=False):
+    if dataset_name == "RAER":
+        train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.2),
             GroupRandomGrayscale(p=0.2),
-            RandomRotation(8),               # ↑ 4° → 8° (more head tilt variation)
+            RandomRotation(8),               # 8° (more head tilt variation)
             GroupResize(image_size),
             GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupRandomErasing(p=0.3, scale=(0.02, 0.15))  # occlusion simulation
-         ])
+        ])
+    elif dataset_name in ["CAER", "CAER-S", "CAER_S"]:
+        # CAER-S: Static Context-Aware Emotion dataset
+        train_transforms = torchvision.transforms.Compose([
+            ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
+            GroupRandomGrayscale(p=0.15),
+            RandomRotation(8),
+            GroupResize(image_size),
+            GroupRandomHorizontalFlip(),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupRandomErasing(p=0.3, scale=(0.02, 0.15))
+        ])
+    elif dataset_name == "DAiSEE":
+        # DAiSEE: E-learning engagement videos (subtle lighting shifts, head tilt)
+        train_transforms = torchvision.transforms.Compose([
+            ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+            RandomRotation(6),
+            GroupResize(image_size),
+            GroupRandomHorizontalFlip(),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupRandomErasing(p=0.2, scale=(0.02, 0.1))
+        ])
     elif dataset_name == "EMOTIC":
-         train_transforms = torchvision.transforms.Compose([
-            ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),  # matches paper
-            GroupRandomGrayscale(p=0.1),     # force shape/pose over color occasionally
-            RandomRotation(10),              # camera angle variation in EMOTIC scenes
+        train_transforms = torchvision.transforms.Compose([
+            ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+            GroupRandomGrayscale(p=0.1),
+            RandomRotation(10),
             GroupResize(image_size),
             GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
-            GroupRandomErasing(p=0.4, scale=(0.02, 0.2))   # EMOTIC has heavy occlusion
-         ])
+            GroupRandomErasing(p=0.4, scale=(0.02, 0.2))
+        ])
     else:
-         # Default transforms for other datasets like CK+
-         train_transforms = torchvision.transforms.Compose([
+        # Default transforms for other datasets like CK+
+        train_transforms = torchvision.transforms.Compose([
             GroupResize(image_size),
             GroupRandomHorizontalFlip(),
             Stack(),
-            ToTorchFormatTensor()])
+            ToTorchFormatTensor()
+        ])
             
-    
     train_data = VideoDataset(root_dir=root_dir, list_file=list_file,
                               num_segments=num_segments,
                               duration=duration,
@@ -574,21 +622,26 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
                               crop_body=crop_body,
                               num_classes=num_classes,
                               dataset_name=dataset_name,
-                              vad_annotation=vad_annotation
+                              mask_context_face=mask_context_face,
+                              daisee_merge_low=daisee_merge_low
                               )
     return train_data
 
 
-def test_data_loader(root_dir, list_file, num_segments, duration, image_size, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, dataset_name="", vad_annotation=None):
+def test_data_loader(root_dir, list_file, num_segments, duration, image_size, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, dataset_name="", mask_context_face=False, daisee_merge_low=False):
     if dataset_name == "EMOTIC":
-        test_transform = torchvision.transforms.Compose([GroupResize(image_size),
-                                                         Stack(),
-                                                         ToTorchFormatTensor(),
-                                                         GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])])
+        test_transform = torchvision.transforms.Compose([
+            GroupResize(image_size),
+            Stack(),
+            ToTorchFormatTensor(),
+            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+        ])
     else:
-        test_transform = torchvision.transforms.Compose([GroupResize(image_size),
-                                                         Stack(),
-                                                         ToTorchFormatTensor()])
+        test_transform = torchvision.transforms.Compose([
+            GroupResize(image_size),
+            Stack(),
+            ToTorchFormatTensor()
+        ])
 
     test_data = VideoDataset(root_dir=root_dir, list_file=list_file,
                              num_segments=num_segments,
@@ -601,6 +654,7 @@ def test_data_loader(root_dir, list_file, num_segments, duration, image_size, bo
                              crop_body=crop_body,
                              num_classes=num_classes,
                              dataset_name=dataset_name,
-                             vad_annotation=vad_annotation
+                             mask_context_face=mask_context_face,
+                             daisee_merge_low=daisee_merge_low
                              )
     return test_data

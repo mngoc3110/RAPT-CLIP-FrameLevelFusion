@@ -36,19 +36,33 @@ def get_loss_weight_rampdown(epoch, warmup_epochs, ramp_down_epochs, final_weigh
     else:
         return 0.0
 
-def get_class_counts(annotation_file):
+def get_class_counts(annotation_file, daisee_merge_low=False):
     """Reads an annotation file and returns the number of samples for each class."""
     labels = []
     with open(annotation_file, 'r') as f:
         for line in f:
-            labels.append(int(line.strip().split()[2]))
+            parts = line.strip().split()
+            if not parts:
+                continue
+            lbl_str = parts[-1] if not (len(parts) == 7 and ',' in parts[2]) else parts[2]
+            if ',' not in lbl_str:
+                try:
+                    labels.append(int(lbl_str))
+                except ValueError:
+                    pass
     
-    # Count occurrences of each class
-    class_counts = Counter(labels)
+    if not labels:
+        return []
+
+    min_lbl = min(labels)
+    offset = 1 if min_lbl >= 1 else 0
+    normalized_labels = [l - offset for l in labels]
+    if daisee_merge_low:
+        normalized_labels = [0 if l <= 1 else (1 if l == 2 else 2) for l in normalized_labels]
     
-    # Sort by class index and get just the counts
-    sorted_counts = [class_counts[i] for i in sorted(class_counts)]
-    
+    class_counts = Counter(normalized_labels)
+    max_c = max(class_counts.keys()) if class_counts else -1
+    sorted_counts = [class_counts.get(i, 0) for i in range(max_c + 1)]
     return sorted_counts
 
 def save_checkpoint(state, is_best, checkpoint_path, best_checkpoint_path):
@@ -276,10 +290,7 @@ def evaluate_emotic_map(test_loader, model, device, class_names, log_txt_path):
 
     with torch.no_grad():
         for batch in tqdm.tqdm(test_loader, desc="[EMOTIC Test] Calculating mAP"):
-            if len(batch) == 5:
-                images_face, images_body, images_context, target, vad_target = batch
-                images_context = images_context.to(device)
-            elif len(batch) == 4:
+            if len(batch) == 4:
                 images_face, images_body, images_context, target = batch
                 images_context = images_context.to(device)
             else:

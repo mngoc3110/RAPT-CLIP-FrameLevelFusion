@@ -80,6 +80,8 @@ class Trainer:
 
     def _save_debug_image(self, tensor, prediction, target, epoch_str, batch_idx, img_idx):
         """Saves a single image tensor for debugging, with prediction and target in the filename."""
+        if tensor.ndim == 4:
+            tensor = tensor[0]  # Take first frame (3, H, W)
         # Un-normalize the image
         mean = torch.tensor([0.485, 0.456, 0.406], device=tensor.device).view(3, 1, 1)
         std = torch.tensor([0.229, 0.224, 0.225], device=tensor.device).view(3, 1, 1)
@@ -165,12 +167,7 @@ class Trainer:
         
         with context:
             for i, data in enumerate(pbar):
-                # Handle both 2-stream (Face, Body) and 3-stream (Face, Body, Context), now with VAD (5 elements)
-                vad_target = None
-                if len(data) == 5:
-                    images_face, images_body, images_context, target, vad_target = data
-                    images_context = images_context.to(self.device)
-                elif len(data) == 4:
+                if len(data) == 4:
                     images_face, images_body, images_context, target = data
                     images_context = images_context.to(self.device)
                 else:
@@ -210,9 +207,9 @@ class Trainer:
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
                     # Forward pass
                     if images_context is not None:
-                        output, learnable_text_features, hand_crafted_text_features, moco_logits, vad_pred = self.model(images_face, images_body, images_context)
+                        output, learnable_text_features, hand_crafted_text_features, moco_logits = self.model(images_face, images_body, images_context)
                     else:
-                        output, learnable_text_features, hand_crafted_text_features, moco_logits, vad_pred = self.model(images_face, images_body)
+                        output, learnable_text_features, hand_crafted_text_features, moco_logits = self.model(images_face, images_body)
                     
                     # DEBUG: Check model output for NaN
                     if torch.isnan(output).any():
@@ -294,13 +291,7 @@ class Trainer:
                          loss += moco_loss
                          moco_losses.update(moco_loss.item(), target.size(0))
 
-                    # VAD auxiliary loss (EMOTIC only)
-                    lambda_vad = getattr(self.model.args, 'lambda_vad', 0.0) if hasattr(self.model, 'args') else 0.0
-                    if is_train and vad_pred is not None and lambda_vad > 0.0:
-                        if vad_target is not None:
-                            vad_target = vad_target.to(self.device)
-                            vad_loss = torch.nn.functional.mse_loss(vad_pred, vad_target.float())
-                            loss += lambda_vad * vad_loss
+
 
                 if is_train:
                     self.optimizer.zero_grad()

@@ -32,12 +32,11 @@ class GenerateModel(nn.Module):
        - Loss: CrossEntropy / LDAM
        - Script: train_sh/caer_s_run.sh
 
-    4. EMOTIC (Multi-label Context Emotion - 26 classes + 3 VAD):
+    4. EMOTIC (Multi-label Context Emotion - 26 classes):
        - Stream: Triple-stream (Face + Body + Context) -> use_context=True
        - Fusion: CMAF / Q2L (Query2Label) / CMAF-Decoupled Router
-       - Heads: Classification Head + Optional VAD Auxiliary Head (lambda_vad > 0)
-       - Loss: Dynamic ASL (Asymmetric Loss) + VAD MSE Loss
-       - Script: train_sh/emotic_cmaf.sh, train_sh/emotic_q2l.sh
+       - Loss: Asymmetric Loss (ASL) / Dynamic ASL
+       - Script: train_sh/emotic_cmaf_npy.sh
     """
     def __init__(self, input_text, clip_model, args):
         super().__init__()
@@ -77,9 +76,9 @@ class GenerateModel(nn.Module):
         elif args.dataset == "EMOTIC":
             from models.Text import class_descriptor_emotic_26
             hand_crafted_prompts = class_descriptor_emotic_26
-        elif args.dataset in ["CAER", "CAER-S"]:
-            from models.Text import class_descriptor_7_only_face
-            hand_crafted_prompts = class_descriptor_7_only_face
+        elif args.dataset in ["CAER", "CAER-S", "CAER_S"]:
+            from models.Text import class_descriptor_caer
+            hand_crafted_prompts = class_descriptor_caer
         else:
             from models.Text import class_descriptor_7_only_face
             hand_crafted_prompts = class_descriptor_7_only_face
@@ -125,11 +124,23 @@ class GenerateModel(nn.Module):
         else:
             in_dim = 1536 if self.use_context else 1024
 
+        # Determine whether temporal modeling is needed:
+        # Bypassed for static image datasets (e.g. EMOTIC, CAER-S) or when --no-temporal is set or temporal_layers == 0.
+        self.use_temporal = not (getattr(args, 'dataset', '') in ['EMOTIC', 'CAER-S', 'CAER_S'] or 
+                                 getattr(args, 'no_temporal', False) or 
+                                 getattr(args, 'temporal_layers', 1) == 0)
+
         # Fusion Stage: 'frame' (CMAF before Temporal, Default SOTA) vs 'video' (Temporal before CMAF)
         self.fusion_stage = getattr(args, 'fusion_stage', 'frame')
         print(f"=> Fusion Stage: {self.fusion_stage}")
 
-        if self.fusion_stage == 'video':
+        if not self.use_temporal:
+            print("=> Static Image Dataset (EMOTIC / no-temporal): Bypassing Temporal Transformer.")
+            self.temporal_net_face = None
+            self.temporal_net_body = None
+            self.temporal_net_context = None
+            self.unified_temporal_net = None
+        elif self.fusion_stage == 'video':
             # Video-level fusion: Separate Temporal Transformers operate on individual streams first (512-d)
             self.temporal_net_face = Temporal_Transformer_AttnPool(
                 num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
@@ -151,19 +162,6 @@ class GenerateModel(nn.Module):
         object.__setattr__(self, 'clip_model_', clip_model)
         
         self.project_fc = nn.Linear(in_dim, 512)
-
-        # VAD Head (Valence-Arousal-Dominance) — auxiliary task for EMOTIC
-        self.use_vad = (getattr(args, 'dataset', '') == 'EMOTIC' and
-                        getattr(args, 'lambda_vad', 0.0) > 0.0)
-        if self.use_vad:
-            self.vad_head = nn.Sequential(
-                nn.Linear(512, 64),
-                nn.ReLU(),
-                nn.Dropout(0.3),
-                nn.Linear(64, 3),
-                nn.Sigmoid()   # output ∈ [0,1]: Valence, Arousal, Dominance
-            )
-            print(f"=> VAD Head enabled (lambda_vad={args.lambda_vad})")
 
         # Fusion Selection: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion)
         if self.fusion_type == 'gfi':
@@ -260,7 +258,7 @@ class GenerateModel(nn.Module):
             
             # Return immediately for Q2L, skipping the old classification block
             moco_logits = None
-            return output, text_features, hand_crafted_text_features, moco_logits, None
+            return output, text_features, hand_crafted_text_features, moco_logits
 
         elif self.fusion_type == 'gfi':
             features_to_concat = [image_face_features, image_body_features]
@@ -270,8 +268,11 @@ class GenerateModel(nn.Module):
             gate = self.gate_fc(fused_frame_features)
             fused_frame_features = fused_frame_features * gate
             
-            fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
-            video_features = self.unified_temporal_net(fused_frame_features)
+            if self.use_temporal:
+                fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
+                video_features = self.unified_temporal_net(fused_frame_features)
+            else:
+                video_features = fused_frame_features.contiguous().view(n, -1)
             video_features = self.project_fc(video_features)
             video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
             
@@ -285,8 +286,11 @@ class GenerateModel(nn.Module):
             
             video_features_list = []
             for out in outs:
-                out = out.contiguous().view(n, t, -1)
-                vid_feat = self.unified_temporal_net(out)
+                if self.use_temporal:
+                    out = out.contiguous().view(n, t, -1)
+                    vid_feat = self.unified_temporal_net(out)
+                else:
+                    vid_feat = out.contiguous().view(n, -1)
                 vid_feat = self.project_fc(vid_feat)
                 vid_feat = vid_feat / (vid_feat.norm(dim=-1, keepdim=True) + 1e-6)
                 video_features_list.append(vid_feat)
@@ -307,15 +311,19 @@ class GenerateModel(nn.Module):
                 video_features = self.project_fc(fused_video)
                 video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
             else:
-                # Frame-Level Fusion (Default SOTA): CMAF on each frame, then Unified Temporal
+                # Frame-Level Fusion (Default SOTA): CMAF on each frame
                 if self.use_context:
                     fused_frame_features = self.cmaf(image_face_features, image_body_features, image_context_features)
                 else:
                     fused_frame_features = self.cmaf(image_face_features, image_body_features)
                 
-                # Unified Temporal Transformer
-                fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
-                video_features = self.unified_temporal_net(fused_frame_features)
+                if self.use_temporal:
+                    # Unified Temporal Transformer (Videos)
+                    fused_frame_features = fused_frame_features.contiguous().view(n, t, -1)
+                    video_features = self.unified_temporal_net(fused_frame_features)
+                else:
+                    # Image Datasets (e.g. EMOTIC): Direct projection without temporal net
+                    video_features = fused_frame_features.contiguous().view(n, -1)
 
                 video_features = self.project_fc(video_features)
                 # Robust normalization to avoid NaN on MPS
@@ -383,12 +391,4 @@ class GenerateModel(nn.Module):
             else:
                 output = video_features @ text_features.t() / self.args.temperature
 
-        # VAD prediction (auxiliary task — EMOTIC only)
-        vad_pred = None
-        if self.use_vad:
-            # Use final video_features (B, 512) — already L2-normalized
-            # Detach is NOT used: we want gradient to flow back through VAD head into video encoder
-            _vf = video_features if not isinstance(video_features, tuple) else video_features[0]
-            vad_pred = self.vad_head(_vf)  # (B, 3) ∈ [0,1]
-
-        return output, text_features, hand_crafted_text_features, moco_logits, vad_pred
+        return output, text_features, hand_crafted_text_features, moco_logits
