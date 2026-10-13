@@ -239,8 +239,13 @@ class Transformer(nn.Module):
         # stochastic depth decay rule
         dpr = [x.item() for x in torch.linspace(0, drop_path, layers)]
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask, drop_path=dpr[i]) for i in range(layers)])
+        self.gradient_checkpointing = True
 
     def forward(self, x: torch.Tensor):
+        if getattr(self, 'gradient_checkpointing', True) and self.training and x.requires_grad:
+            for blk in self.resblocks:
+                x = torch.utils.checkpoint.checkpoint(blk, x, use_reentrant=False)
+            return x
         return self.resblocks(x)
 
 

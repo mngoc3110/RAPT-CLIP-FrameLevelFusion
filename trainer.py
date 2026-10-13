@@ -44,7 +44,8 @@ class Trainer:
                  dc_criterion=None, lambda_dc=0,
                  mi_warmup=0, mi_ramp=0, mi_ramp_type='ramp_up',
                  dc_warmup=0, dc_ramp=0, use_amp=False, grad_clip=1.0, mixup_alpha=0.0,
-                 use_ldl=False, ldl_warmup=0):
+                 use_ldl=False, ldl_warmup=0, grad_accum_steps=1):
+        self.grad_accum_steps = max(1, grad_accum_steps)
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -166,6 +167,8 @@ class Trainer:
         pbar = tqdm(loader, desc=f"{mode_str} Epoch {epoch_str}", file=sys.stdout)
         
         with context:
+            if is_train:
+                self.optimizer.zero_grad()
             for i, data in enumerate(pbar):
                 if len(data) == 4:
                     images_face, images_body, images_context, target = data
@@ -295,23 +298,28 @@ class Trainer:
 
 
                 if is_train:
-                    self.optimizer.zero_grad()
-                    loss = loss.to(self.device) # Đảm bảo loss luôn ở trên CUDA
+                    loss = loss.to(self.device)
+                    grad_accum = getattr(self, 'grad_accum_steps', 1)
+                    accum_loss = loss / grad_accum
                     if self.use_amp:
-                        self.scaler.scale(loss).backward()
-                        if self.grad_clip > 0:
-                            self.scaler.unscale_(self.optimizer)
-                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-                        self.scaler.step(self.optimizer)
-                        self.scaler.update()
+                        self.scaler.scale(accum_loss).backward()
                     else:
-                        loss.backward()
-                        if self.grad_clip > 0:
-                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-                        self.optimizer.step()
-                    
-                    # Update EMA shadow weights
-                    self.ema.update(self.model)
+                        accum_loss.backward()
+
+                    if (i + 1) % grad_accum == 0 or (i + 1) == len(loader):
+                        if self.use_amp:
+                            if self.grad_clip > 0:
+                                self.scaler.unscale_(self.optimizer)
+                                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                            self.scaler.step(self.optimizer)
+                            self.scaler.update()
+                        else:
+                            if self.grad_clip > 0:
+                                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                            self.optimizer.step()
+                        self.optimizer.zero_grad()
+                        # Update EMA shadow weights
+                        self.ema.update(self.model)
 
                 # Record metrics
                 is_emotic = hasattr(self.model, 'args') and self.model.args.dataset == 'EMOTIC'

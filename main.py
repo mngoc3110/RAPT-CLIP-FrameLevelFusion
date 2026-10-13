@@ -79,6 +79,7 @@ path_group.add_argument('--npy-dir', type=str, default='emotic_dataset/emotic_pr
 train_group = parser.add_argument_group('Training Control', 'Parameters to control the training process')
 train_group.add_argument('--epochs', type=int, default=20, help='Total number of training epochs.')
 train_group.add_argument('--batch-size', type=int, default=4, help='Batch size for training and validation.')
+train_group.add_argument('--grad-accum-steps', type=int, default=1, help='Number of steps to accumulate gradients before updating optimizer.')
 train_group.add_argument('--print-freq', type=int, default=10, help='Frequency of printing training logs.')
 train_group.add_argument('--use-amp', action='store_true', help='Use Automatic Mixed Precision.')
 train_group.add_argument('--grad-clip', type=float, default=1.0, help='Gradient clipping value.')
@@ -437,7 +438,8 @@ def run_training(args: argparse.Namespace) -> None:
                     mi_warmup=args.mi_warmup, mi_ramp=args.mi_ramp, mi_ramp_type=args.mi_ramp_type,
                     dc_warmup=args.dc_warmup, dc_ramp=args.dc_ramp, 
                     use_amp=args.use_amp, grad_clip=args.grad_clip, mixup_alpha=args.mixup_alpha,
-                    use_ldl=args.use_ldl, ldl_warmup=args.ldl_warmup)
+                    use_ldl=args.use_ldl, ldl_warmup=args.ldl_warmup,
+                    grad_accum_steps=getattr(args, 'grad_accum_steps', 1))
     
     # Early stopping setup
     early_stop_patience = getattr(args, 'early_stopping_patience', 0)

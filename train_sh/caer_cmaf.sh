@@ -54,10 +54,11 @@ python -u main.py \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
-  --batch-size 2 \
+  --batch-size 4 \
+  --grad-accum-steps 2 \
   --print-freq 50 \
   --seed 42 \
-  --workers 2 \
+  --workers 4 \
   --root-dir "${DATA_DIR}" \
   --train-annotation "${DATA_DIR}/train.txt" \
   --val-annotation "${DATA_DIR}/validation.txt" \
@@ -82,7 +83,7 @@ python -u main.py \
   --gamma 0.1 \
   \
   --loss-type ldam \
-  --ldam-s 30.0 \
+  --ldam-s 1.0 \
   --ldam-max-m 0.5 \
   --use-weighted-sampler \
   --label-smoothing 0.05 \
