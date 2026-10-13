@@ -224,6 +224,7 @@ def run_training(args: argparse.Namespace) -> None:
     best_train_war = 0.0
     best_val_uar = 0.0
     best_val_war = 0.0
+    best_val_score = 0.0
     start_epoch = 0
     
     # Build model
@@ -489,23 +490,27 @@ def run_training(args: argparse.Namespace) -> None:
 
         # Save checkpoint
         if args.dataset in ['CAER', 'CAER-S', 'CAER_S']:
-            is_best = val_war > best_val_war
+            # Harmonized Balanced Score (Harmonic Mean) to maximize BOTH WAR and UAR simultaneously
+            val_score = (2.0 * val_war * val_uar) / (val_war + val_uar + 1e-6)
+            is_best = val_score > best_val_score
+            best_val_score = max(val_score, best_val_score)
+            eval_metric_name = f"Harmonic Score: {val_score:.2f}% (WAR: {val_war:.2f}% | UAR: {val_uar:.2f}%)"
+            best_metric_val = best_val_score
         else:
             is_best = val_uar > best_val_uar
+            eval_metric_name = f"UAR: {val_uar:.2f}%"
+            best_metric_val = best_val_uar
         best_val_uar = max(val_uar, best_val_uar)
         best_val_war = max(val_war, best_val_war)
         best_train_uar = max(train_uar, best_train_uar)
         best_train_war = max(train_war, best_train_war)
-
-        eval_metric_name = "WAR" if args.dataset in ['CAER', 'CAER-S', 'CAER_S'] else "UAR"
-        best_metric_val = best_val_war if args.dataset in ['CAER', 'CAER-S', 'CAER_S'] else best_val_uar
 
         summary_msg = (
             f"\n============================================================\n"
             f"📊 [EPOCH {epoch} SUMMARY]\n"
             f"  • Train: Loss = {train_los:.4f} | WAR = {train_war:.2f}% | UAR = {train_uar:.2f}%\n"
             f"  • Valid: Loss = {val_los:.4f}   | WAR = {val_war:.2f}%   | UAR = {val_uar:.2f}%\n"
-            f"  • Best Valid {eval_metric_name}: {best_metric_val:.2f}% {'(NEW BEST! 🏆)' if is_best else ''}\n"
+            f"  • Best Valid {eval_metric_name} {'(NEW BEST! 🏆)' if is_best else ''}\n"
             f"============================================================\n"
         )
         print(summary_msg)

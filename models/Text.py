@@ -312,40 +312,75 @@ class_descriptor_caer = [
 ]
 
 prompt_ensemble_caer = [
-    [ # Anger
-        "A photo of a person showing anger.",
-        "A face with furrowed brows and a glare.",
-        "An angry facial expression."
+    [ # Anger (Class 0)
+        "A photo of an angry person shouting and glaring furiously.",
+        "A face with clenched jaw, furrowed brows, and intense furious glare.",
+        "An aggressive confrontational posture, pointing fingers, clenching fists in rage.",
+        "A person arguing heatedly in a tense hostile conflict situation.",
+        "An enraged individual with flared nostrils, tightened lips, and burning eyes.",
+        "A furious facial expression showing extreme hostility, outrage, and indignation.",
+        "A tense, rigid body leaning forward aggressively in an altercation scene.",
+        "An angry character yelling with fiery gaze in a dramatic confrontation."
     ],
-    [ # Disgust
-        "A photo of a person showing disgust.",
-        "A face with a wrinkled nose.",
-        "A disgusted facial expression."
+    [ # Disgust (Class 1)
+        "A photo of a disgusted person grimacing with intense revulsion.",
+        "A face with wrinkled nose, raised upper lip, and squinted eyes in aversion.",
+        "A person turning their head and body away, recoiling from something repulsive.",
+        "A nauseated expression showing strong dislike, aversion, and bitter distaste.",
+        "A person covering their mouth or nose with a look of utter distaste and repulsion.",
+        "An expression of revulsion, curled lip, and head pulled back in strong disdain.",
+        "A disgusted posture shrinking back with deep distaste in an offensive situation.",
+        "A character showing profound aversion with twisted mouth and squinted eyes."
     ],
-    [ # Fear
-        "A photo of a person showing fear.",
-        "A face with wide eyes and a terrified look.",
-        "A fearful facial expression."
+    [ # Fear (Class 2)
+        "A photo of a terrified person panicking with sheer fright and dread.",
+        "A face with wide staring eyes, raised eyebrows, and open trembling mouth in horror.",
+        "A defensive cowering posture, hands raised to protect the face, trembling.",
+        "A person backing away in terror, frozen or fleeing from sudden imminent danger.",
+        "A frightened character gasping with dread in a dark suspenseful thriller scene.",
+        "A shocked terrified expression showing intense dread, helplessness, and alarm.",
+        "A person trembling with pale face and widened pupils in mortal danger.",
+        "A fearful body crouching defensively, shrinking from an intimidating threat."
     ],
-    [ # Happy
-        "A photo of a person showing happiness.",
-        "A smiling face with joy.",
-        "A happy facial expression."
+    [ # Happy (Class 3)
+        "A photo of a joyful person smiling brightly and laughing warmly.",
+        "A radiant face with crinkling eye corners (Duchenne smile) and raised cheeks.",
+        "An open relaxed body posture with open arms, celebrating in great excitement.",
+        "A person grinning warmly and cheering with friends in a happy social gathering.",
+        "A cheerful expression showing genuine pleasure, warmth, enthusiasm, and amusement.",
+        "A delighted character laughing heartily in a celebratory joyous scene.",
+        "A relaxed, enthusiastic posture radiating great happiness and inner comfort.",
+        "A joyous individual beaming with contentment in a pleasant sunny atmosphere."
     ],
-    [ # Neutral
-        "A photo of a person showing a neutral expression.",
-        "A calm, composed face with relaxed facial muscles and impassive gaze.",
-        "A neutral facial expression."
+    [ # Neutral (Class 4)
+        "A photo of a calm composed individual with impassive expression.",
+        "A resting facial expression with relaxed brows, smooth forehead, and natural mouth.",
+        "A relaxed natural sitting or standing posture with no strong emotional tension.",
+        "A person quietly observing their surroundings with a serene indifferent gaze.",
+        "An emotionless face showing neither joy nor distress in an everyday setting.",
+        "A tranquil character with steady gaze and neutral resting body language.",
+        "An everyday resting posture, composed and balanced in an ordinary room.",
+        "A calm impassive person going about regular daily routine quietly."
     ],
-    [ # Sad
-        "A photo of a person showing sadness.",
-        "A face with a frown and sorrowful eyes.",
-        "A sad facial expression."
+    [ # Sad (Class 5)
+        "A photo of a sorrowful dejected person looking down with profound grief.",
+        "A sad face with drooping eyelids, downturned mouth corners, and inner brows raised.",
+        "A slumped despondent body posture, bowed head, drooping shoulders in deep despair.",
+        "A weeping or tearful character holding their head in misery, agony, and distress.",
+        "A person gazing blankly downward in deep melancholy, depression, and emotional pain.",
+        "A heartbroken individual sitting alone, mourning in quiet gloomy solitude.",
+        "A dejected character with lifeless gaze and slumped back in overwhelming sorrow.",
+        "A solemn grieving person mourning in a gloomy melancholic atmosphere."
     ],
-    [ # Surprise
-        "A photo of a person showing surprise.",
-        "A face with an open mouth and wide eyes.",
-        "A surprised facial expression."
+    [ # Surprise (Class 6)
+        "A photo of a stunned person gasping with sudden shock and bewilderment.",
+        "A face with raised high curved eyebrows, widened round eyes, and dropped jaw.",
+        "An arrested startled posture, hands raised to cheeks, frozen in astonishment.",
+        "A person caught completely off guard by an unexpected startling revelation.",
+        "An amazed wide-eyed expression showing utter bewilderment and astonishment.",
+        "A startled character jumping back with wide open mouth in sheer disbelief.",
+        "A shocked individual gasping for breath at an unbelievable sudden event.",
+        "A stunned posture with parted lips and dilated eyes in dramatic realization."
     ]
 ]
 
