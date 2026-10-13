@@ -41,13 +41,10 @@ fi
 
 echo "=> Using CAER-S dataset root: ${DATA_DIR}"
 
-# 2. Chuẩn bị file annotation (train.txt, validation.txt, test.txt, face.json, body.json)
+# 2. Tự động chuyển đổi đường dẫn Colab -> Kaggle và tạo file annotation
 ANNOTATION_DIR="/kaggle/working/caers_data"
-if [ -f "${DATA_DIR}/train.txt" ] && [ -f "${DATA_DIR}/face.json" ]; then
-  ANNOTATION_DIR="${DATA_DIR}"
-  echo "=> Found pre-existing annotations in ${DATA_DIR}"
-elif [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ]; then
-  echo "=> Annotations not found. Auto-generating from Kaggle CSV files..."
+if [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ]; then
+  echo "=> [Preprocessor] Đang tự động chuyển đổi đường dẫn Colab sang Kaggle..."
   python tools/prepare_caers_dataset.py \
     --data-dir "${DATA_DIR}" \
     --output-dir "${ANNOTATION_DIR}"
@@ -59,10 +56,11 @@ TEST_TXT="${ANNOTATION_DIR}/test.txt"
 FACE_BOX="${ANNOTATION_DIR}/face.json"
 BODY_BOX="${ANNOTATION_DIR}/body.json"
 
-echo "=> Train annotation: ${TRAIN_TXT}"
-echo "=> Val annotation:   ${VAL_TXT}"
-echo "=> Face BBox:        ${FACE_BOX}"
-echo "=> Body BBox:        ${BODY_BOX}"
+echo "=> File Train annotation: ${TRAIN_TXT}"
+echo "=> File Val annotation:   ${VAL_TXT}"
+echo "=> File Face BBox:        ${FACE_BOX}"
+echo "=> File Body BBox:        ${BODY_BOX}"
+echo "=> Thư mục CSVs đã đổi đường dẫn: ${ANNOTATION_DIR}/converted_csvs/"
 
 # 3. Khởi chạy huấn luyện RAPT-CLIP
 python -u main.py \
