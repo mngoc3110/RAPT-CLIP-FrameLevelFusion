@@ -43,7 +43,7 @@ echo "=> Using CAER-S dataset root: ${DATA_DIR}"
 
 # 2. Tự động chuyển đổi đường dẫn Colab -> Kaggle và tạo file annotation
 ANNOTATION_DIR="/kaggle/working/caers_data"
-if [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ]; then
+if [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ] || [ ! -f "${ANNOTATION_DIR}/validation.txt" ]; then
   echo "=> [Preprocessor] Đang tự động chuyển đổi đường dẫn Colab sang Kaggle..."
   python tools/prepare_caers_dataset.py \
     --data-dir "${DATA_DIR}" \
@@ -53,6 +53,12 @@ fi
 TRAIN_TXT="${ANNOTATION_DIR}/train.txt"
 VAL_TXT="${ANNOTATION_DIR}/validation.txt"
 TEST_TXT="${ANNOTATION_DIR}/test.txt"
+
+# Nếu val.txt không tồn tại, tự động trỏ về test.txt
+if [ ! -f "${VAL_TXT}" ] && [ -f "${TEST_TXT}" ]; then
+  VAL_TXT="${TEST_TXT}"
+fi
+
 FACE_BOX="${ANNOTATION_DIR}/face.json"
 BODY_BOX="${ANNOTATION_DIR}/body.json"
 

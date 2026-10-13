@@ -217,6 +217,15 @@ def main():
                 f.write(f"{rec}\n")
         print(f"   ✓ Đã tạo {out_txt_name}: {len(split_records)} mẫu -> {out_txt_path}")
 
+    # Đảm bảo validation.txt luôn tồn tại (CAER-S thường chỉ có train và test)
+    val_txt_path = os.path.join(output_dir, "validation.txt")
+    test_txt_path = os.path.join(output_dir, "test.txt")
+    if (not os.path.exists(val_txt_path) or os.path.getsize(val_txt_path) == 0) and os.path.exists(test_txt_path):
+        import shutil
+        print(f"\n=> [THÔNG TIN] Dataset CAER-S không có tập val riêng biệt. Tự động sử dụng test.txt làm validation.txt...")
+        shutil.copy(test_txt_path, val_txt_path)
+        print(f"   ✓ Đã tạo validation.txt (sao chép từ {test_txt_path})")
+
     # Ghi face.json và body.json
     face_json_path = os.path.join(output_dir, "face.json")
     with open(face_json_path, 'w') as f:
