@@ -1,58 +1,87 @@
 #!/bin/bash
 # ============================================================================
-# CAER-S Training Script — Context-Aware Emotion Recognition (Static) + CMAF
+# CAER-S Training Script — Context-Aware Emotion Recognition (Static Images)
 # ============================================================================
-# CAER-S dataset:
+# CAER-S Dataset:
 # - 7 emotion classes (0: Anger, 1: Disgust, 2: Fear, 3: Happy, 4: Neutral, 5: Sad, 6: Surprise)
-# - Static images (num_segments=1, duration=1, no-temporal)
-# - Triple-stream architecture: Face (from caer_s_faces.json), Body (torso estimation), Context (full scene)
-# - Fusion: Tridirectional CMAF (Cross-Modal Attention Fusion)
-# - Loss: LDAM Loss (s=30.0, max_m=0.5)
+# - Static images (num_segments=1, duration=1)
+# - Triple-stream architecture: Face + Body (torso estimation) + Context (full scene)
+# - Fusion: Tridirectional Frame-Level CMAF (Cross-Modal Attention Fusion)
+# - Loss: LDAM Loss (s=1.0, max_m=0.5) + MI Loss + DC Loss
 # ============================================================================
 
+export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
-# Exact Kaggle Dataset directory for CAER
-DATA_DIR="/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
-if [ ! -d "$DATA_DIR" ]; then
-  # Fallback search if mounted under a custom slug/username path on Kaggle
-  DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "train.txt" 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null)
+# 1. Tự động nhận diện thư mục dataset trên Kaggle
+POSSIBLE_DIRS=(
+  "/kaggle/input/datasets/lcngtr/caer-s"
+  "/kaggle/input/caer-s"
+  "/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
+)
+
+DATA_DIR=""
+for d in "${POSSIBLE_DIRS[@]}"; do
+  if [ -d "$d" ]; then
+    DATA_DIR="$d"
+    break
+  fi
+done
+
+if [ -z "$DATA_DIR" ]; then
+  # Fallback search nếu đặt tên thư mục tùy chỉnh
+  DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "*bbox_*.csv" 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
+  else
+    DATA_DIR="/kaggle/input/datasets/lcngtr/caer-s"
   fi
 fi
-# Preprocess body bounding boxes if dataset body.json is empty ({})
-BODY_BOX="${DATA_DIR}/body.json"
-if [ ! -f "$BODY_BOX" ] || [ $(wc -c < "$BODY_BOX" 2>/dev/null || echo 0) -lt 100 ]; then
-  GENERATED_BODY="/kaggle/working/caer_body_boxes.json"
-  if [ ! -f "$GENERATED_BODY" ]; then
-    echo "=> [Preprocessing] Dataset body.json is empty ({}) or missing."
-    echo "=> Generating high-precision temporally-smoothed Body Bounding Boxes..."
-    python tools/generate_caer_body_boxes.py \
-      --face-json "${DATA_DIR}/face.json" \
-      --output "$GENERATED_BODY"
-  fi
-  BODY_BOX="$GENERATED_BODY"
-fi
-echo "=> Using Body bounding box path: $BODY_BOX"
 
-python main.py \
+echo "=> Using CAER-S dataset root: ${DATA_DIR}"
+
+# 2. Chuẩn bị file annotation (train.txt, validation.txt, test.txt, face.json, body.json)
+ANNOTATION_DIR="/kaggle/working/caers_data"
+if [ -f "${DATA_DIR}/train.txt" ] && [ -f "${DATA_DIR}/face.json" ]; then
+  ANNOTATION_DIR="${DATA_DIR}"
+  echo "=> Found pre-existing annotations in ${DATA_DIR}"
+elif [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ]; then
+  echo "=> Annotations not found. Auto-generating from Kaggle CSV files..."
+  python tools/prepare_caers_dataset.py \
+    --data-dir "${DATA_DIR}" \
+    --output-dir "${ANNOTATION_DIR}"
+fi
+
+TRAIN_TXT="${ANNOTATION_DIR}/train.txt"
+VAL_TXT="${ANNOTATION_DIR}/validation.txt"
+TEST_TXT="${ANNOTATION_DIR}/test.txt"
+FACE_BOX="${ANNOTATION_DIR}/face.json"
+BODY_BOX="${ANNOTATION_DIR}/body.json"
+
+echo "=> Train annotation: ${TRAIN_TXT}"
+echo "=> Val annotation:   ${VAL_TXT}"
+echo "=> Face BBox:        ${FACE_BOX}"
+echo "=> Body BBox:        ${BODY_BOX}"
+
+# 3. Khởi chạy huấn luyện RAPT-CLIP
+python -u main.py \
   --mode train \
-  --exper-name CAER-CMAF \
+  --exper-name CAER-S-CMAF \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
-  --batch-size 2 \
+  --batch-size 16 \
+  --grad-accum-steps 2 \
   --print-freq 50 \
   --seed 42 \
-  --workers 2 \
+  --workers 4 \
   --root-dir "${DATA_DIR}" \
-  --train-annotation "${DATA_DIR}/train.txt" \
-  --val-annotation "${DATA_DIR}/validation.txt" \
-  --test-annotation "${DATA_DIR}/test.txt" \
+  --train-annotation "${TRAIN_TXT}" \
+  --val-annotation "${VAL_TXT}" \
+  --test-annotation "${TEST_TXT}" \
   --clip-path ViT-B/16 \
-  --bounding-box-face "${DATA_DIR}/face.json" \
+  --bounding-box-face "${FACE_BOX}" \
   --bounding-box-body "${BODY_BOX}" \
   \
   --fusion-type cmaf \
@@ -74,13 +103,15 @@ python main.py \
   --loss-type ldam \
   --ldam-s 1.0 \
   --ldam-max-m 0.5 \
+  --use-weighted-sampler \
+  --label-smoothing 0.05 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
-  --mi-warmup 5 \
-  --mi-ramp 10 \
-  --dc-warmup 5 \
-  --dc-ramp 10 \
+  --mi-warmup 3 \
+  --mi-ramp 6 \
+  --dc-warmup 3 \
+  --dc-ramp 6 \
   --grad-clip 1.0 \
   \
   --text-type prompt_ensemble \
@@ -88,9 +119,10 @@ python main.py \
   --class-token-position end \
   --class-specific-contexts True \
   --load_and_tune_prompt_learner True \
-  --num-segments 8 \
+  --num-segments 1 \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \
   --drop-path-rate 0.1 \
+  --modality-dropout 0.3 \
   --use-amp
