@@ -435,7 +435,9 @@ class Trainer:
             all_preds = torch.cat(all_preds_list)
             all_targets = torch.cat(all_targets_list)
             
-            cm = confusion_matrix(all_targets.numpy(), all_preds.numpy())
+            num_classes = getattr(self.model, 'num_classes', None)
+            labels = range(num_classes) if num_classes is not None else None
+            cm = confusion_matrix(all_targets.numpy(), all_preds.numpy(), labels=labels)
             war = war_meter.avg 
             
             class_acc = cm.diagonal() / (cm.sum(axis=1) + 1e-6)

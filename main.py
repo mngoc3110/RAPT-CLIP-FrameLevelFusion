@@ -491,7 +491,7 @@ def run_training(args: argparse.Namespace) -> None:
         trainer.scheduler.step()
 
         # Save checkpoint
-        if args.dataset in ['CAER', 'CAER-S', 'CAER_S']:
+        if args.dataset in ['CAER', 'CAER-S', 'CAER_S', 'DAiSEE']:
             # Harmonized Balanced Score (Harmonic Mean) to maximize BOTH WAR and UAR simultaneously
             val_score = (2.0 * val_war * val_uar) / (val_war + val_uar + 1e-6)
             is_best = val_score > best_val_score

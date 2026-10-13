@@ -89,10 +89,12 @@ python -u main.py \
   --dataset DAiSEE \
   --gpu 0 \
   --epochs 20 \
-  --batch-size 8 \
+  --batch-size 4 \
+  --grad-accum-steps 2 \
   --print-freq 50 \
   --seed 42 \
-  --workers 2 \
+  --workers 4 \
+  --early-stopping-patience 0 \
   --root-dir "$DATA_DIR" \
   --train-annotation "$DATA_DIR/daisee_train.txt" \
   --val-annotation "$DATA_DIR/daisee_val.txt" \
@@ -107,8 +109,8 @@ python -u main.py \
   --daisee-merge-low \
   \
   --optimizer AdamW \
-  --lr 5e-5 \
-  --lr-image-encoder 5e-6 \
+  --lr 3e-5 \
+  --lr-image-encoder 5e-7 \
   --lr-prompt-learner 1e-4 \
   --lr-adapter 1e-4 \
   --weight-decay 0.005 \
@@ -123,10 +125,10 @@ python -u main.py \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
-  --mi-warmup 0 \
-  --mi-ramp 0 \
-  --dc-warmup 0 \
-  --dc-ramp 0 \
+  --mi-warmup 3 \
+  --mi-ramp 5 \
+  --dc-warmup 3 \
+  --dc-ramp 5 \
   --grad-clip 1.0 \
   \
   --text-type prompt_ensemble \
