@@ -250,17 +250,39 @@ class VideoDataset(data.Dataset):
         if self.bounding_box_face and os.path.exists(self.bounding_box_face):
             with open(self.bounding_box_face, 'r') as f:
                 self.boxs = json.load(f)
+            # Match verification on sample_list
+            match_cnt = 0
+            check_subset = self.sample_list[:500] if len(self.sample_list) > 500 else self.sample_list
+            for item in check_subset:
+                rel = item[0].replace('./', '').replace('\\', '/')
+                clean_rel = rel[len('CAER/'):] if rel.startswith('CAER/') else rel
+                no_ext = os.path.splitext(clean_rel)[0]
+                if no_ext in self.boxs or clean_rel in self.boxs or f"CAER/{no_ext}" in self.boxs or f"CAER/{clean_rel}" in self.boxs:
+                    match_cnt += 1
+            rate = (match_cnt / len(check_subset) * 100) if check_subset else 0
+            print(f"[{self.dataset_name} {self.mode}] Loaded {len(self.boxs)} Face boxes from '{os.path.basename(self.bounding_box_face)}' | Match rate: {rate:.1f}%")
         else:
-            # print(f"Warning: Face bounding box file not found or None ({self.bounding_box_face}). Proceeding without face boxes.")
             self.boxs = {}
+            print(f"[{self.dataset_name} {self.mode}] Warning: Face bounding box file not found or None ({self.bounding_box_face}).")
 
     def _read_body_boxes(self):
         if self.bounding_box_body and os.path.exists(self.bounding_box_body):
             with open(self.bounding_box_body, 'r') as f:
                 self.body_boxes = json.load(f)
+            # Match verification on sample_list
+            match_cnt = 0
+            check_subset = self.sample_list[:500] if len(self.sample_list) > 500 else self.sample_list
+            for item in check_subset:
+                rel = item[0].replace('./', '').replace('\\', '/')
+                clean_rel = rel[len('CAER/'):] if rel.startswith('CAER/') else rel
+                no_ext = os.path.splitext(clean_rel)[0]
+                if no_ext in self.body_boxes or clean_rel in self.body_boxes or f"CAER/{no_ext}" in self.body_boxes or f"CAER/{clean_rel}" in self.body_boxes:
+                    match_cnt += 1
+            rate = (match_cnt / len(check_subset) * 100) if check_subset else 0
+            print(f"[{self.dataset_name} {self.mode}] Loaded {len(self.body_boxes)} Body boxes from '{os.path.basename(self.bounding_box_body)}' | Match rate: {rate:.1f}%")
         else:
-            # print(f"Warning: Body bounding box file not found or None ({self.bounding_box_body}). Proceeding without body boxes.")
             self.body_boxes = {}
+            print(f"[{self.dataset_name} {self.mode}] Warning: Body bounding box file not found or None ({self.bounding_box_body}).")
 
 
     def _cv2pil(self,im_cv):
@@ -313,10 +335,20 @@ class VideoDataset(data.Dataset):
             upper = int(upper)
             right = int(right)
             lower = int(lower)
-            left = max(0, left - margin)
-            upper = max(0, upper - margin)
-            right = min(img.width, right + margin)
-            lower = min(img.height, lower + margin)
+            if self.dataset_name in ['CAER', 'CAER-S', 'CAER_S']:
+                bw = right - left
+                bh = lower - upper
+                pad_w = int(bw * 0.15)
+                pad_h = int(bh * 0.15)
+                left = max(0, left - pad_w)
+                upper = max(0, upper - pad_h)
+                right = min(img.width, right + pad_w)
+                lower = min(img.height, lower + pad_h)
+            else:
+                left = max(0, left - margin)
+                upper = max(0, upper - margin)
+                right = min(img.width, right + margin)
+                lower = min(img.height, lower + margin)
             if mode == 'face':
                 if right > left and lower > upper:
                     return img.crop((left, upper, right, lower))
@@ -531,6 +563,7 @@ class VideoDataset(data.Dataset):
         images_context = list()
         
         current_frame_idx = -1
+        last_valid_img = None
         for seg_ind in indices:
             p = int(seg_ind)
             for i in range(self.duration):
@@ -541,8 +574,9 @@ class VideoDataset(data.Dataset):
                 if is_image_file:
                     try:
                         img_pil = Image.open(record.path).convert('RGB')
+                        last_valid_img = img_pil
                     except Exception as e:
-                        img_pil = Image.new('RGB', (self.image_size, self.image_size))
+                        img_pil = last_valid_img if last_valid_img is not None else Image.new('RGB', (self.image_size, self.image_size))
                 elif is_video_file:
                     gap = p - current_frame_idx
                     if gap == 1:
@@ -559,14 +593,16 @@ class VideoDataset(data.Dataset):
                     if ret:
                         img_cv_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         img_pil = Image.fromarray(img_cv_rgb)
+                        last_valid_img = img_pil
                     else:
-                        img_pil = Image.new('RGB', (self.image_size, self.image_size))
+                        img_pil = last_valid_img if last_valid_img is not None else Image.new('RGB', (self.image_size, self.image_size))
                 else:
                     img_path = video_frames_path[p]
                     try:
                         img_pil = Image.open(img_path).convert('RGB')
+                        last_valid_img = img_pil
                     except:
-                        img_pil = Image.new('RGB', (self.image_size, self.image_size))
+                        img_pil = last_valid_img if last_valid_img is not None else Image.new('RGB', (self.image_size, self.image_size))
 
                 # 2. Key Lookup Strategy for Bounding Box
                 rel_path = record.path.replace('./', '').replace('\\', '/')

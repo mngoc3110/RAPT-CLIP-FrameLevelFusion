@@ -315,6 +315,8 @@ def evaluate_emotic_map(test_loader, model, device, class_names, log_txt_path):
     ap_scores = []
     import json
     thresholds_file = os.path.join(os.path.dirname(log_txt_path), "emotic_thresholds.json")
+    if not os.path.exists(thresholds_file):
+        thresholds_file = os.path.join(os.path.dirname(log_txt_path), "emotic_threshold.json")
     loaded_thresholds = {}
     if os.path.exists(thresholds_file):
         try:

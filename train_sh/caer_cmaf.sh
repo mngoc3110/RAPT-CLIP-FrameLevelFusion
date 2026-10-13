@@ -26,24 +26,31 @@ if [ ! -d "$DATA_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
   fi
 fi
-# Preprocess body bounding boxes if dataset body.json is empty ({})
-BODY_BOX="${DATA_DIR}/body.json"
+# Detect bounding box files (prefer Version 3 100% full coverage files)
+FACE_BOX="${DATA_DIR}/face_boxes.json"
+if [ ! -f "$FACE_BOX" ]; then
+  FACE_BOX="${DATA_DIR}/face.json"
+fi
+
+BODY_BOX="${DATA_DIR}/body_boxes.json"
 if [ ! -f "$BODY_BOX" ] || [ $(wc -c < "$BODY_BOX" 2>/dev/null || echo 0) -lt 100 ]; then
   GENERATED_BODY="/kaggle/working/caer_body_boxes.json"
   if [ ! -f "$GENERATED_BODY" ]; then
-    echo "=> [Preprocessing] Dataset body.json is empty ({}) or missing."
+    echo "=> [Preprocessing] Dataset body.json is empty or missing."
     echo "=> Generating high-precision temporally-smoothed Body Bounding Boxes..."
     python tools/generate_caer_body_boxes.py \
-      --face-json "${DATA_DIR}/face.json" \
+      --face-json "${FACE_BOX}" \
       --output "$GENERATED_BODY"
   fi
   BODY_BOX="$GENERATED_BODY"
 fi
-echo "=> Using Body bounding box path: $BODY_BOX"
+
+echo "=> Using Face BBox path: $FACE_BOX"
+echo "=> Using Body BBox path: $BODY_BOX"
 
 python -u main.py \
   --mode train \
-  --exper-name CAER-CMAF \
+  --exper-name CAER-FrameLevelFusion \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
@@ -56,7 +63,7 @@ python -u main.py \
   --val-annotation "${DATA_DIR}/validation.txt" \
   --test-annotation "${DATA_DIR}/test.txt" \
   --clip-path ViT-B/16 \
-  --bounding-box-face "${DATA_DIR}/face.json" \
+  --bounding-box-face "${FACE_BOX}" \
   --bounding-box-body "${BODY_BOX}" \
   \
   --fusion-type cmaf \
@@ -64,7 +71,6 @@ python -u main.py \
   --temporal-layers 1 \
   --use-context \
   --crop-body \
-  --mask-context-face \
   \
   --optimizer AdamW \
   --lr 2e-5 \
@@ -76,8 +82,10 @@ python -u main.py \
   --gamma 0.1 \
   \
   --loss-type ldam \
-  --ldam-s 1.0 \
+  --ldam-s 30.0 \
   --ldam-max-m 0.5 \
+  --use-weighted-sampler \
+  --label-smoothing 0.05 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
@@ -92,9 +100,10 @@ python -u main.py \
   --class-token-position end \
   --class-specific-contexts True \
   --load_and_tune_prompt_learner True \
-  --num-segments 8 \
+  --num-segments 16 \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \
   --drop-path-rate 0.1 \
+  --modality-dropout 0.3 \
   --use-amp

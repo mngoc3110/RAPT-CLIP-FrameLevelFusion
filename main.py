@@ -130,6 +130,7 @@ model_group = parser.add_argument_group('Model & Input', 'Parameters for model a
 model_group.add_argument('--text-type', default='prompt_ensemble', choices=['class_names', 'class_names_with_context', 'class_descriptor', 'prompt_ensemble', 'au_guided_prompts'], help='Type of text prompts to use.')
 model_group.add_argument('--temporal-layers', type=int, default=1, help='Number of layers in the temporal modeling part.')
 model_group.add_argument('--no-temporal', action='store_true', help='Bypass temporal modeling (automatically bypassed for image datasets like EMOTIC).')
+model_group.add_argument('--use-temporal', action='store_true', help='Force temporal modeling even for image datasets (required for legacy EMOTIC checkpoints).')
 model_group.add_argument('--contexts-number', type=int, default=8, help='Number of context vectors in the prompt learner.')
 model_group.add_argument('--ctx-init', type=str, default='', help='Text prompt used to semantically initialize context vectors in PromptLearner (e.g. "a video of a student in a classroom").')
 model_group.add_argument('--class-token-position', type=str, default="end", help='Position of the class token in the prompt.')
@@ -441,6 +442,31 @@ def run_training(args: argparse.Namespace) -> None:
     early_stop_patience = getattr(args, 'early_stopping_patience', 0)
     no_improve_count = 0
     
+    # Pre-flight Verification Check (verify 1 batch from train_loader)
+    print("\n" + "=" * 60)
+    print("🔍 [PRE-FLIGHT DATA & MODALITY VERIFICATION]")
+    try:
+        sample_batch = next(iter(train_loader))
+        if len(sample_batch) == 4:
+            s_body, s_face, s_context, s_label = sample_batch
+            print(f"  • Face Stream Tensor:    {s_face.shape} | mean: {s_face.float().mean():.4f} (std: {s_face.float().std():.4f})")
+            print(f"  • Body Stream Tensor:    {s_body.shape} | mean: {s_body.float().mean():.4f} (std: {s_body.float().std():.4f})")
+            print(f"  • Context Stream Tensor: {s_context.shape} | mean: {s_context.float().mean():.4f} (std: {s_context.float().std():.4f})")
+            print(f"  • Label Tensor:          {s_label.shape} | sample values: {s_label[:4].tolist()}")
+            
+            if s_face.float().std() < 1e-4 or s_body.float().std() < 1e-4:
+                print("  ⚠️ CẢNH BÁO: Face hoặc Body có độ lệch chuẩn gần 0 (nghi ngờ bị ảnh đen). Vui lòng kiểm tra BBox!")
+            else:
+                print("  ✅ KIỂM TRA ĐẠT: Cả 3 luồng dữ liệu đều chứa tín hiệu ảnh hợp lệ, không bị đen xì!")
+            
+            if args.dataset in ['CAER', 'CAER-S', 'CAER_S']:
+                print(f"  • Tiêu chuẩn tối ưu: WAR (Overall Accuracy) - Chuẩn so sánh SOTA cho bộ CAER")
+            else:
+                print(f"  • Tiêu chuẩn tối ưu: UAR (Balanced Accuracy) - Chuẩn so sánh cho bộ {args.dataset}")
+    except Exception as e:
+        print(f"  ℹ️ Pre-flight batch verification skipped: {e}")
+    print("=" * 60 + "\n")
+
     for epoch in range(start_epoch, args.epochs):
         inf = f'******************** Epoch: {epoch} ********************'
         start_time = time.time()
@@ -462,18 +488,24 @@ def run_training(args: argparse.Namespace) -> None:
         trainer.scheduler.step()
 
         # Save checkpoint
-        is_best = val_uar > best_val_uar
+        if args.dataset in ['CAER', 'CAER-S', 'CAER_S']:
+            is_best = val_war > best_val_war
+        else:
+            is_best = val_uar > best_val_uar
         best_val_uar = max(val_uar, best_val_uar)
         best_val_war = max(val_war, best_val_war)
         best_train_uar = max(train_uar, best_train_uar)
         best_train_war = max(train_war, best_train_war)
+
+        eval_metric_name = "WAR" if args.dataset in ['CAER', 'CAER-S', 'CAER_S'] else "UAR"
+        best_metric_val = best_val_war if args.dataset in ['CAER', 'CAER-S', 'CAER_S'] else best_val_uar
 
         summary_msg = (
             f"\n============================================================\n"
             f"📊 [EPOCH {epoch} SUMMARY]\n"
             f"  • Train: Loss = {train_los:.4f} | WAR = {train_war:.2f}% | UAR = {train_uar:.2f}%\n"
             f"  • Valid: Loss = {val_los:.4f}   | WAR = {val_war:.2f}%   | UAR = {val_uar:.2f}%\n"
-            f"  • Best Valid UAR: {best_val_uar:.2f}% {'(NEW BEST! 🏆)' if is_best else ''}\n"
+            f"  • Best Valid {eval_metric_name}: {best_metric_val:.2f}% {'(NEW BEST! 🏆)' if is_best else ''}\n"
             f"============================================================\n"
         )
         print(summary_msg)
@@ -484,7 +516,7 @@ def run_training(args: argparse.Namespace) -> None:
         save_checkpoint({
             'epoch': epoch + 1,
             'state_dict': trainer.model.state_dict(),
-            'best_acc': best_val_uar,
+            'best_acc': best_metric_val,
             'optimizer': trainer.optimizer.state_dict(),
             'scheduler': trainer.scheduler.state_dict(),
             'recorder': recorder
@@ -499,7 +531,7 @@ def run_training(args: argparse.Namespace) -> None:
             save_slim_checkpoint(
                 model=trainer.model,
                 path=best_checkpoint_path,
-                meta={'epoch': epoch + 1, 'best_acc': best_val_uar}
+                meta={'epoch': epoch + 1, 'best_acc': best_metric_val}
             )
             
             if hasattr(trainer, 'ema') and trainer.ema is not None:

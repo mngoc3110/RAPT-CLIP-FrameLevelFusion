@@ -130,9 +130,13 @@ class GenerateModel(nn.Module):
 
         # Determine whether temporal modeling is needed:
         # Bypassed for static image datasets (e.g. EMOTIC, CAER-S) or when --no-temporal is set or temporal_layers == 0.
-        self.use_temporal = not (getattr(args, 'dataset', '') in ['EMOTIC', 'CAER-S', 'CAER_S'] or 
-                                 getattr(args, 'no_temporal', False) or 
-                                 getattr(args, 'temporal_layers', 1) == 0)
+        # Explicit --use-temporal forces temporal modeling (required for legacy checkpoints trained with unified_temporal_net).
+        if getattr(args, 'use_temporal', False):
+            self.use_temporal = True
+        else:
+            self.use_temporal = not (getattr(args, 'dataset', '') in ['EMOTIC', 'CAER-S', 'CAER_S'] or 
+                                     getattr(args, 'no_temporal', False) or 
+                                     getattr(args, 'temporal_layers', 1) == 0)
 
         # Fusion Stage: 'frame' (CMAF before Temporal, Default SOTA) vs 'video' (Temporal before CMAF)
         self.fusion_stage = getattr(args, 'fusion_stage', 'frame')
