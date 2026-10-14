@@ -242,10 +242,10 @@ def computer_uar_war(val_loader, model, device, class_names, log_confusion_matri
     war = 100. * correct / len(val_loader.dataset)
     
 
-    _confusion_matrix = confusion_matrix(all_targets.numpy(), all_predicted.numpy())
+    _confusion_matrix = confusion_matrix(all_targets.numpy(), all_predicted.numpy(), labels=range(len(class_names)))
     np.set_printoptions(precision=4)
 
-    class_recall = _confusion_matrix.diagonal() / _confusion_matrix.sum(axis=1)
+    class_recall = _confusion_matrix.diagonal() / np.maximum(_confusion_matrix.sum(axis=1), 1)
     class_recall[np.isnan(class_recall)] = 0 
     uar = np.mean(class_recall) * 100.0
 

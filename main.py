@@ -491,6 +491,13 @@ def run_training(args: argparse.Namespace) -> None:
         trainer.scheduler.step()
 
         # Save checkpoint
+        warmup_limit = getattr(args, 'mi_warmup', 3)
+        # Reset best metric when exiting warmup so early un-converged epochs don't hijack model_best
+        if epoch == warmup_limit and warmup_limit > 0:
+            print(f"=> Warmup completed at epoch {epoch}. Resetting best tracking for converged training.")
+            best_val_score = 0.0
+            best_val_uar = 0.0
+
         if args.dataset in ['CAER', 'CAER-S', 'CAER_S', 'DAiSEE']:
             # Harmonized Balanced Score (Harmonic Mean) to maximize BOTH WAR and UAR simultaneously
             val_score = (2.0 * val_war * val_uar) / (val_war + val_uar + 1e-6)
@@ -577,7 +584,7 @@ def run_training(args: argparse.Namespace) -> None:
             f.write(log_msg + '\n\n')
 
     # Final evaluation with best model (load slim checkpoint)
-    print("=> Final evaluation on test set...")
+    print("\n=> Final evaluation on test set (with BEST validation checkpoint: model_best.pth)...")
     load_slim_checkpoint(model, best_checkpoint_path, device=args.device)
     if args.dataset == 'EMOTIC':
         evaluate_emotic_map(
@@ -595,8 +602,32 @@ def run_training(args: argparse.Namespace) -> None:
             class_names=class_names,
             log_confusion_matrix_path=log_confusion_matrix_path,
             log_txt_path=log_txt_path,
-            title=f"Confusion Matrix on {args.dataset} Test Set"
+            title=f"Confusion Matrix on {args.dataset} (Best Val Ckpt)"
         )
+
+    # Also evaluate the last epoch model (model.pth) to verify post-warmup convergence
+    if os.path.exists(checkpoint_path):
+        print("\n=> Final evaluation on test set (with LAST epoch checkpoint: model.pth)...")
+        load_slim_checkpoint(model, checkpoint_path, device=args.device)
+        last_cm_path = os.path.join(args.output_path, 'confusion_matrix_last_epoch.png')
+        if args.dataset == 'EMOTIC':
+            evaluate_emotic_map(
+                test_loader=test_loader,
+                model=model,
+                device=args.device,
+                class_names=class_names,
+                log_txt_path=log_txt_path,
+            )
+        else:
+            computer_uar_war(
+                val_loader=test_loader,
+                model=model,
+                device=args.device,
+                class_names=class_names,
+                log_confusion_matrix_path=last_cm_path,
+                log_txt_path=log_txt_path,
+                title=f"Confusion Matrix on {args.dataset} (Last Epoch Ckpt)"
+            )
 
 def run_eval(args: argparse.Namespace) -> None:
     print("=> Starting evaluation mode...")
