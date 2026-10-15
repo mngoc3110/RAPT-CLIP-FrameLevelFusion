@@ -68,7 +68,26 @@ echo "=> File Face BBox:        ${FACE_BOX}"
 echo "=> File Body BBox:        ${BODY_BOX}"
 echo "=> Thư mục CSVs đã đổi đường dẫn: ${ANNOTATION_DIR}/converted_csvs/"
 
-# 3. Khởi chạy huấn luyện RAPT-CLIP
+# 3. Nạp đường dẫn Checkpoint để Resume
+RESUME_PATH="/kaggle/input/models/mngochocsupham/caers/tensorflow2/default/1/CAER-S-model.pth"
+
+# Cho phép ghi đè đường dẫn nếu truyền qua tham số dòng lệnh $1
+if [ -n "$1" ]; then
+  RESUME_PATH="$1"
+elif [ ! -f "$RESUME_PATH" ]; then
+  # Fallback nếu chạy test ở local hoặc cấu trúc thư mục Kaggle khác
+  for cp in "outputs/CAER-S/CAER-S-model.pth" "outputs/CAER-S/model_best.pth" "/kaggle/input/caers/tensorflow2/default/1/CAER-S-model.pth" "/kaggle/working/outputs/CAER-S-CMAF/model.pth"; do
+    if [ -f "$cp" ]; then
+      RESUME_PATH="$cp"
+      break
+    fi
+  done
+fi
+
+echo "=> [Resume] Sử dụng checkpoint: ${RESUME_PATH}"
+RESUME_ARG=("--resume" "${RESUME_PATH}")
+
+# 4. Khởi chạy huấn luyện RAPT-CLIP
 python -u main.py \
   --mode train \
   --exper-name CAER-S-CMAF \
@@ -87,6 +106,7 @@ python -u main.py \
   --clip-path ViT-B/16 \
   --bounding-box-face "${FACE_BOX}" \
   --bounding-box-body "${BODY_BOX}" \
+  "${RESUME_ARG[@]}" \
   \
   --fusion-type cmaf \
   --fusion-stage frame \
