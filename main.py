@@ -133,6 +133,7 @@ model_group.add_argument('--text-type', default='prompt_ensemble', choices=['cla
 model_group.add_argument('--temporal-layers', type=int, default=1, help='Number of layers in the temporal modeling part.')
 model_group.add_argument('--no-temporal', action='store_true', help='Bypass temporal modeling (automatically bypassed for image datasets like EMOTIC).')
 model_group.add_argument('--use-temporal', action='store_true', help='Force temporal modeling even for image datasets (required for legacy EMOTIC checkpoints).')
+model_group.add_argument('--temporal-pooling', type=str, default='attn', choices=['attn', 'mean', 'cls'], help='Temporal token pooling method: attn (Attention Pooling, default SOTA), mean (Mean Pooling), or cls (CLS token).')
 model_group.add_argument('--contexts-number', type=int, default=8, help='Number of context vectors in the prompt learner.')
 model_group.add_argument('--ctx-init', type=str, default='', help='Text prompt used to semantically initialize context vectors in PromptLearner (e.g. "a video of a student in a classroom").')
 model_group.add_argument('--class-token-position', type=str, default="end", help='Position of the class token in the prompt.')

@@ -142,6 +142,9 @@ class GenerateModel(nn.Module):
         self.fusion_stage = getattr(args, 'fusion_stage', 'frame')
         print(f"=> Fusion Stage: {self.fusion_stage}")
 
+        temporal_pooling = getattr(args, 'temporal_pooling', 'attn')
+        print(f"=> Temporal Pooling: {temporal_pooling}")
+
         if not self.use_temporal:
             print("=> Static Image Dataset (EMOTIC / no-temporal): Bypassing Temporal Transformer.")
             self.temporal_net_face = None
@@ -151,38 +154,38 @@ class GenerateModel(nn.Module):
         elif self.fusion_stage == 'video':
             # Video-level fusion: Separate Temporal Transformers operate on individual streams first (512-d)
             self.temporal_net_face = Temporal_Transformer_AttnPool(
-                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                pooling=temporal_pooling
             )
             self.temporal_net_body = Temporal_Transformer_AttnPool(
-                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                pooling=temporal_pooling
             )
             if self.use_context:
                 self.temporal_net_context = Temporal_Transformer_AttnPool(
-                    num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                    num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                    pooling=temporal_pooling
                 )
         elif self.fusion_stage == 'parallel':
             # [Ablation: parallel] CMAF per-frame (decoupled, no concat) → 3 stream-specific Temporal → video-level concat
-            # Rationale: each modality cross-attends to others PER FRAME to absorb cross-modal context,
-            #   then learns its OWN temporal dynamics independently (not forced to share a unified temporal net).
-            # Contrast with 'frame': CMAF → concat immediately → 1 unified Temporal (shared temporal attention)
-            # Contrast with 'video': NO CMAF at frame-level; Temporal first → CMAF at video-level only
-            # Expected gain: stream-specific temporal attention pools (face: micro-expression keyframes;
-            #   body: posture trend; context: scene change) → richer video-level representation.
-            # Note: same #params as 'video' stage, but features are cross-modal-enriched before temporal.
             self.temporal_net_face = Temporal_Transformer_AttnPool(
-                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                pooling=temporal_pooling
             )
             self.temporal_net_body = Temporal_Transformer_AttnPool(
-                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                pooling=temporal_pooling
             )
             if self.use_context:
                 self.temporal_net_context = Temporal_Transformer_AttnPool(
-                    num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                    num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                    pooling=temporal_pooling
                 )
         else:
             # Frame-level fusion: Unified Temporal Transformer operates on fused multi-modal frames (1536-d or 1024-d)
             self.unified_temporal_net = Temporal_Transformer_AttnPool(
-                num_patches=16, input_dim=in_dim, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                num_patches=16, input_dim=in_dim, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64,
+                pooling=temporal_pooling
             )
 
         # Store clip_model_ as a plain Python attribute (NOT an nn.Module submodule).

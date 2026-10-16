@@ -82,47 +82,62 @@ class Transformer(nn.Module):
         return x
     
 class Temporal_Transformer_AttnPool(nn.Module):
-    def __init__(self, num_patches, input_dim, depth, heads, mlp_dim, dim_head):
+    def __init__(self, num_patches, input_dim, depth, heads, mlp_dim, dim_head, pooling='attn'):
         super().__init__()
         dropout = 0.1
         self.num_patches = num_patches
         self.input_dim = input_dim
+        self.pooling = pooling  # 'attn', 'mean', or 'cls'
         
         # Position embeddings for frame tokens
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, input_dim))
+        if self.pooling == 'cls':
+            self.cls_token = nn.Parameter(torch.randn(1, 1, input_dim))
+            self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, input_dim))
+        else:
+            self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, input_dim))
+            
         self.temporal_transformer = Transformer(input_dim, depth, heads, dim_head, mlp_dim, dropout)
         
-        # Attention Pooling layers
-        self.attention_pool = nn.Sequential(
-            nn.Linear(input_dim, mlp_dim // 2),
-            nn.Tanh(),
-            nn.Linear(mlp_dim // 2, 1)
-        )
-        
-        # Initialize attention pool weights
-        for m in self.attention_pool.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
+        # Attention Pooling layers (only instantiated if pooling == 'attn')
+        if self.pooling == 'attn':
+            self.attention_pool = nn.Sequential(
+                nn.Linear(input_dim, mlp_dim // 2),
+                nn.Tanh(),
+                nn.Linear(mlp_dim // 2, 1)
+            )
+            
+            # Initialize attention pool weights
+            for m in self.attention_pool.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.xavier_uniform_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        # x shape: (batch_size, num_segments, input_dim) -> (B, 16, 512)
+        # x shape: (batch_size, num_segments, input_dim) -> (B, 16, input_dim)
         b, n, d = x.shape
+        
+        if self.pooling == 'cls':
+            cls_tokens = self.cls_token.expand(b, -1, -1)
+            x = torch.cat((cls_tokens, x), dim=1) # (B, n+1, d)
+            x = x + self.pos_embedding[:, :(n + 1)]
+            x = self.temporal_transformer(x)
+            return x[:, 0] # (B, d)
         
         # Add positional embedding to all frame tokens
         x = x + self.pos_embedding[:, :n]
+        x = self.temporal_transformer(x) # (B, 16, input_dim)
         
-        # Process through Transformer layers
-        x = self.temporal_transformer(x) # (B, 16, 512)
+        if self.pooling == 'mean':
+            return x.mean(dim=1) # (B, input_dim)
         
         # Compute attention scores for each frame
-        # (B, 16, 512) -> (B, 16, 1)
+        # (B, 16, input_dim) -> (B, 16, 1)
         attn_weights = self.attention_pool(x)
         attn_weights = torch.softmax(attn_weights, dim=1) # Normalize over 16 frames
         
-        # Weighted sum: (B, 1, 16) @ (B, 16, 512) -> (B, 1, 512)
+        # Weighted sum: (B, 1, 16) @ (B, 16, input_dim) -> (B, 1, input_dim)
         pooled_x = torch.bmm(attn_weights.transpose(1, 2), x)
-        pooled_x = pooled_x.squeeze(1) # (B, 512)
+        pooled_x = pooled_x.squeeze(1) # (B, input_dim)
         
         return pooled_x

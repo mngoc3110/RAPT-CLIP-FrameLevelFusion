@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# RAER Ablation Training Script — Video-Level Fusion (Temporal before CMAF)
+# RAER Ablation: VIDEO-LEVEL FUSION (Temporal before CMAF)
 # ============================================================================
 # Architectural Ablation:
 #   Instead of Frame-Level Fusion (CMAF at each frame -> Unified Temporal),
@@ -9,16 +9,21 @@
 #     2. CMAF applied across the resulting video-level vectors
 #     3. Projection to 512-d CLIP embedding space
 #
-# All other hyperparameters (LDAM, MI/DC, lr, sampler, batch_size=2) are IDENTICAL
-# to RAER-FrameLevelFusion-[06-07]-[03:06] to isolate the architectural impact.
-# ============================================================================
+# All other hyperparameters are IDENTICAL to RAER-FrameLevelFusion baseline.
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
 
+# Auto-detect Bounding Box paths (Local vs Kaggle)
+FACE_BOX="RAER/bounding_box/face.json"
+[ ! -f "$FACE_BOX" ] && FACE_BOX="/kaggle/input/datasets/bearmn/raer-video-emotion-dataset/RAER/bounding_box/face.json"
+
+BODY_BOX="RAER/bounding_box/body.json"
+[ ! -f "$BODY_BOX" ] && BODY_BOX="/kaggle/input/datasets/bearmn/raer-video-emotion-dataset/RAER/bounding_box/body.json"
+
 python main.py \
   --mode train \
-  --exper-name RAER-VideoLevelFusion \
+  --exper-name Ablation-RAER-VideoLevelFusion \
   --dataset RAER \
   --gpu 0 \
   --workers 2 \
@@ -28,8 +33,8 @@ python main.py \
   --val-annotation /kaggle/input/datasets/bearmn/raer-annot/annotation/test.txt \
   --test-annotation /kaggle/input/datasets/bearmn/raer-annot/annotation/test.txt \
   --clip-path ViT-B/16 \
-  --bounding-box-face RAER/bounding_box/face.json \
-  --bounding-box-body RAER/bounding_box/body.json \
+  --bounding-box-face "$FACE_BOX" \
+  --bounding-box-body "$BODY_BOX" \
   --epochs 20 \
   --batch-size 2 \
   --print-freq 50 \

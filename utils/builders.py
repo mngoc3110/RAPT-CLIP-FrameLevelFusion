@@ -227,6 +227,26 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
                 args.root_dir = detected_dir
                 print(f"=> [Auto-Recovered] Updated root_dir to: {args.root_dir}")
 
+    # Auto-resolve bounding box paths if specified relative or not directly found
+    for bbox_attr in ['bounding_box_face', 'bounding_box_body']:
+        bbox_path = getattr(args, bbox_attr, None)
+        if bbox_path and not os.path.exists(bbox_path):
+            candidates = [
+                os.path.join(args.root_dir, bbox_path),
+                os.path.join(args.root_dir, 'RAER', bbox_path),
+                os.path.join(args.root_dir, 'bounding_box', os.path.basename(bbox_path)),
+                os.path.join(args.root_dir, 'RAER', 'bounding_box', os.path.basename(bbox_path)),
+                os.path.join('.', bbox_path),
+                os.path.join('.', 'RAER', bbox_path),
+                os.path.join('/kaggle/input/datasets/bearmn/raer-video-emotion-dataset', bbox_path),
+                os.path.join('/kaggle/input/datasets/bearmn/raer-video-emotion-dataset/RAER', bbox_path),
+            ]
+            for cand in candidates:
+                if os.path.exists(cand):
+                    setattr(args, bbox_attr, cand)
+                    print(f"=> [Auto-Recovered] Found {bbox_attr} at: {cand}")
+                    break
+
     mask_context_face = getattr(args, 'mask_context_face', False)
     daisee_merge_low = getattr(args, 'daisee_merge_low', False)
     if mask_context_face:
