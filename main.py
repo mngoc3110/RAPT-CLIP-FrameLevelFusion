@@ -151,7 +151,7 @@ model_group.add_argument('--freeze-image-encoder', action='store_true', help='Fr
 model_group.add_argument('--ablation-no-text', action='store_true', help='Use Visual-Only ablation architecture.')
 model_group.add_argument('--modality-dropout', type=float, default=0.3, help='Modality Dropout probability.')
 model_group.add_argument('--fusion-type', type=str, default='cmaf', choices=['gfi', 'cmaf', 'cmaf_decoupled', 'q2l'], help='Fusion method: gfi (Gated Feature Integration) or cmaf (Cross-Modal Attention Fusion).')
-model_group.add_argument('--fusion-stage', type=str, default='frame', choices=['frame', 'video'], help='Stage of fusion: frame (Frame-Level Fusion: CMAF before Temporal Transformer, SOTA) or video (Video-Level Fusion: Temporal Transformer before CMAF).')
+model_group.add_argument('--fusion-stage', type=str, default='frame', choices=['frame', 'video', 'parallel'], help='Stage of fusion: frame (Frame-Level Fusion: CMAF before Temporal, SOTA) | video (Temporal first → CMAF at video-level) | parallel (Ablation: CMAF per-frame decoupled → 3 parallel Temporal → video-level concat).')
 model_group.add_argument('--use-context', action='store_true', help='Enable context stream (Triple Stream: Face, Body, Context).')
 model_group.add_argument('--mask-context-face', action='store_true', help='Mask out face region in Context Stream to prevent shortcut face leakage (CAER-S SOTA).')
 model_group.add_argument('--daisee-merge-low', action='store_true', help='Merge DAiSEE Very Low (34 clips) and Low (213 clips) into Low Engagement (3-class SOTA).')
