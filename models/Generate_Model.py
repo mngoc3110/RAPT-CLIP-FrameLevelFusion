@@ -160,6 +160,25 @@ class GenerateModel(nn.Module):
                 self.temporal_net_context = Temporal_Transformer_AttnPool(
                     num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
                 )
+        elif self.fusion_stage == 'parallel':
+            # [Ablation: parallel] CMAF per-frame (decoupled, no concat) → 3 stream-specific Temporal → video-level concat
+            # Rationale: each modality cross-attends to others PER FRAME to absorb cross-modal context,
+            #   then learns its OWN temporal dynamics independently (not forced to share a unified temporal net).
+            # Contrast with 'frame': CMAF → concat immediately → 1 unified Temporal (shared temporal attention)
+            # Contrast with 'video': NO CMAF at frame-level; Temporal first → CMAF at video-level only
+            # Expected gain: stream-specific temporal attention pools (face: micro-expression keyframes;
+            #   body: posture trend; context: scene change) → richer video-level representation.
+            # Note: same #params as 'video' stage, but features are cross-modal-enriched before temporal.
+            self.temporal_net_face = Temporal_Transformer_AttnPool(
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+            )
+            self.temporal_net_body = Temporal_Transformer_AttnPool(
+                num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+            )
+            if self.use_context:
+                self.temporal_net_context = Temporal_Transformer_AttnPool(
+                    num_patches=16, input_dim=512, depth=args.temporal_layers, heads=8, mlp_dim=1024, dim_head=64
+                )
         else:
             # Frame-level fusion: Unified Temporal Transformer operates on fused multi-modal frames (1536-d or 1024-d)
             self.unified_temporal_net = Temporal_Transformer_AttnPool(
@@ -318,6 +337,40 @@ class GenerateModel(nn.Module):
                 
                 video_features = self.project_fc(fused_video)
                 video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
+            elif self.fusion_stage == 'parallel':
+                # [Ablation: parallel] ─────────────────────────────────────────────────────────────
+                # Step 1: Frame-level Cross-Attention (decoupled — NO concat yet)
+                #   Each modality cross-attends to others per frame to absorb cross-modal context,
+                #   but keeps its own 512-d representation (return_decoupled=True).
+                if self.use_context:
+                    face_out, body_out, ctx_out = self.cmaf(
+                        image_face_features, image_body_features, image_context_features,
+                        return_decoupled=True
+                    )  # each: (B*T, 512)
+                else:
+                    face_out, body_out = self.cmaf(
+                        image_face_features, image_body_features,
+                        return_decoupled=True
+                    )  # each: (B*T, 512)
+
+                # Step 2: Stream-specific Temporal Transformers (learn independent temporal dynamics)
+                #   face: focuses attention on micro-expression keyframes
+                #   body: focuses attention on posture/gesture trends across frames
+                #   context: focuses attention on scene-change moments
+                face_vid = self.temporal_net_face(face_out.contiguous().view(n, t, -1))   # (B, 512)
+                body_vid = self.temporal_net_body(body_out.contiguous().view(n, t, -1))   # (B, 512)
+
+                if self.use_context:
+                    ctx_vid = self.temporal_net_context(ctx_out.contiguous().view(n, t, -1))  # (B, 512)
+                    # Step 3: Video-level concat: 3 × 512 → 1536 → project_fc → 512
+                    fused = torch.cat([face_vid, body_vid, ctx_vid], dim=-1)
+                else:
+                    # Step 3: Video-level concat: 2 × 512 → 1024 → project_fc → 512
+                    fused = torch.cat([face_vid, body_vid], dim=-1)
+
+                video_features = self.project_fc(fused)
+                video_features = video_features / (video_features.norm(dim=-1, keepdim=True) + 1e-6)
+                # ─────────────────────────────────────────────────────────────────────────────────
             else:
                 # Frame-Level Fusion (Default SOTA): CMAF on each frame
                 if self.use_context:
