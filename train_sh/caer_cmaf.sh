@@ -17,13 +17,19 @@ export CUDA_VISIBLE_DEVICES=0
 export OPENCV_LOG_LEVEL=OFF
 export OPENCV_FFMPEG_LOGLEVEL=0
 
-# Exact Kaggle Dataset directory for CAER
+# 1. Tự động nhận diện thư mục video CAER trên Kaggle
 POSSIBLE_DIRS=(
+  "/kaggle/input/caer-video-dataset/CAER"
+  "/kaggle/input/caer-video-dataset"
+  "/kaggle/input/caer-dataset/CAER"
   "/kaggle/input/caer-dataset"
+  "/kaggle/input/caer-video/CAER"
   "/kaggle/input/caer-video"
-  "/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
-  "/kaggle/input/datasets/lcngtr/caer"
+  "/kaggle/input/caer/CAER"
   "/kaggle/input/caer"
+  "/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
+  "/Users/macbook/Downloads/RAPT-CLIP/CAER_Video"
+  "/Users/macbook/Downloads/RAPT-CLIP/CAER"
 )
 
 DATA_DIR=""
@@ -35,36 +41,58 @@ for d in "${POSSIBLE_DIRS[@]}"; do
 done
 
 if [ -z "$DATA_DIR" ]; then
-  # Fallback search if mounted under a custom slug/username path on Kaggle
-  DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "train.txt" 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null)
+  # Fallback: Tự động tìm thư mục chứa 'train/Anger'
+  DETECTED_DIR=$(find /kaggle/input -maxdepth 5 -type d -path "*/train/Anger" 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
   else
-    DATA_DIR="/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
+    DATA_DIR="/kaggle/input/caer-video-dataset/CAER"
   fi
-fi
-# Detect bounding box files (prefer Version 3 100% full coverage files)
-FACE_BOX="${DATA_DIR}/face_boxes.json"
-if [ ! -f "$FACE_BOX" ]; then
-  FACE_BOX="${DATA_DIR}/face.json"
 fi
 
-BODY_BOX="${DATA_DIR}/body_boxes.json"
-if [ ! -f "$BODY_BOX" ] || [ $(wc -c < "$BODY_BOX" 2>/dev/null || echo 0) -lt 100 ]; then
-  GENERATED_BODY="/kaggle/working/caer_body_boxes.json"
-  if [ ! -f "$GENERATED_BODY" ]; then
-    echo "=> [Preprocessing] Dataset body.json is empty or missing."
-    echo "=> Generating high-precision temporally-smoothed Body Bounding Boxes..."
-    python tools/generate_caer_body_boxes.py \
-      --face-json "${FACE_BOX}" \
-      --output "$GENERATED_BODY"
-  fi
-  BODY_BOX="$GENERATED_BODY"
+# Nếu DATA_DIR trỏ tới thư mục cha mà bên trong có folder CAER/
+if [ -d "${DATA_DIR}/CAER/train" ]; then
+  DATA_DIR="${DATA_DIR}/CAER"
 fi
 
 echo "=> Using CAER video dataset root: ${DATA_DIR}"
-echo "=> Using Face BBox path: $FACE_BOX"
-echo "=> Using Body BBox path: $BODY_BOX"
+
+# 2. Sử dụng Annotations và Bounding Boxes từ repo (đã tích hợp sẵn 100% video)
+ANNOTATION_DIR="annotations/caer_video"
+if [ ! -d "$ANNOTATION_DIR" ]; then
+  ANNOTATION_DIR="CAER_Video"
+fi
+
+TRAIN_TXT="${ANNOTATION_DIR}/train.txt"
+VAL_TXT="${ANNOTATION_DIR}/validation.txt"
+TEST_TXT="${ANNOTATION_DIR}/test.txt"
+
+# Fallback nếu DATA_DIR có sẵn file txt
+if [ ! -f "$TRAIN_TXT" ] && [ -f "${DATA_DIR}/train.txt" ]; then
+  TRAIN_TXT="${DATA_DIR}/train.txt"
+  VAL_TXT="${DATA_DIR}/validation.txt"
+  TEST_TXT="${DATA_DIR}/test.txt"
+fi
+
+FACE_BOX="${ANNOTATION_DIR}/face_boxes.json"
+if [ ! -f "$FACE_BOX" ] && [ -f "${DATA_DIR}/face_boxes.json" ]; then
+  FACE_BOX="${DATA_DIR}/face_boxes.json"
+elif [ ! -f "$FACE_BOX" ] && [ -f "${DATA_DIR}/face.json" ]; then
+  FACE_BOX="${DATA_DIR}/face.json"
+fi
+
+BODY_BOX="${ANNOTATION_DIR}/body_boxes.json"
+if [ ! -f "$BODY_BOX" ] && [ -f "${DATA_DIR}/body_boxes.json" ]; then
+  BODY_BOX="${DATA_DIR}/body_boxes.json"
+elif [ ! -f "$BODY_BOX" ]; then
+  BODY_BOX="${DATA_DIR}/body.json"
+fi
+
+echo "=> Train Annotation: $TRAIN_TXT"
+echo "=> Val Annotation:   $VAL_TXT"
+echo "=> Test Annotation:  $TEST_TXT"
+echo "=> Face BBox path:   $FACE_BOX"
+echo "=> Body BBox path:   $BODY_BOX"
 
 python -u main.py \
   --mode train \
@@ -78,9 +106,9 @@ python -u main.py \
   --seed 42 \
   --workers 4 \
   --root-dir "${DATA_DIR}" \
-  --train-annotation "${DATA_DIR}/train.txt" \
-  --val-annotation "${DATA_DIR}/validation.txt" \
-  --test-annotation "${DATA_DIR}/test.txt" \
+  --train-annotation "${TRAIN_TXT}" \
+  --val-annotation "${VAL_TXT}" \
+  --test-annotation "${TEST_TXT}" \
   --clip-path ViT-B/16 \
   --bounding-box-face "${FACE_BOX}" \
   --bounding-box-body "${BODY_BOX}" \
