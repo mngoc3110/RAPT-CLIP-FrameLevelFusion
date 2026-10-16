@@ -18,12 +18,29 @@ export OPENCV_LOG_LEVEL=OFF
 export OPENCV_FFMPEG_LOGLEVEL=0
 
 # Exact Kaggle Dataset directory for CAER
-DATA_DIR="/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
-if [ ! -d "$DATA_DIR" ]; then
+POSSIBLE_DIRS=(
+  "/kaggle/input/caer-dataset"
+  "/kaggle/input/caer-video"
+  "/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
+  "/kaggle/input/datasets/lcngtr/caer"
+  "/kaggle/input/caer"
+)
+
+DATA_DIR=""
+for d in "${POSSIBLE_DIRS[@]}"; do
+  if [ -d "$d" ]; then
+    DATA_DIR="$d"
+    break
+  fi
+done
+
+if [ -z "$DATA_DIR" ]; then
   # Fallback search if mounted under a custom slug/username path on Kaggle
   DETECTED_DIR=$(find /kaggle/input -maxdepth 4 -type f -name "train.txt" 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
+  else
+    DATA_DIR="/kaggle/input/datasets/bearmn/caers-dataset-rapt-clip"
   fi
 fi
 # Detect bounding box files (prefer Version 3 100% full coverage files)
@@ -45,12 +62,13 @@ if [ ! -f "$BODY_BOX" ] || [ $(wc -c < "$BODY_BOX" 2>/dev/null || echo 0) -lt 10
   BODY_BOX="$GENERATED_BODY"
 fi
 
+echo "=> Using CAER video dataset root: ${DATA_DIR}"
 echo "=> Using Face BBox path: $FACE_BOX"
 echo "=> Using Body BBox path: $BODY_BOX"
 
 python -u main.py \
   --mode train \
-  --exper-name CAER-FrameLevelFusion \
+  --exper-name CAER-Video-CMAF \
   --dataset CAER \
   --gpu 0 \
   --epochs 20 \
@@ -72,21 +90,19 @@ python -u main.py \
   --temporal-layers 1 \
   --use-context \
   --crop-body \
+  --mask-context-face \
   \
   --optimizer AdamW \
   --lr 2e-5 \
-  --lr-image-encoder 1e-6 \
+  --lr-image-encoder 1e-5 \
   --lr-prompt-learner 3e-4 \
   --lr-adapter 1e-4 \
   --weight-decay 0.005 \
   --milestones 10 15 \
   --gamma 0.1 \
   \
-  --loss-type ldam \
-  --ldam-s 1.0 \
-  --ldam-max-m 0.5 \
-  --use-weighted-sampler \
-  --label-smoothing 0.05 \
+  --loss-type ce \
+  --label-smoothing 0.1 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
