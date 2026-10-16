@@ -981,7 +981,7 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
             GroupRandomErasing(p=0.3, scale=(0.02, 0.15))
         ])
     elif dataset_name == "DAiSEE":
-        # DAiSEE: E-learning engagement videos (subtle lighting shifts, head tilt)
+        # DAiSEE: E-learning engagement videos (Normalized for CLIP ViT)
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
             RandomRotation(6),
@@ -989,6 +989,7 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
             GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
+            GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
             GroupRandomErasing(p=0.2, scale=(0.02, 0.1))
         ])
     elif dataset_name == "EMOTIC":
@@ -1030,7 +1031,7 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
 
 
 def test_data_loader(root_dir, list_file, num_segments, duration, image_size, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, dataset_name="", mask_context_face=False, daisee_merge_low=False):
-    if dataset_name in ["EMOTIC", "CAER", "CAER-S", "CAER_S"]:
+    if dataset_name in ["EMOTIC", "CAER", "CAER-S", "CAER_S", "DAiSEE"]:
         test_transform = torchvision.transforms.Compose([
             GroupResize(image_size),
             Stack(),
