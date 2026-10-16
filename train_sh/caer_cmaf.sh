@@ -49,6 +49,8 @@ done
 
 # 1. Tự động nhận diện thư mục Video CAER (Kaggle / Colab / Local)
 POSSIBLE_DATA_DIRS=(
+  "/kaggle/input/datasets/bearmn/caer-video-dataset/CAER"
+  "/kaggle/input/datasets/bearmn/caer-video-dataset"
   "/kaggle/input/caer-video-dataset/CAER"
   "/kaggle/input/caer-video-dataset"
   "/kaggle/input/caer-dataset/CAER"
@@ -72,14 +74,14 @@ done
 
 if [ -z "$DATA_DIR" ] && [ -d "/kaggle/input" ]; then
   # Fallback: Tự động tìm thư mục chứa 'train/Anger' hoặc 'test/Anger'
-  DETECTED_DIR=$(find /kaggle/input -maxdepth 5 -type d \( -name "Anger" -o -name "anger" \) 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null | xargs dirname 2>/dev/null)
+  DETECTED_DIR=$(find /kaggle/input -maxdepth 6 -type d \( -name "Anger" -o -name "anger" \) 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
     DATA_DIR="$DETECTED_DIR"
   fi
 fi
 
 if [ -z "$DATA_DIR" ]; then
-  DATA_DIR="/kaggle/input/caer-video-dataset/CAER"
+  DATA_DIR="/kaggle/input/datasets/bearmn/caer-video-dataset/CAER"
 fi
 
 # Nếu DATA_DIR trỏ tới thư mục cha mà bên trong có folder CAER/
@@ -91,8 +93,10 @@ echo "==========================================================================
 echo "=> [1/4] Thư mục CAER Video root: ${DATA_DIR}"
 
 # 2. Tự động nhận diện thư mục Annotation & Bounding Boxes
-# Ưu tiên dataset Kaggle mới mount: 'caer-video-annotation'
+# Ưu tiên dataset Kaggle: 'caer-video-annotation' của user 'traincollab'
 POSSIBLE_ANNOT_DIRS=(
+  "/kaggle/input/datasets/traincollab/caer-video-annotation"
+  "/kaggle/input/datasets/traincollab/caer-video-annotation/CAER-video-annotation"
   "/kaggle/input/caer-video-annotation"
   "/kaggle/input/caer-video-annotation/CAER-video-annotation"
   "/kaggle/input/caer-video-annotations"
@@ -107,16 +111,27 @@ POSSIBLE_ANNOT_DIRS=(
   "/Users/macbook/Downloads/RAPT-CLIP/annotations/caer_video"
 )
 
-ANNOTATION_DIR=""
-for d in "${POSSIBLE_ANNOT_DIRS[@]}"; do
-  if [ -d "$d" ] && { [ -f "$d/train.txt" ] || [ -f "$d/face_boxes.json" ] || [ -f "$d/face_boxes_mediapipe.json" ]; }; then
-    ANNOTATION_DIR="$d"
-    break
-  fi
-done
+# Thêm tất cả đường dẫn khớp wildcard nếu có
+if [ -d "/kaggle/input/datasets" ]; then
+  for d in /kaggle/input/datasets/*/caer-video-annotation*; do
+    if [ -d "$d" ]; then
+      POSSIBLE_ANNOT_DIRS=("$d" "${POSSIBLE_ANNOT_DIRS[@]}")
+    fi
+  done
+fi
+
+ANNOTATION_DIR="${ANNOTATION_DIR:-${ANNOT_DIR:-}}"
+if [ -z "$ANNOTATION_DIR" ]; then
+  for d in "${POSSIBLE_ANNOT_DIRS[@]}"; do
+    if [ -d "$d" ] && { [ -f "$d/train.txt" ] || [ -f "$d/body_boxes.json" ] || [ -f "$d/face_boxes_mediapipe.json" ] || [ -f "$d/face_boxes.json" ]; }; then
+      ANNOTATION_DIR="$d"
+      break
+    fi
+  done
+fi
 
 if [ -z "$ANNOTATION_DIR" ] && [ -d "/kaggle/input" ]; then
-  DETECTED_ANNOT=$(find /kaggle/input -maxdepth 4 -name "face_boxes*.json" 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
+  DETECTED_ANNOT=$(find /kaggle/input -maxdepth 8 \( -name "body_boxes.json" -o -name "face_boxes*.json" \) 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_ANNOT" ] && [ -d "$DETECTED_ANNOT" ]; then
     ANNOTATION_DIR="$DETECTED_ANNOT"
   fi
@@ -131,7 +146,6 @@ echo "=> [2/4] Thư mục Annotation root: ${ANNOTATION_DIR}"
 # 3. Chọn file Annotations (Train / Val / Test)
 TRAIN_TXT="${ANNOTATION_DIR}/${SPLIT_CHOICE}"
 if [ ! -f "$TRAIN_TXT" ]; then
-  # Fallbacks
   if [ -f "${ANNOTATION_DIR}/train.txt" ]; then
     TRAIN_TXT="${ANNOTATION_DIR}/train.txt"
   elif [ -f "${ANNOTATION_DIR}/train_balance.txt" ]; then
@@ -176,6 +190,8 @@ CANDIDATE_FACE_BOXES=(
   "${ANNOTATION_DIR}/face_boxes.json"
   "${ANNOTATION_DIR}/face_boxes_optimized.json"
   "${ANNOTATION_DIR}/face.json"
+  "/kaggle/input/datasets/traincollab/caer-video-annotation/face_boxes_mediapipe.json"
+  "/kaggle/input/datasets/traincollab/caer-video-annotation/face_boxes.json"
   "${DATA_DIR}/face_boxes_mediapipe.json"
   "${DATA_DIR}/face_boxes.json"
   "${DATA_DIR}/face.json"
@@ -195,6 +211,7 @@ BODY_BOX=""
 CANDIDATE_BODY_BOXES=(
   "${ANNOTATION_DIR}/body_boxes.json"
   "${ANNOTATION_DIR}/body.json"
+  "/kaggle/input/datasets/traincollab/caer-video-annotation/body_boxes.json"
   "${DATA_DIR}/body_boxes.json"
   "${DATA_DIR}/body.json"
   "CAER_Video/body_boxes.json"
