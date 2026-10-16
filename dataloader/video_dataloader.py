@@ -435,48 +435,113 @@ class VideoDataset(data.Dataset):
     
     def _read_sample(self):
         self.sample_list = []
+        if not os.path.exists(self.list_file):
+            print(f"[{self.dataset_name} {self.mode}] Warning: list_file not found: {self.list_file}")
+            return
+
         with open(self.list_file, 'r') as f:
-            for line in f:
-                parts = line.strip().split(' ')
-                if not parts or not parts[0]:
+            raw_lines = [l.strip() for l in f if l.strip()]
+
+        if not raw_lines:
+            return
+
+        # 1. Support DAiSEE direct CSV file (e.g., TrainLabels.csv, ValidationLabels.csv)
+        if self.dataset_name == 'DAiSEE' and (self.list_file.lower().endswith('.csv') or (raw_lines and ',' in raw_lines[0])):
+            for line in raw_lines:
+                cols = [p.strip() for p in line.split(',') if p.strip()]
+                if not cols or cols[0].lower().startswith(('clip', 'video', 'id')):
                     continue
-                if len(parts) == 2:
-                    # Case: [path, label] (e.g., EMOTIC / CAER-S images train.txt)
-                    p_path = parts[0]
-                    if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                            p_path = p_path[len('DAiSEE_data/'):]
-                    elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
-                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                            p_path = p_path[len('CAER/'):]
-                    self.sample_list.append([p_path, 1, parts[1]])
-                elif len(parts) == 6 and ',' in parts[1]:
-                    # Case: [path, label, x1, y1, x2, y2] (e.g., EMOTIC train_bbox.txt)
-                    self.sample_list.append([parts[0], 1, parts[1], parts[2], parts[3], parts[4], parts[5]])
-                elif len(parts) > 3:
-                    # Path contains spaces, join all parts except the last two
-                    p_path = ' '.join(parts[:-2])
-                    num_frames = parts[-2]
-                    label = parts[-1]
-                    if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                            p_path = p_path[len('DAiSEE_data/'):]
-                    elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
-                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                            p_path = p_path[len('CAER/'):]
-                    self.sample_list.append([p_path, num_frames, label])
-                else:
-                    # Case: [path, num_frames, label] (e.g., standard RAER / DAiSEE / CAER video)
-                    p_path = parts[0]
-                    num_frames = parts[1]
-                    label = parts[2]
-                    if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                            p_path = p_path[len('DAiSEE_data/'):]
-                    elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
-                        if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                            p_path = p_path[len('CAER/'):]
-                    self.sample_list.append([p_path, num_frames, label])
+                cid = cols[0]
+                eng = int(cols[3]) if len(cols) >= 4 else int(cols[1])
+                self.sample_list.append([cid, 300, eng])
+            return
+
+        # 2. Support DAiSEE raw text files with no inline label (e.g., Validation.txt, Train.txt)
+        first_tokens = raw_lines[0].split()
+        if self.dataset_name == 'DAiSEE' and len(first_tokens) == 1:
+            label_dict = {}
+            base_fname = os.path.basename(self.list_file).lower()
+            split_prefix = "Validation" if "val" in base_fname else ("Test" if "test" in base_fname else "Train")
+            
+            cand_csv_paths = [
+                os.path.join(self.root_dir, 'Labels', f'{split_prefix}Labels.csv'),
+                os.path.join(os.path.dirname(self.list_file), 'Labels', f'{split_prefix}Labels.csv'),
+                os.path.join(os.path.dirname(os.path.dirname(self.list_file)), 'Labels', f'{split_prefix}Labels.csv'),
+                os.path.join(self.root_dir, f'{split_prefix}Labels.csv'),
+                f'/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/Labels/{split_prefix}Labels.csv'
+            ]
+            
+            found_csv = None
+            for cp in cand_csv_paths:
+                if os.path.exists(cp):
+                    found_csv = cp
+                    break
+            
+            if found_csv is None and os.path.exists('/kaggle/input'):
+                for match in glob.glob(f'/kaggle/input/**/{split_prefix}Labels.csv', recursive=True):
+                    found_csv = match
+                    break
+
+            if found_csv and os.path.exists(found_csv):
+                print(f"[{self.dataset_name} {self.mode}] Auto-loaded labels from companion CSV: {found_csv}")
+                with open(found_csv, 'r') as cf:
+                    for cline in cf:
+                        cols = [p.strip() for p in cline.split(',') if p.strip()]
+                        if not cols or cols[0].lower().startswith(('clip', 'video', 'id')):
+                            continue
+                        c_id = os.path.splitext(cols[0])[0]
+                        c_eng = int(cols[3]) if len(cols) >= 4 else int(cols[1])
+                        label_dict[c_id] = c_eng
+                        label_dict[cols[0]] = c_eng
+            else:
+                print(f"[{self.dataset_name} {self.mode}] Notice: Companion {split_prefix}Labels.csv not found. Defaulting labels to 0.")
+
+            for line in raw_lines:
+                p_path = line.strip()
+                clip_base = os.path.splitext(os.path.basename(p_path))[0]
+                lbl = label_dict.get(clip_base, label_dict.get(p_path, 0))
+                self.sample_list.append([p_path, 300, lbl])
+            return
+
+        # 3. Standard multi-column space-separated parsing
+        for line in raw_lines:
+            parts = line.split(' ')
+            if not parts or not parts[0]:
+                continue
+            if len(parts) == 2:
+                # Case: [path, label]
+                p_path = parts[0]
+                if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
+                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                        p_path = p_path[len('DAiSEE_data/'):]
+                elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
+                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                        p_path = p_path[len('CAER/'):]
+                self.sample_list.append([p_path, 1, parts[1]])
+            elif len(parts) == 6 and ',' in parts[1]:
+                self.sample_list.append([parts[0], 1, parts[1], parts[2], parts[3], parts[4], parts[5]])
+            elif len(parts) > 3:
+                p_path = ' '.join(parts[:-2])
+                num_frames = parts[-2]
+                label = parts[-1]
+                if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
+                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                        p_path = p_path[len('DAiSEE_data/'):]
+                elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
+                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                        p_path = p_path[len('CAER/'):]
+                self.sample_list.append([p_path, num_frames, label])
+            else:
+                p_path = parts[0]
+                num_frames = parts[1]
+                label = parts[2]
+                if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
+                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                        p_path = p_path[len('DAiSEE_data/'):]
+                elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
+                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
+                        p_path = p_path[len('CAER/'):]
+                self.sample_list.append([p_path, num_frames, label])
 
     def _parse_list(self):
         # 

@@ -49,20 +49,25 @@ done
 
 # 1. Tự động nhận diện thư mục dữ liệu DAiSEE (Kaggle / Colab / Local)
 POSSIBLE_DATA_DIRS=(
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet"
+  "/kaggle/input/datasets/olgaparfenova/daisee"
   "/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data"
   "/kaggle/input/datasets/mngochocsupham/daisee"
   "/kaggle/input/daisee/DAiSEE_data"
+  "/kaggle/input/daisee/DAiSEE"
   "/kaggle/input/daisee"
   "/kaggle/input/DAiSEE_data"
   "/kaggle/input/DAiSEE"
   "DAiSEE/DAiSEE_data"
+  "DAiSEE/DataSet"
   "DAiSEE"
   "/Users/macbook/Downloads/RAPT-CLIP/DAiSEE"
 )
 
 # Thêm đường dẫn wildcard nếu có
 if [ -d "/kaggle/input/datasets" ]; then
-  for d in /kaggle/input/datasets/*/*daisee*/DAiSEE_data /kaggle/input/datasets/*/*daisee*; do
+  for d in /kaggle/input/datasets/*/*daisee*/DAiSEE /kaggle/input/datasets/*/*daisee*/DataSet /kaggle/input/datasets/*/*daisee*; do
     if [ -d "$d" ]; then
       POSSIBLE_DATA_DIRS=("$d" "${POSSIBLE_DATA_DIRS[@]}")
     fi
@@ -71,36 +76,84 @@ fi
 
 DATA_DIR=""
 for d in "${POSSIBLE_DATA_DIRS[@]}"; do
-  if [ -f "$d/daisee_train.txt" ] || [ -f "$d/train.txt" ]; then
+  if [ -f "$d/DataSet/Validation.txt" ] || [ -f "$d/Validation.txt" ] || [ -f "$d/daisee_train.txt" ] || [ -f "$d/train.txt" ] || [ -f "$d/Labels/TrainLabels.csv" ]; then
     DATA_DIR="$d"
     break
   fi
 done
 
 if [ -z "$DATA_DIR" ] && [ -d "/kaggle/input" ]; then
-  DETECTED_FILE=$(find /kaggle/input -maxdepth 8 \( -iname "daisee_train.txt" -o -iname "daisee_test.txt" \) 2>/dev/null | head -n 1)
+  DETECTED_FILE=$(find /kaggle/input -maxdepth 8 \( -iname "Validation.txt" -o -iname "daisee_train.txt" -o -iname "TrainLabels.csv" \) 2>/dev/null | head -n 1)
   if [ -n "$DETECTED_FILE" ]; then
-    DATA_DIR=$(dirname "$DETECTED_FILE")
+    DIRNAME=$(dirname "$DETECTED_FILE")
+    if [ "$(basename "$DIRNAME")" = "DataSet" ] || [ "$(basename "$DIRNAME")" = "Labels" ]; then
+      DATA_DIR=$(dirname "$DIRNAME")
+    else
+      DATA_DIR="$DIRNAME"
+    fi
   fi
 fi
 
 if [ -z "$DATA_DIR" ]; then
-  DATA_DIR="/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data"
+  DATA_DIR="/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE"
 fi
 
 echo "============================================================================"
 echo "=> [1/4] Thư mục DAiSEE root: ${DATA_DIR}"
 
 # 2. Nhận diện file Annotation (Train, Val, Test)
-TRAIN_TXT="$DATA_DIR/daisee_train.txt"
-[ ! -f "$TRAIN_TXT" ] && [ -f "$DATA_DIR/train.txt" ] && TRAIN_TXT="$DATA_DIR/train.txt"
+# Hỗ trợ cả DataSet/*.txt (tự động link Labels/*.csv) và daisee_*.txt
+TRAIN_TXT=""
+CANDIDATE_TRAIN=(
+  "$DATA_DIR/DataSet/Train.txt"
+  "$DATA_DIR/Train.txt"
+  "$DATA_DIR/daisee_train.txt"
+  "$DATA_DIR/train.txt"
+  "$DATA_DIR/Labels/TrainLabels.csv"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet/Train.txt"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/Labels/TrainLabels.csv"
+)
+for t in "${CANDIDATE_TRAIN[@]}"; do
+  if [ -f "$t" ]; then
+    TRAIN_TXT="$t"
+    break
+  fi
+done
 
-VAL_TXT="$DATA_DIR/daisee_val.txt"
-[ ! -f "$VAL_TXT" ] && [ -f "$DATA_DIR/val.txt" ] && VAL_TXT="$DATA_DIR/val.txt"
-[ ! -f "$VAL_TXT" ] && [ -f "$DATA_DIR/validation.txt" ] && VAL_TXT="$DATA_DIR/validation.txt"
+VAL_TXT=""
+CANDIDATE_VAL=(
+  "$DATA_DIR/DataSet/Validation.txt"
+  "$DATA_DIR/Validation.txt"
+  "$DATA_DIR/daisee_val.txt"
+  "$DATA_DIR/val.txt"
+  "$DATA_DIR/validation.txt"
+  "$DATA_DIR/Labels/ValidationLabels.csv"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet/Validation.txt"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/Labels/ValidationLabels.csv"
+)
+for v in "${CANDIDATE_VAL[@]}"; do
+  if [ -f "$v" ]; then
+    VAL_TXT="$v"
+    break
+  fi
+done
 
-TEST_TXT="$DATA_DIR/daisee_test.txt"
-[ ! -f "$TEST_TXT" ] && [ -f "$DATA_DIR/test.txt" ] && TEST_TXT="$DATA_DIR/test.txt"
+TEST_TXT=""
+CANDIDATE_TEST=(
+  "$DATA_DIR/DataSet/Test.txt"
+  "$DATA_DIR/Test.txt"
+  "$DATA_DIR/daisee_test.txt"
+  "$DATA_DIR/test.txt"
+  "$DATA_DIR/Labels/TestLabels.csv"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet/Test.txt"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/Labels/TestLabels.csv"
+)
+for s in "${CANDIDATE_TEST[@]}"; do
+  if [ -f "$s" ]; then
+    TEST_TXT="$s"
+    break
+  fi
+done
 
 echo "=> [2/4] File Danh Sách Dữ Liệu:"
 echo "   - Train: $TRAIN_TXT"
@@ -112,6 +165,7 @@ FACE_BBOX_PATH="none"
 POSSIBLE_BBOX=(
   "$DATA_DIR/daisee_face_bbox.json"
   "$DATA_DIR/face_bbox.json"
+  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/daisee_face_bbox.json"
   "/kaggle/working/daisee_face_bbox.json"
   "DAiSEE/daisee_face_bbox.json"
   "daisee_face_bbox.json"
