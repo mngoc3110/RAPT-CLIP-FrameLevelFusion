@@ -284,6 +284,30 @@ class MoCoRankLoss(nn.Module):
         loss = F.cross_entropy(logits, labels)
         return loss
 
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        if alpha is not None:
+            if not isinstance(alpha, torch.Tensor):
+                alpha = torch.tensor(alpha, dtype=torch.float32)
+            self.register_buffer('alpha', alpha)
+        else:
+            self.alpha = None
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        alpha = self.alpha.to(device=inputs.device, dtype=inputs.dtype) if self.alpha is not None else None
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=alpha)
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1.0 - pt) ** self.gamma) * ce_loss
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        return focal_loss
+
+
 class LDAMLoss(nn.Module):
     def __init__(self, cls_num_list, max_m=0.8, weight=None, s=30):
         super(LDAMLoss, self).__init__()

@@ -100,7 +100,8 @@ optim_group.add_argument('--gamma', type=float, default=0.1, help='Factor for le
 
 # --- Loss & Imbalance Handling ---
 loss_group = parser.add_argument_group('Loss & Imbalance Handling', 'Parameters for loss functions and imbalance handling')
-loss_group.add_argument('--loss-type', type=str, default='ce', choices=['ce', 'ldl', 'ldam', 'asl', 'discrete', 'dynamic_asl'], help='Type of primary classification loss.')
+loss_group.add_argument('--loss-type', type=str, default='ce', choices=['ce', 'ldl', 'ldam', 'asl', 'discrete', 'dynamic_asl', 'focal'], help='Type of primary classification loss.')
+loss_group.add_argument('--focal-gamma', type=float, default=2.0, help='Focusing parameter gamma for Focal Loss.')
 loss_group.add_argument('--lambda_mi', type=float, default=0.1, help='Weight for the Mutual Information loss.')
 loss_group.add_argument('--lambda_dc', type=float, default=0.1, help='Weight for the Decorrelation loss.')
 
@@ -296,6 +297,16 @@ def run_training(args: argparse.Namespace) -> None:
     elif args.use_ldl:
         print(f"=> Using SemanticLDLLoss (LDL) with temperature {args.ldl_temperature}")
         criterion = SemanticLDLLoss(temperature=args.ldl_temperature).to(args.device)
+    elif args.loss_type == 'focal':
+        focal_weight = None
+        if getattr(args, 'use_class_weight', False) and sum(cls_num_list) > 0:
+            counts = np.array(cls_num_list, dtype=np.float32)
+            raw_weights = (np.max(counts) / np.maximum(counts, 1.0)) ** 0.33
+            norm_weights = raw_weights / np.mean(raw_weights)
+            focal_weight = torch.tensor(norm_weights, dtype=torch.float32, device=args.device)
+            print(f"=> Using smoothed class weights for Focal Loss: {norm_weights.round(2).tolist()}")
+        print(f"=> Using Focal Loss with gamma={getattr(args, 'focal_gamma', 2.0)}")
+        criterion = FocalLoss(alpha=focal_weight, gamma=getattr(args, 'focal_gamma', 2.0)).to(args.device)
     elif args.loss_type == 'ldam':
         if sum(cls_num_list) > 0:
             ldam_weight = None
