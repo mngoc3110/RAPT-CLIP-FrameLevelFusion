@@ -219,6 +219,80 @@ def resolve_daisee_path(raw_path, root_dir, cached_rule=None):
     return os.path.join(root_dir, raw_path), None
 
 
+def resolve_caer_path(raw_path, root_dir, cached_rule=None):
+    """
+    Robustly resolves a CAER video or frame directory from an annotation line.
+    Handles nested 'CAER/', case differences (Anger vs anger), extensions (.avi vs .mp4 vs directory),
+    and Kaggle directory structure variations.
+    """
+    clean_p = raw_path.replace('\\', '/').strip('/')
+    while clean_p.startswith(('CAER/', './CAER/')):
+        clean_p = clean_p[len('CAER/'):] if clean_p.startswith('CAER/') else clean_p[len('./CAER/'):]
+
+    parts = [p for p in clean_p.split('/') if p and p != '.']
+    if len(parts) >= 3:
+        split_name, emotion, filename = parts[-3], parts[-2], parts[-1]
+    elif len(parts) == 2:
+        split_name, emotion, filename = '', parts[-2], parts[-1]
+    else:
+        return os.path.join(root_dir, raw_path), None
+
+    base_name = os.path.splitext(filename)[0]
+
+    if cached_rule is not None:
+        cand = cached_rule(split_name, emotion, base_name)
+        if os.path.exists(cand) or os.path.isdir(cand):
+            return cand, cached_rule
+
+    clean_root = root_dir.rstrip('/')
+    cand_roots = [
+        root_dir,
+        os.path.join(root_dir, 'CAER'),
+        clean_root,
+        os.path.join(clean_root, 'CAER'),
+        os.path.dirname(clean_root),
+        os.path.join(os.path.dirname(clean_root), 'CAER'),
+        '/kaggle/input/caer-video-dataset/CAER',
+        '/kaggle/input/caer-video-dataset',
+        '/kaggle/input/caer-dataset/CAER',
+        '/kaggle/input/caer-dataset',
+        '/kaggle/input/caer-video/CAER',
+        '/kaggle/input/caer-video',
+        '/kaggle/input/caer/CAER',
+        '/kaggle/input/caer'
+    ]
+    if os.path.exists('/kaggle/input'):
+        for root_cand in glob.glob('/kaggle/input/**/train', recursive=True):
+            cand_roots.append(os.path.dirname(root_cand))
+
+    splits = [split_name, split_name.lower(), split_name.capitalize()]
+    emotions = [emotion, emotion.lower(), emotion.capitalize()]
+    exts = ['.avi', '.mp4', '.mkv', '', '.AVI', '.MP4']
+
+    for r in cand_roots:
+        if not os.path.exists(r):
+            continue
+        for s in splits:
+            for e in emotions:
+                for ext in exts:
+                    cand = os.path.join(r, s, e, base_name + ext) if s else os.path.join(r, e, base_name + ext)
+                    if os.path.exists(cand) or os.path.isdir(cand):
+                        def make_rule(r_f=r, s_f=s, e_f=e, ext_f=ext):
+                            return lambda sp, emo, bn: os.path.join(r_f, s_f if sp.lower() == s_f.lower() else sp, e_f if emo.lower() == e_f.lower() else emo, bn + ext_f)
+                        return cand, make_rule()
+
+    # Search with os.walk if not found in standard paths
+    if base_name and os.path.exists(root_dir):
+        for w_root, dirs, files in os.walk(root_dir):
+            for f in files:
+                if os.path.splitext(f)[0] == base_name:
+                    return os.path.join(w_root, f), None
+            if base_name in dirs:
+                return os.path.join(w_root, base_name), None
+
+    return os.path.join(root_dir, raw_path), None
+
+
 class VideoDataset(data.Dataset):
     def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", mask_context_face=False, daisee_merge_low=False):
         self.list_file = list_file
@@ -419,6 +493,21 @@ class VideoDataset(data.Dataset):
                     resolved_samples.append([full_cand] + item[1:])
                 else:
                     real_p, new_rule = resolve_daisee_path(rel_p, self.root_dir, cached_rule)
+                    if new_rule is not None:
+                        cached_rule = new_rule
+                    resolved_samples.append([real_p] + item[1:])
+            self.video_list = [VideoRecord(item) for item in resolved_samples]
+        elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S', 'CAER_Video', 'CAER-Video']:
+            # Pre-resolve CAER paths to handle nested directories, casing, and extensions
+            cached_rule = None
+            resolved_samples = []
+            for item in self.sample_list:
+                rel_p = item[0]
+                full_cand = os.path.join(self.root_dir, rel_p)
+                if os.path.exists(full_cand) or os.path.isdir(full_cand):
+                    resolved_samples.append([full_cand] + item[1:])
+                else:
+                    real_p, new_rule = resolve_caer_path(rel_p, self.root_dir, cached_rule)
                     if new_rule is not None:
                         cached_rule = new_rule
                     resolved_samples.append([real_p] + item[1:])
