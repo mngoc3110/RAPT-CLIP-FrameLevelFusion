@@ -48,6 +48,12 @@ LOSS_CHOICE="${LOSS_TYPE:-ldam}"
 NUM_SEGS="${NUM_SEGMENTS:-16}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 WORKERS="${WORKERS:-4}"
+LR="${LR:-5e-05}"
+LR_IMAGE="${LR_IMAGE:-5e-06}"
+LR_PROMPT="${LR_PROMPT:-0.0004}"
+LR_ADAPTER="${LR_ADAPTER:-0.0002}"
+SCHEDULER="${SCHEDULER:-cosine}"
+WARMUP_EPOCHS="${WARMUP_EPOCHS:-2}"
 EXTRA_ARGS=()
 
 for arg in "$@"; do
@@ -78,6 +84,30 @@ for arg in "$@"; do
       ;;
     --workers=*|-w=*)
       WORKERS="${arg#*=}"
+      ;;
+    --lr=*)
+      LR="${arg#*=}"
+      ;;
+    --lr-image=*|--lr-image-encoder=*)
+      LR_IMAGE="${arg#*=}"
+      ;;
+    --lr-prompt=*|--lr-prompt-learner=*)
+      LR_PROMPT="${arg#*=}"
+      ;;
+    --lr-adapter=*)
+      LR_ADAPTER="${arg#*=}"
+      ;;
+    --cosine)
+      SCHEDULER="cosine"
+      ;;
+    --multistep)
+      SCHEDULER="multistep"
+      ;;
+    --scheduler=*)
+      SCHEDULER="${arg#*=}"
+      ;;
+    --warmup=*|--warmup-epochs=*)
+      WARMUP_EPOCHS="${arg#*=}"
       ;;
     --data-dir=*)
       DATA_DIR="$(normalize_path "${arg#*=}")"
@@ -391,12 +421,14 @@ if [ -z "$BODY_BOX" ] || [ ! -f "$BODY_BOX" ]; then
 fi
 
 echo "=> [4/4] Cấu hình Huấn luyện:"
-echo "   - Face BBox: $FACE_BOX"
-echo "   - Body BBox: $BODY_BOX"
-echo "   - Loss Type: $LOSS_CHOICE (${LOSS_ARGS[*]})"
+echo "   - Face BBox:  $FACE_BOX"
+echo "   - Body BBox:  $BODY_BOX"
+echo "   - Loss Type:  $LOSS_CHOICE (${LOSS_ARGS[*]})"
 echo "   - Batch Size: $BATCH_SIZE"
 echo "   - Workers:    $WORKERS"
-echo "   - Segments:  $NUM_SEGS"
+echo "   - LR Main:    $LR (ViT Image: $LR_IMAGE, Prompt: $LR_PROMPT, Adapter: $LR_ADAPTER)"
+echo "   - Scheduler:  $SCHEDULER (Warmup: $WARMUP_EPOCHS epochs)"
+echo "   - Segments:   $NUM_SEGS"
 echo "============================================================================"
 
 python -u main.py \
@@ -419,10 +451,12 @@ python -u main.py \
   --use-amp \
   --grad-clip 1.0 \
   --optimizer AdamW \
-  --lr 2e-05 \
-  --lr-image-encoder 1e-06 \
-  --lr-prompt-learner 0.0003 \
-  --lr-adapter 0.0001 \
+  --lr "${LR}" \
+  --lr-image-encoder "${LR_IMAGE}" \
+  --lr-prompt-learner "${LR_PROMPT}" \
+  --lr-adapter "${LR_ADAPTER}" \
+  --scheduler "${SCHEDULER}" \
+  --warmup-epochs "${WARMUP_EPOCHS}" \
   --weight-decay 0.005 \
   --momentum 0.9 \
   --milestones 10 15 \
