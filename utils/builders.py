@@ -343,17 +343,22 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         sampler = torch.utils.data.WeightedRandomSampler(sample_weights, len(sample_weights))
         shuffle = False # Sampler and shuffle are mutually exclusive
 
+    extra_loader_kwargs = {}
+    if args.workers > 0:
+        extra_loader_kwargs['persistent_workers'] = True
+        extra_loader_kwargs['prefetch_factor'] = 2
+
     train_loader = torch.utils.data.DataLoader(
         train_data, batch_size=args.batch_size, shuffle=shuffle, sampler=sampler,
-        num_workers=args.workers, pin_memory=True, drop_last=True
+        num_workers=args.workers, pin_memory=True, drop_last=True, **extra_loader_kwargs
     )
     val_loader = torch.utils.data.DataLoader(
         val_data, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True
+        num_workers=args.workers, pin_memory=True, **extra_loader_kwargs
     )
     test_loader = torch.utils.data.DataLoader(
         test_data, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True
+        num_workers=args.workers, pin_memory=True, **extra_loader_kwargs
     )
     
     return train_loader, val_loader, test_loader

@@ -47,6 +47,7 @@ SPLIT_CHOICE="${TRAIN_SPLIT:-train.txt}"
 LOSS_CHOICE="${LOSS_TYPE:-ldam}"
 NUM_SEGS="${NUM_SEGMENTS:-16}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
+WORKERS="${WORKERS:-4}"
 EXTRA_ARGS=()
 
 for arg in "$@"; do
@@ -74,6 +75,9 @@ for arg in "$@"; do
       ;;
     --batch-size=*|-b=*)
       BATCH_SIZE="${arg#*=}"
+      ;;
+    --workers=*|-w=*)
+      WORKERS="${arg#*=}"
       ;;
     --data-dir=*)
       DATA_DIR="$(normalize_path "${arg#*=}")"
@@ -391,6 +395,7 @@ echo "   - Face BBox: $FACE_BOX"
 echo "   - Body BBox: $BODY_BOX"
 echo "   - Loss Type: $LOSS_CHOICE (${LOSS_ARGS[*]})"
 echo "   - Batch Size: $BATCH_SIZE"
+echo "   - Workers:    $WORKERS"
 echo "   - Segments:  $NUM_SEGS"
 echo "============================================================================"
 
@@ -399,7 +404,7 @@ python -u main.py \
   --exper-name CAER-Video-CMAF \
   --dataset CAER \
   --gpu 0 \
-  --workers 2 \
+  --workers "${WORKERS}" \
   --seed 42 \
   --root-dir "${DATA_DIR}" \
   --train-annotation "${TRAIN_TXT}" \
