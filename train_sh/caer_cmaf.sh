@@ -93,6 +93,9 @@ for arg in "$@"; do
     --face-box=*)
       FACE_BOX="$(normalize_path "${arg#*=}")"
       ;;
+    --ldam-s=*)
+      LDAM_S="${arg#*=}"
+      ;;
     --body-box=*)
       BODY_BOX="$(normalize_path "${arg#*=}")"
       ;;
@@ -102,6 +105,7 @@ for arg in "$@"; do
   esac
 done
 
+LDAM_S="${LDAM_S:-1.5}"
 DATA_DIR="$(normalize_path "${DATA_DIR:-}")"
 ANNOTATION_DIR="$(normalize_path "${ANNOTATION_DIR:-${ANNOT_DIR:-}}")"
 TRAIN_TXT="$(normalize_path "${TRAIN_TXT:-}")"
@@ -118,7 +122,7 @@ if [ -n "$TRAIN_TXT" ] && [ -f "$TRAIN_TXT" ]; then
 fi
 
 if [ "$LOSS_CHOICE" = "ldam" ]; then
-  LOSS_ARGS=(--loss-type ldam --ldam-s 30.0 --ldam-max-m 0.5 --use-weighted-sampler --label-smoothing 0.05)
+  LOSS_ARGS=(--loss-type ldam --ldam-s "${LDAM_S}" --ldam-max-m 0.5 --use-weighted-sampler --label-smoothing 0.05)
 elif [ "$LOSS_CHOICE" = "focal" ]; then
   LOSS_ARGS=(--loss-type focal --focal-gamma 2.0 --use-weighted-sampler --use-class-weight)
 else
