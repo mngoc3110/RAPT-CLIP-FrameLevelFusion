@@ -46,11 +46,11 @@ normalize_path() {
 SPLIT_CHOICE="${TRAIN_SPLIT:-train.txt}"
 LOSS_CHOICE="${LOSS_TYPE:-ldam}"
 NUM_SEGS="${NUM_SEGMENTS:-16}"
-BATCH_SIZE="${BATCH_SIZE:-8}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
 WORKERS="${WORKERS:-4}"
-LR="${LR:-5e-05}"
-LR_IMAGE="${LR_IMAGE:-5e-06}"
-LR_PROMPT="${LR_PROMPT:-0.0004}"
+LR="${LR:-0.0001}"
+LR_IMAGE="${LR_IMAGE:-1e-05}"
+LR_PROMPT="${LR_PROMPT:-0.0005}"
 LR_ADAPTER="${LR_ADAPTER:-0.0002}"
 SCHEDULER="${SCHEDULER:-cosine}"
 WARMUP_EPOCHS="${WARMUP_EPOCHS:-2}"
@@ -447,7 +447,7 @@ python -u main.py \
   --bounding-box-body "${BODY_BOX}" \
   --epochs 20 \
   --batch-size "${BATCH_SIZE}" \
-  --print-freq 50 \
+  --print-freq 20 \
   --use-amp \
   --grad-clip 1.0 \
   --optimizer AdamW \
