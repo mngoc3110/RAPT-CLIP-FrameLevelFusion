@@ -134,6 +134,7 @@ class Trainer:
         all_targets_list = []
         
         saved_images_count = 0
+        running_metric = 0.0
 
         # Print weights at the start of training epoch
         if is_train:
@@ -353,8 +354,7 @@ class Trainer:
                         else:
                             break
                 
-                # Update progress bar with Running UAR/mAP
-                running_metric = 0.0
+                # Update progress bar with Running UAR/mAP (computed periodically every 10 steps)
                 if len(all_preds_list) > 0:
                     # Only calc complex metrics every 10 batches to save CPU time
                     if i % 10 == 0 or i == len(loader) - 1:
