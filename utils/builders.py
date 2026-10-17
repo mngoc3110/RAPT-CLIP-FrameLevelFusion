@@ -181,16 +181,36 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         )
         return train_loader, val_loader, test_loader
 
-    train_annotation_file_path = getattr(args, 'train_annotation', None)
-    val_annotation_file_path = getattr(args, 'val_annotation', None)
-    test_annotation_file_path = getattr(args, 'test_annotation', None)
+    def normalize_colab(p):
+        if not p or not isinstance(p, str):
+            return p
+        if os.path.exists(p):
+            return p
+        if p.startswith('content/'):
+            alt = '/' + p
+            if os.path.exists(alt):
+                return alt
+        elif p.startswith('drive/'):
+            alt = '/content/' + p
+            if os.path.exists(alt):
+                return alt
+        return p
+
+    train_annotation_file_path = normalize_colab(getattr(args, 'train_annotation', None))
+    val_annotation_file_path = normalize_colab(getattr(args, 'val_annotation', None))
+    test_annotation_file_path = normalize_colab(getattr(args, 'test_annotation', None))
+    args.train_annotation = train_annotation_file_path
+    args.val_annotation = val_annotation_file_path
+    args.test_annotation = test_annotation_file_path
+    if hasattr(args, 'root_dir') and args.root_dir:
+        args.root_dir = normalize_colab(args.root_dir)
 
     # Auto-recovery if annotation file does not exist (e.g. Kaggle path casing or custom slug)
     if train_annotation_file_path and not os.path.exists(train_annotation_file_path):
         target_name = os.path.basename(train_annotation_file_path).lower()
         print(f"Warning: Annotation file {train_annotation_file_path} not found. Searching for {target_name}...")
         found_path = None
-        for base in ['/kaggle/input', '.', '..']:
+        for base in ['/kaggle/input', '/content/drive/MyDrive', '/content', '.', '..']:
             if os.path.exists(base):
                 for root, dirs, files in os.walk(base):
                     for f in files:
@@ -229,10 +249,13 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
 
     # Auto-resolve bounding box paths if specified relative or not directly found
     for bbox_attr in ['bounding_box_face', 'bounding_box_body']:
-        bbox_path = getattr(args, bbox_attr, None)
+        bbox_path = normalize_colab(getattr(args, bbox_attr, None))
+        setattr(args, bbox_attr, bbox_path)
         if bbox_path and not os.path.exists(bbox_path):
             candidates = [
                 os.path.join(args.root_dir, bbox_path),
+                os.path.join(args.root_dir, os.path.basename(bbox_path)),
+                os.path.join(os.path.dirname(train_annotation_file_path or ''), os.path.basename(bbox_path)),
                 os.path.join(args.root_dir, 'RAER', bbox_path),
                 os.path.join(args.root_dir, 'bounding_box', os.path.basename(bbox_path)),
                 os.path.join(args.root_dir, 'RAER', 'bounding_box', os.path.basename(bbox_path)),

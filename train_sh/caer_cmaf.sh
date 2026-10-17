@@ -30,6 +30,18 @@ if [ $? -ne 0 ]; then
   echo ""
 fi
 
+normalize_path() {
+  local p="$1"
+  if [ -n "$p" ]; then
+    if [[ "$p" == content/* ]]; then
+      p="/$p"
+    elif [[ "$p" == drive/* ]]; then
+      p="/content/$p"
+    fi
+  fi
+  echo "$p"
+}
+
 # Parse optional arguments
 SPLIT_CHOICE="${TRAIN_SPLIT:-train.txt}"
 LOSS_CHOICE="${LOSS_TYPE:-ldam}"
@@ -59,11 +71,47 @@ for arg in "$@"; do
     --8seg|--segments-8)
       NUM_SEGS="8"
       ;;
+    --data-dir=*)
+      DATA_DIR="$(normalize_path "${arg#*=}")"
+      ;;
+    --annot-dir=*)
+      ANNOTATION_DIR="$(normalize_path "${arg#*=}")"
+      ;;
+    --train-txt=*)
+      TRAIN_TXT="$(normalize_path "${arg#*=}")"
+      ;;
+    --val-txt=*)
+      VAL_TXT="$(normalize_path "${arg#*=}")"
+      ;;
+    --test-txt=*)
+      TEST_TXT="$(normalize_path "${arg#*=}")"
+      ;;
+    --face-box=*)
+      FACE_BOX="$(normalize_path "${arg#*=}")"
+      ;;
+    --body-box=*)
+      BODY_BOX="$(normalize_path "${arg#*=}")"
+      ;;
     *)
       EXTRA_ARGS+=("$arg")
       ;;
   esac
 done
+
+DATA_DIR="$(normalize_path "${DATA_DIR:-}")"
+ANNOTATION_DIR="$(normalize_path "${ANNOTATION_DIR:-${ANNOT_DIR:-}}")"
+TRAIN_TXT="$(normalize_path "${TRAIN_TXT:-}")"
+VAL_TXT="$(normalize_path "${VAL_TXT:-}")"
+TEST_TXT="$(normalize_path "${TEST_TXT:-}")"
+FACE_BOX="$(normalize_path "${FACE_BOX:-}")"
+BODY_BOX="$(normalize_path "${BODY_BOX:-}")"
+
+# If TRAIN_TXT is already provided, derive ANNOTATION_DIR if empty
+if [ -n "$TRAIN_TXT" ] && [ -f "$TRAIN_TXT" ]; then
+  if [ -z "$ANNOTATION_DIR" ]; then
+    ANNOTATION_DIR="$(dirname "$TRAIN_TXT")"
+  fi
+fi
 
 if [ "$LOSS_CHOICE" = "ldam" ]; then
   LOSS_ARGS=(--loss-type ldam --ldam-s 30.0 --ldam-max-m 0.5 --use-weighted-sampler --label-smoothing 0.05)
@@ -73,8 +121,17 @@ else
   LOSS_ARGS=(--loss-type ce --label-smoothing 0.05 --use-weighted-sampler)
 fi
 
-# 1. Tự động nhận diện thư mục Video CAER (Kaggle / Colab / Local)
+# 1. Tự động nhận diện thư mục Video CAER (Colab / Kaggle / Local)
 POSSIBLE_DATA_DIRS=(
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video"
+  "/content/drive/MyDrive/CAER_Video/CAER_Video"
+  "/content/drive/MyDrive/CAER_Video"
+  "/content/CAER_Video/CAER_Video"
+  "/content/CAER_Video"
+  "/content/CAER"
   "/kaggle/input/datasets/bearmn/caer-video-dataset/CAER"
   "/kaggle/input/datasets/bearmn/caer-video-dataset"
   "/kaggle/input/caer-video-dataset/CAER"
@@ -90,13 +147,22 @@ POSSIBLE_DATA_DIRS=(
   "/Users/macbook/Downloads/RAPT-CLIP/CAER"
 )
 
-DATA_DIR=""
-for d in "${POSSIBLE_DATA_DIRS[@]}"; do
-  if [ -d "$d" ]; then
-    DATA_DIR="$d"
-    break
+DATA_DIR="${DATA_DIR:-}"
+if [ -z "$DATA_DIR" ]; then
+  for d in "${POSSIBLE_DATA_DIRS[@]}"; do
+    if [ -d "$d" ]; then
+      DATA_DIR="$d"
+      break
+    fi
+  done
+fi
+
+if [ -z "$DATA_DIR" ] && [ -d "/content/drive/MyDrive" ]; then
+  DETECTED_DIR=$(find "/content/drive/MyDrive" -maxdepth 8 -type d \( -name "Anger" -o -name "anger" \) 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null | xargs dirname 2>/dev/null)
+  if [ -n "$DETECTED_DIR" ] && [ -d "$DETECTED_DIR" ]; then
+    DATA_DIR="$DETECTED_DIR"
   fi
-done
+fi
 
 if [ -z "$DATA_DIR" ] && [ -d "/kaggle/input" ]; then
   DETECTED_DIR=$(find /kaggle/input -maxdepth 6 -type d \( -name "Anger" -o -name "anger" \) 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null | xargs dirname 2>/dev/null)
@@ -106,7 +172,11 @@ if [ -z "$DATA_DIR" ] && [ -d "/kaggle/input" ]; then
 fi
 
 if [ -z "$DATA_DIR" ]; then
-  DATA_DIR="/kaggle/input/datasets/bearmn/caer-video-dataset/CAER"
+  if [ -d "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video" ]; then
+    DATA_DIR="/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+  else
+    DATA_DIR="/kaggle/input/datasets/bearmn/caer-video-dataset/CAER"
+  fi
 fi
 
 if [ -d "${DATA_DIR}/CAER/train" ]; then
@@ -118,6 +188,17 @@ echo "=> [1/4] Thư mục CAER Video root: ${DATA_DIR}"
 
 # 2. Tự động nhận diện thư mục Annotation & Bounding Boxes
 POSSIBLE_ANNOT_DIRS=(
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/annotations"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/annotations"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video"
+  "/content/CAER_Video/CAER_Video"
+  "/content/CAER_Video"
+  "/content/CAER"
+  "/content/drive/MyDrive/CAER_Video/CAER_Video"
+  "/content/drive/MyDrive/CAER_Video"
   "/kaggle/input/datasets/traincollab/caer-video-annotation"
   "/kaggle/input/datasets/traincollab/caer-video-annotation/CAER-video-annotation"
   "/kaggle/input/caer-video-annotation"
@@ -152,6 +233,13 @@ if [ -z "$ANNOTATION_DIR" ]; then
   done
 fi
 
+if [ -z "$ANNOTATION_DIR" ] && [ -d "/content/drive/MyDrive" ]; then
+  DETECTED_ANNOT=$(find "/content/drive/MyDrive" -maxdepth 8 \( -name "body_boxes.json" -o -name "face_boxes*.json" -o -name "train.txt" \) 2>/dev/null | grep -i "caer" | head -n 1 | xargs dirname 2>/dev/null)
+  if [ -n "$DETECTED_ANNOT" ] && [ -d "$DETECTED_ANNOT" ]; then
+    ANNOTATION_DIR="$DETECTED_ANNOT"
+  fi
+fi
+
 if [ -z "$ANNOTATION_DIR" ] && [ -d "/kaggle/input" ]; then
   DETECTED_ANNOT=$(find /kaggle/input -maxdepth 8 \( -name "body_boxes.json" -o -name "face_boxes*.json" \) 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
   if [ -n "$DETECTED_ANNOT" ] && [ -d "$DETECTED_ANNOT" ]; then
@@ -160,43 +248,65 @@ if [ -z "$ANNOTATION_DIR" ] && [ -d "/kaggle/input" ]; then
 fi
 
 if [ -z "$ANNOTATION_DIR" ]; then
-  ANNOTATION_DIR="annotations/caer_video"
+  if [ -d "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video" ]; then
+    ANNOTATION_DIR="/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+  else
+    ANNOTATION_DIR="annotations/caer_video"
+  fi
 fi
 
 echo "=> [2/4] Thư mục Annotation root: ${ANNOTATION_DIR}"
 
 # 3. Chọn file Annotations (Train / Val / Test)
-TRAIN_TXT="${ANNOTATION_DIR}/${SPLIT_CHOICE}"
-if [ ! -f "$TRAIN_TXT" ]; then
-  if [ -f "${ANNOTATION_DIR}/train.txt" ]; then
-    TRAIN_TXT="${ANNOTATION_DIR}/train.txt"
-  elif [ -f "${ANNOTATION_DIR}/train_balance.txt" ]; then
-    TRAIN_TXT="${ANNOTATION_DIR}/train_balance.txt"
-  elif [ -f "annotations/caer_video/${SPLIT_CHOICE}" ]; then
-    TRAIN_TXT="annotations/caer_video/${SPLIT_CHOICE}"
-  elif [ -f "annotations/caer_video/train.txt" ]; then
-    TRAIN_TXT="annotations/caer_video/train.txt"
-  elif [ -f "${DATA_DIR}/train.txt" ]; then
-    TRAIN_TXT="${DATA_DIR}/train.txt"
+if [ -z "$TRAIN_TXT" ]; then
+  TRAIN_TXT="${ANNOTATION_DIR}/${SPLIT_CHOICE}"
+  if [ ! -f "$TRAIN_TXT" ]; then
+    if [ -f "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/train.txt" ]; then
+      TRAIN_TXT="/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/train.txt"
+    elif [ -f "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/train.txt" ]; then
+      TRAIN_TXT="content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/train.txt"
+    elif [ -f "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/train.txt" ]; then
+      TRAIN_TXT="/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/train.txt"
+    elif [ -f "${ANNOTATION_DIR}/train.txt" ]; then
+      TRAIN_TXT="${ANNOTATION_DIR}/train.txt"
+    elif [ -f "${ANNOTATION_DIR}/train_balance.txt" ]; then
+      TRAIN_TXT="${ANNOTATION_DIR}/train_balance.txt"
+    elif [ -f "annotations/caer_video/${SPLIT_CHOICE}" ]; then
+      TRAIN_TXT="annotations/caer_video/${SPLIT_CHOICE}"
+    elif [ -f "annotations/caer_video/train.txt" ]; then
+      TRAIN_TXT="annotations/caer_video/train.txt"
+    elif [ -f "${DATA_DIR}/train.txt" ]; then
+      TRAIN_TXT="${DATA_DIR}/train.txt"
+    fi
   fi
 fi
 
-VAL_TXT="${ANNOTATION_DIR}/validation.txt"
-if [ ! -f "$VAL_TXT" ]; then
-  if [ -f "annotations/caer_video/validation.txt" ]; then
-    VAL_TXT="annotations/caer_video/validation.txt"
-  elif [ -f "${DATA_DIR}/validation.txt" ]; then
-    VAL_TXT="${DATA_DIR}/validation.txt"
-  fi
+if [ -z "$VAL_TXT" ] || [ ! -f "$VAL_TXT" ]; then
+  for v in "${ANNOTATION_DIR}/validation.txt" "${ANNOTATION_DIR}/val.txt" \
+           "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/validation.txt" \
+           "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/val.txt" \
+           "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/validation.txt" \
+           "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/val.txt" \
+           "annotations/caer_video/validation.txt" "annotations/caer_video/val.txt" \
+           "${DATA_DIR}/validation.txt" "${DATA_DIR}/val.txt"; do
+    if [ -f "$v" ]; then
+      VAL_TXT="$v"
+      break
+    fi
+  done
 fi
 
-TEST_TXT="${ANNOTATION_DIR}/test.txt"
-if [ ! -f "$TEST_TXT" ]; then
-  if [ -f "annotations/caer_video/test.txt" ]; then
-    TEST_TXT="annotations/caer_video/test.txt"
-  elif [ -f "${DATA_DIR}/test.txt" ]; then
-    TEST_TXT="${DATA_DIR}/test.txt"
-  fi
+if [ -z "$TEST_TXT" ] || [ ! -f "$TEST_TXT" ]; then
+  for t in "${ANNOTATION_DIR}/test.txt" \
+           "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/test.txt" \
+           "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/test.txt" \
+           "annotations/caer_video/test.txt" \
+           "${DATA_DIR}/test.txt"; do
+    if [ -f "$t" ]; then
+      TEST_TXT="$t"
+      break
+    fi
+  done
 fi
 
 echo "=> [3/4] File Danh Sách Dữ Liệu:"
@@ -205,12 +315,19 @@ echo "   - Val:   $VAL_TXT"
 echo "   - Test:  $TEST_TXT"
 
 # 4. Tự động nhận diện Bounding Boxes (Face & Body)
-FACE_BOX=""
 CANDIDATE_FACE_BOXES=(
   "${ANNOTATION_DIR}/face_boxes_mediapipe.json"
   "${ANNOTATION_DIR}/face_boxes.json"
   "${ANNOTATION_DIR}/face_boxes_optimized.json"
   "${ANNOTATION_DIR}/face.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/face_boxes_mediapipe.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/face_boxes.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/face.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/face_boxes_mediapipe.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/face_boxes.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/face.json"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/face_boxes.json"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/face_boxes.json"
   "/kaggle/input/datasets/traincollab/caer-video-annotation/face_boxes_mediapipe.json"
   "/kaggle/input/datasets/traincollab/caer-video-annotation/face_boxes.json"
   "${DATA_DIR}/face_boxes_mediapipe.json"
@@ -220,17 +337,24 @@ CANDIDATE_FACE_BOXES=(
   "annotations/caer_video/face_boxes.json"
 )
 
-for fb in "${CANDIDATE_FACE_BOXES[@]}"; do
-  if [ -f "$fb" ]; then
-    FACE_BOX="$fb"
-    break
-  fi
-done
+if [ -z "$FACE_BOX" ] || [ ! -f "$FACE_BOX" ]; then
+  for fb in "${CANDIDATE_FACE_BOXES[@]}"; do
+    if [ -f "$fb" ]; then
+      FACE_BOX="$fb"
+      break
+    fi
+  done
+fi
 
-BODY_BOX=""
 CANDIDATE_BODY_BOXES=(
   "${ANNOTATION_DIR}/body_boxes.json"
   "${ANNOTATION_DIR}/body.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/body_boxes.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/body.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/body_boxes.json"
+  "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/body.json"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video/body_boxes.json"
+  "content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/body_boxes.json"
   "/kaggle/input/datasets/traincollab/caer-video-annotation/body_boxes.json"
   "${DATA_DIR}/body_boxes.json"
   "${DATA_DIR}/body.json"
@@ -238,12 +362,14 @@ CANDIDATE_BODY_BOXES=(
   "annotations/caer_video/body_boxes.json"
 )
 
-for bb in "${CANDIDATE_BODY_BOXES[@]}"; do
-  if [ -f "$bb" ]; then
-    BODY_BOX="$bb"
-    break
-  fi
-done
+if [ -z "$BODY_BOX" ] || [ ! -f "$BODY_BOX" ]; then
+  for bb in "${CANDIDATE_BODY_BOXES[@]}"; do
+    if [ -f "$bb" ]; then
+      BODY_BOX="$bb"
+      break
+    fi
+  done
+fi
 
 echo "=> [4/4] Cấu hình Huấn luyện:"
 echo "   - Face BBox: $FACE_BOX"

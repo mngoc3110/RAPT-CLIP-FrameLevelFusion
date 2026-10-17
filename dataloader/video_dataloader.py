@@ -219,12 +219,29 @@ def resolve_daisee_path(raw_path, root_dir, cached_rule=None):
     return os.path.join(root_dir, raw_path), None
 
 
+def normalize_colab_path(p):
+    if not p or not isinstance(p, str):
+        return p
+    if os.path.exists(p):
+        return p
+    if p.startswith('content/'):
+        alt = '/' + p
+        if os.path.exists(alt):
+            return alt
+    elif p.startswith('drive/'):
+        alt = '/content/' + p
+        if os.path.exists(alt):
+            return alt
+    return p
+
+
 def resolve_caer_path(raw_path, root_dir, cached_rule=None):
     """
     Robustly resolves a CAER video or frame directory from an annotation line.
     Handles nested 'CAER/', case differences (Anger vs anger), extensions (.avi vs .mp4 vs directory),
     and Kaggle directory structure variations.
     """
+    root_dir = normalize_colab_path(root_dir)
     clean_p = raw_path.replace('\\', '/').strip('/')
     while clean_p.startswith(('CAER/', './CAER/')):
         clean_p = clean_p[len('CAER/'):] if clean_p.startswith('CAER/') else clean_p[len('./CAER/'):]
@@ -295,16 +312,16 @@ def resolve_caer_path(raw_path, root_dir, cached_rule=None):
 
 class VideoDataset(data.Dataset):
     def __init__(self, list_file, num_segments, duration, mode, transform, image_size, bounding_box_face, bounding_box_body, crop_body=False, root_dir="", num_classes=8, dataset_name="", mask_context_face=False, daisee_merge_low=False):
-        self.list_file = list_file
+        self.list_file = normalize_colab_path(list_file)
         self.duration = duration
         self.num_segments = num_segments
         self.transform = transform
         self.image_size = image_size
         self.mode = mode
-        self.bounding_box_face = bounding_box_face
-        self.bounding_box_body = bounding_box_body
+        self.bounding_box_face = normalize_colab_path(bounding_box_face)
+        self.bounding_box_body = normalize_colab_path(bounding_box_body)
         self.crop_body = crop_body
-        self.root_dir = root_dir
+        self.root_dir = normalize_colab_path(root_dir)
         self.dataset_name = dataset_name
         self.mask_context_face = mask_context_face
         self.daisee_merge_low = daisee_merge_low
