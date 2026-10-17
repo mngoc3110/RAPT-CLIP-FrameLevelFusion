@@ -33,7 +33,7 @@ fi
 # Parse optional arguments
 SPLIT_CHOICE="${TRAIN_SPLIT:-train.txt}"
 LOSS_CHOICE="${LOSS_TYPE:-ldam}"
-NUM_SEGS="${NUM_SEGMENTS:-8}"
+NUM_SEGS="${NUM_SEGMENTS:-16}"
 EXTRA_ARGS=()
 
 for arg in "$@"; do
@@ -66,11 +66,11 @@ for arg in "$@"; do
 done
 
 if [ "$LOSS_CHOICE" = "ldam" ]; then
-  LOSS_ARGS=(--loss-type ldam --ldam-s 1.5 --ldam-max-m 0.5 --use-class-weight --label-smoothing 0.05)
+  LOSS_ARGS=(--loss-type ldam --ldam-s 30.0 --ldam-max-m 0.5 --use-weighted-sampler --label-smoothing 0.05)
 elif [ "$LOSS_CHOICE" = "focal" ]; then
-  LOSS_ARGS=(--loss-type focal --focal-gamma 2.0 --use-class-weight)
+  LOSS_ARGS=(--loss-type focal --focal-gamma 2.0 --use-weighted-sampler --use-class-weight)
 else
-  LOSS_ARGS=(--loss-type ce --label-smoothing 0.1)
+  LOSS_ARGS=(--loss-type ce --label-smoothing 0.05 --use-weighted-sampler)
 fi
 
 # 1. Tự động nhận diện thư mục Video CAER (Kaggle / Colab / Local)
@@ -257,12 +257,8 @@ python -u main.py \
   --exper-name CAER-Video-CMAF \
   --dataset CAER \
   --gpu 0 \
-  --epochs 20 \
-  --batch-size 4 \
-  --grad-accum-steps 2 \
-  --print-freq 50 \
+  --workers 2 \
   --seed 42 \
-  --workers 4 \
   --root-dir "${DATA_DIR}" \
   --train-annotation "${TRAIN_TXT}" \
   --val-annotation "${VAL_TXT}" \
@@ -270,34 +266,31 @@ python -u main.py \
   --clip-path ViT-B/16 \
   --bounding-box-face "${FACE_BOX}" \
   --bounding-box-body "${BODY_BOX}" \
-  \
-  --fusion-type cmaf \
-  --fusion-stage frame \
-  --temporal-layers 1 \
-  --use-context \
-  --crop-body \
-  --mask-context-face \
-  \
+  --epochs 20 \
+  --batch-size 2 \
+  --print-freq 50 \
+  --use-amp \
+  --grad-clip 1.0 \
   --optimizer AdamW \
-  --lr 2e-5 \
-  --lr-image-encoder 1e-5 \
-  --lr-prompt-learner 3e-4 \
-  --lr-adapter 1e-4 \
+  --lr 2e-05 \
+  --lr-image-encoder 1e-06 \
+  --lr-prompt-learner 0.0003 \
+  --lr-adapter 0.0001 \
   --weight-decay 0.005 \
+  --momentum 0.9 \
   --milestones 10 15 \
   --gamma 0.1 \
-  \
   "${LOSS_ARGS[@]}" \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
   --mi-warmup 5 \
   --mi-ramp 10 \
+  --mi-ramp-type ramp_up \
   --dc-warmup 5 \
   --dc-ramp 10 \
-  --grad-clip 1.0 \
-  \
   --text-type prompt_ensemble \
+  --temporal-layers 1 \
   --contexts-number 8 \
   --class-token-position end \
   --class-specific-contexts True \
@@ -306,7 +299,11 @@ python -u main.py \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \
+  --crop-body \
   --drop-path-rate 0.1 \
   --modality-dropout 0.3 \
-  --use-amp \
+  --fusion-type cmaf \
+  --fusion-stage frame \
+  --use-context \
+  --mask-context-face \
   "${EXTRA_ARGS[@]}"
