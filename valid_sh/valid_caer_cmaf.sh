@@ -187,7 +187,7 @@ python -u main.py \
   --exper-name Eval-CAER-Video-CMAF \
   --dataset CAER \
   --gpu 0 \
-  --batch-size 4 \
+  --batch-size 8 \
   --workers 2 \
   --root-dir "${DATA_DIR}" \
   --test-annotation "${TEST_TXT}" \

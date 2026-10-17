@@ -46,6 +46,7 @@ normalize_path() {
 SPLIT_CHOICE="${TRAIN_SPLIT:-train.txt}"
 LOSS_CHOICE="${LOSS_TYPE:-ldam}"
 NUM_SEGS="${NUM_SEGMENTS:-16}"
+BATCH_SIZE="${BATCH_SIZE:-8}"
 EXTRA_ARGS=()
 
 for arg in "$@"; do
@@ -70,6 +71,9 @@ for arg in "$@"; do
       ;;
     --8seg|--segments-8)
       NUM_SEGS="8"
+      ;;
+    --batch-size=*|-b=*)
+      BATCH_SIZE="${arg#*=}"
       ;;
     --data-dir=*)
       DATA_DIR="$(normalize_path "${arg#*=}")"
@@ -375,6 +379,7 @@ echo "=> [4/4] Cấu hình Huấn luyện:"
 echo "   - Face BBox: $FACE_BOX"
 echo "   - Body BBox: $BODY_BOX"
 echo "   - Loss Type: $LOSS_CHOICE (${LOSS_ARGS[*]})"
+echo "   - Batch Size: $BATCH_SIZE"
 echo "   - Segments:  $NUM_SEGS"
 echo "============================================================================"
 
@@ -393,7 +398,7 @@ python -u main.py \
   --bounding-box-face "${FACE_BOX}" \
   --bounding-box-body "${BODY_BOX}" \
   --epochs 20 \
-  --batch-size 2 \
+  --batch-size "${BATCH_SIZE}" \
   --print-freq 50 \
   --use-amp \
   --grad-clip 1.0 \
