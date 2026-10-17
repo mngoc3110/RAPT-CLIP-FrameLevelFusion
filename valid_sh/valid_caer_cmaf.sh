@@ -17,6 +17,13 @@ normalize_path() {
   echo "$p"
 }
 
+# 0. Ưu tiên trực tiếp đường dẫn Google Drive CAER Video nếu tồn tại
+COLAB_TARGET_DIR="/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
+if [ -d "$COLAB_TARGET_DIR" ]; then
+  DATA_DIR="${DATA_DIR:-$COLAB_TARGET_DIR}"
+  ANNOTATION_DIR="${ANNOTATION_DIR:-$COLAB_TARGET_DIR}"
+fi
+
 # 1. Tự động nhận diện thư mục dataset trên Colab / Kaggle / Local
 POSSIBLE_DATA_DIRS=(
   "/content/drive/MyDrive/Nghiên cứu/0.Dataset and Source code/CAER_Video/CAER_Video"
