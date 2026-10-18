@@ -25,6 +25,7 @@ python main.py \
   --dataset RAER \
   --gpu 0 \
   --epochs 20 \
+  --early-stopping-patience 3 \
   --batch-size 4 \
   --print-freq 50 \
   --seed 42 \

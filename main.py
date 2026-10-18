@@ -125,7 +125,7 @@ loss_group.add_argument('--asl-gamma-pos', type=float, default=0.0, help='Asymme
 loss_group.add_argument('--asl-clip', type=float, default=0.05, help='Asymmetric Loss probability clipping for negatives.')
 loss_group.add_argument('--use-class-weight', action='store_true', default=False, help='Enable smoothed inverse-frequency class weights for LDAM/CE.')
 # Early stopping
-train_group.add_argument('--early-stopping-patience', type=int, default=0, help='Early stopping patience (0=disabled). Stop if valid metric does not improve for N epochs.')
+train_group.add_argument('--early-stopping-patience', type=int, default=3, help='Early stopping patience (0=disabled, default=3). Stop if valid metric does not improve for N epochs.')
 
 # --- Model & Input ---
 model_group = parser.add_argument_group('Model & Input', 'Parameters for model architecture and data handling')
@@ -563,17 +563,22 @@ def run_training(args: argparse.Namespace) -> None:
             if hasattr(trainer, 'ema') and trainer.ema is not None:
                 trainer.ema.restore(trainer.model)
 
-        # Early stopping check
-        if is_best:
+        # Early stopping check (only active after warmup and at/after first milestone)
+        first_milestone = args.milestones[0] if (hasattr(args, 'milestones') and args.milestones) else 10
+        min_epoch_for_early_stop = max(warmup_limit, first_milestone)
+        if epoch < min_epoch_for_early_stop:
             no_improve_count = 0
         else:
-            no_improve_count += 1
-            if early_stop_patience > 0 and no_improve_count >= early_stop_patience:
-                early_stop_msg = f"\n==> Early stopping triggered at epoch {epoch} (no improvement for {early_stop_patience} epochs). Best Valid mAP: {best_val_uar:.2f}%"
-                print(early_stop_msg)
-                with open(log_txt_path, 'a') as f:
-                    f.write(early_stop_msg + '\n')
-                break
+            if is_best:
+                no_improve_count = 0
+            else:
+                no_improve_count += 1
+                if early_stop_patience > 0 and no_improve_count >= early_stop_patience:
+                    early_stop_msg = f"\n==> Early stopping triggered at epoch {epoch} (no improvement for {early_stop_patience} epochs). Best Valid: {eval_metric_name}"
+                    print(early_stop_msg)
+                    with open(log_txt_path, 'a') as f:
+                        f.write(early_stop_msg + '\n')
+                    break
 
         # Record metrics
         epoch_time = time.time() - start_time

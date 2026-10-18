@@ -23,6 +23,7 @@ python main.py \
   --bounding-box-face RAER/bounding_box/face.json \
   --bounding-box-body RAER/bounding_box/body.json \
   --epochs 20 \
+  --early-stopping-patience 3 \
   --batch-size 4 \
   --print-freq 50 \
   --use-amp \

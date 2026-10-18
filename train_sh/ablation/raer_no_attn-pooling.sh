@@ -34,6 +34,7 @@ python main.py \
   --bounding-box-face "$FACE_BOX" \
   --bounding-box-body "$BODY_BOX" \
   --epochs 20 \
+  --early-stopping-patience 3 \
   --batch-size 4 \
   --print-freq 50 \
   --use-amp \
