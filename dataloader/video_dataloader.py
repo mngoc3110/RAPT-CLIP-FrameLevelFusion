@@ -74,7 +74,19 @@ class EmoticNpyDataset(data.Dataset):
         # Artificial face crop (60% center crop from context) to satisfy Triple-Stream
         w, h = context_pil.size
         face_pil = context_pil.crop((int(w * 0.2), int(h * 0.2), int(w * 0.8), int(h * 0.8)))
-        
+
+        # Synchronized Spatial Augmentations across streams (Train mode only)
+        if self.mode == 'train':
+            if random.random() < 0.5:
+                context_pil = context_pil.transpose(Image.FLIP_LEFT_RIGHT)
+                body_pil = body_pil.transpose(Image.FLIP_LEFT_RIGHT)
+                face_pil = face_pil.transpose(Image.FLIP_LEFT_RIGHT)
+            rot = random.uniform(-10, 10)
+            if abs(rot) > 0.5:
+                context_pil = context_pil.rotate(rot, resample=Image.BILINEAR)
+                body_pil = body_pil.rotate(rot, resample=Image.BILINEAR)
+                face_pil = face_pil.rotate(rot, resample=Image.BILINEAR)
+
         if self.transform:
             # Transform expects a list of PIL Images (for video segments)
             # We wrap single images in a list, then reshape back to (T, C, H, W) where T=1
@@ -421,7 +433,15 @@ class VideoDataset(data.Dataset):
                 return img
             return img
         else:
-            left, upper, right, lower = box
+            if isinstance(box, (list, tuple)) and len(box) > 0 and isinstance(box[0], (list, tuple)):
+                box = box[0]
+            left, upper, right, lower = box[:4]
+            # Safety check: auto-scale normalized [0, 1] coordinates
+            if 0.0 <= left <= 1.0 and 0.0 <= right <= 1.0 and right > left and img.width > 10:
+                left = left * img.width
+                upper = upper * img.height
+                right = right * img.width
+                lower = lower * img.height
             left = int(left)
             upper = int(upper)
             right = int(right)
@@ -802,6 +822,16 @@ class VideoDataset(data.Dataset):
                                 raw = self.boxs[candidate]
                                 box = raw if isinstance(raw[0], (int, float)) else raw[0]
                                 break
+                    if box is None:
+                        base_fname = os.path.basename(rel_key)
+                        if base_fname in self.boxs:
+                            raw = self.boxs[base_fname]
+                            box = raw if isinstance(raw[0], (int, float)) else raw[0]
+                        else:
+                            base_no_ext = os.path.splitext(base_fname)[0]
+                            if base_no_ext in self.boxs:
+                                raw = self.boxs[base_no_ext]
+                                box = raw if isinstance(raw[0], (int, float)) else raw[0]
                 else:
                     # Video / Frames nested or flat JSON
                     video_key_full = os.path.splitext(rel_key)[0]
@@ -856,10 +886,26 @@ class VideoDataset(data.Dataset):
                                 box = v_box_entry['default']
                             else:
                                 try:
-                                    avail_indices = [int(k.split('.')[0]) for k in v_box_entry.keys() if k.replace('.jpg', '').isdigit()]
+                                    avail_indices = sorted([int(k.split('.')[0]) for k in v_box_entry.keys() if k.replace('.jpg', '').isdigit()])
                                     if avail_indices:
-                                        closest_p = min(avail_indices, key=lambda x: abs(x - p))
-                                        box = v_box_entry.get(f"{closest_p}.jpg", v_box_entry.get(str(closest_p)))
+                                        lowers = [k for k in avail_indices if k <= p]
+                                        uppers = [k for k in avail_indices if k >= p]
+                                        if lowers and uppers:
+                                            idx_l, idx_u = lowers[-1], uppers[0]
+                                            box_l = v_box_entry.get(f"{idx_l}.jpg", v_box_entry.get(str(idx_l)))
+                                            box_u = v_box_entry.get(f"{idx_u}.jpg", v_box_entry.get(str(idx_u)))
+                                            if box_l and box_u and len(box_l) == 4 and len(box_u) == 4:
+                                                if idx_l == idx_u:
+                                                    box = box_l
+                                                else:
+                                                    alpha = (p - idx_l) / float(idx_u - idx_l)
+                                                    box = [box_l[i] * (1.0 - alpha) + box_u[i] * alpha for i in range(4)]
+                                            else:
+                                                closest_p = min(avail_indices, key=lambda x: abs(x - p))
+                                                box = v_box_entry.get(f"{closest_p}.jpg", v_box_entry.get(str(closest_p)))
+                                        else:
+                                            closest_p = min(avail_indices, key=lambda x: abs(x - p))
+                                            box = v_box_entry.get(f"{closest_p}.jpg", v_box_entry.get(str(closest_p)))
                                 except Exception:
                                     pass
                                 if box is None and len(v_box_entry) > 0:
@@ -884,6 +930,16 @@ class VideoDataset(data.Dataset):
                                     raw = self.body_boxes[candidate]
                                     body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
                                     break
+                            if body_box is None:
+                                base_fname = os.path.basename(rel_key)
+                                if base_fname in self.body_boxes:
+                                    raw = self.body_boxes[base_fname]
+                                    body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
+                                else:
+                                    base_no_ext = os.path.splitext(base_fname)[0]
+                                    if base_no_ext in self.body_boxes:
+                                        raw = self.body_boxes[base_no_ext]
+                                        body_box = raw if isinstance(raw[0], (int, float)) else raw[0]
                     else:
                         matched_body_key = None
                         b_candidates = [
@@ -929,17 +985,29 @@ class VideoDataset(data.Dataset):
                                 elif 'default' in v_body_dict:
                                     body_box = v_body_dict['default']
                                 else:
-                                    nearest_5 = f"{round(p / 5) * 5}.jpg"
-                                    if nearest_5 in v_body_dict:
-                                        body_box = v_body_dict[nearest_5]
-                                    else:
-                                        try:
-                                            avail_indices = [int(k.split('.')[0]) for k in v_body_dict.keys() if '.' in k or k.isdigit()]
-                                            if avail_indices:
+                                    try:
+                                        avail_indices = sorted([int(k.split('.')[0]) for k in v_body_dict.keys() if '.' in k or k.isdigit()])
+                                        if avail_indices:
+                                            lowers = [k for k in avail_indices if k <= p]
+                                            uppers = [k for k in avail_indices if k >= p]
+                                            if lowers and uppers:
+                                                idx_l, idx_u = lowers[-1], uppers[0]
+                                                b_l = v_body_dict.get(f"{idx_l}.jpg", v_body_dict.get(str(idx_l)))
+                                                b_u = v_body_dict.get(f"{idx_u}.jpg", v_body_dict.get(str(idx_u)))
+                                                if b_l and b_u and len(b_l) == 4 and len(b_u) == 4:
+                                                    if idx_l == idx_u:
+                                                        body_box = b_l
+                                                    else:
+                                                        alpha = (p - idx_l) / float(idx_u - idx_l)
+                                                        body_box = [b_l[i] * (1.0 - alpha) + b_u[i] * alpha for i in range(4)]
+                                                else:
+                                                    closest_p = min(avail_indices, key=lambda x: abs(x - p))
+                                                    body_box = v_body_dict.get(f"{closest_p}.jpg", v_body_dict.get(str(closest_p)))
+                                            else:
                                                 closest_p = min(avail_indices, key=lambda x: abs(x - p))
                                                 body_box = v_body_dict.get(f"{closest_p}.jpg", v_body_dict.get(str(closest_p)))
-                                        except:
-                                            pass
+                                    except:
+                                        pass
                                     if body_box is None and len(v_body_dict) > 0:
                                         body_box = next(iter(v_body_dict.values()))
                     
@@ -948,7 +1016,14 @@ class VideoDataset(data.Dataset):
 
                 # Specialized crops for body/posture when body bbox is missing
                 if body_box is not None:
-                    left, upper, right, lower = body_box
+                    if isinstance(body_box, (list, tuple)) and len(body_box) > 0 and isinstance(body_box[0], (list, tuple)):
+                        body_box = body_box[0]
+                    left, upper, right, lower = body_box[:4]
+                    if 0.0 <= left <= 1.0 and 0.0 <= right <= 1.0 and right > left and img_pil.width > 10:
+                        left = left * img_pil.width
+                        upper = upper * img_pil.height
+                        right = right * img_pil.width
+                        lower = lower * img_pil.height
                     left = max(0, int(left)); upper = max(0, int(upper))
                     right = min(img_pil.width, int(right)); lower = min(img_pil.height, int(lower))
                     if right > left and lower > upper:
@@ -1012,6 +1087,28 @@ class VideoDataset(data.Dataset):
         if is_video_file and 'cap' in dir() and cap is not None:
             cap.release()
 
+        # Synchronized Spatial Augmentations across streams (Train mode only)
+        # Guarantees identical horizontal flip and rotation across Face, Body, and Context streams
+        # to preserve cross-modal spatial correspondence for CMAF.
+        if self.mode == 'train':
+            # 1. Synchronized Random Horizontal Flip (50% probability)
+            if random.random() < 0.5:
+                images = [img.transpose(Image.FLIP_LEFT_RIGHT) for img in images]
+                images_face = [img.transpose(Image.FLIP_LEFT_RIGHT) for img in images_face]
+                images_context = [img.transpose(Image.FLIP_LEFT_RIGHT) for img in images_context]
+
+            # 2. Synchronized Random Small Rotation
+            max_rot = 8
+            if self.dataset_name == 'EMOTIC':
+                max_rot = 10
+            elif self.dataset_name == 'DAiSEE':
+                max_rot = 6
+            angle = random.uniform(-max_rot, max_rot)
+            if abs(angle) > 0.5:
+                images = [img.rotate(angle, resample=Image.BILINEAR) for img in images]
+                images_face = [img.rotate(angle, resample=Image.BILINEAR) for img in images_face]
+                images_context = [img.rotate(angle, resample=Image.BILINEAR) for img in images_context]
+
         # Apply transforms
         process_data = self.transform(images) # (C*T, H, W)
         process_data_face = self.transform(images_face) # (C*T, H, W)
@@ -1038,13 +1135,13 @@ class VideoDataset(data.Dataset):
 
 
 def train_data_loader(root_dir, list_file, num_segments, duration, image_size, dataset_name, bounding_box_face, bounding_box_body, crop_body=False, num_classes=8, mask_context_face=False, daisee_merge_low=False):
+    # Note: Spatial augmentations (Horizontal Flip & Rotation) are synchronized across streams inside VideoDataset.get()
+    # to maintain strict cross-modal spatial alignment for CMAF.
     if dataset_name == "RAER":
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.2),
             GroupRandomGrayscale(p=0.2),
-            RandomRotation(8),               # 8° (more head tilt variation)
             GroupResize(image_size),
-            GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupRandomErasing(p=0.3, scale=(0.02, 0.15))  # occlusion simulation
@@ -1054,9 +1151,7 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
             GroupRandomGrayscale(p=0.15),
-            RandomRotation(8),
             GroupResize(image_size),
-            GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
@@ -1066,9 +1161,7 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
         # DAiSEE: E-learning engagement videos (Normalized for CLIP ViT)
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
-            RandomRotation(6),
             GroupResize(image_size),
-            GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
@@ -1078,9 +1171,7 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
             GroupRandomGrayscale(p=0.1),
-            RandomRotation(10),
             GroupResize(image_size),
-            GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
@@ -1090,7 +1181,6 @@ def train_data_loader(root_dir, list_file, num_segments, duration, image_size, d
         # Default transforms for other datasets like CK+
         train_transforms = torchvision.transforms.Compose([
             GroupResize(image_size),
-            GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor()
         ])

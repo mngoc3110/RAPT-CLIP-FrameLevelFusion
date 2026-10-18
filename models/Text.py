@@ -354,13 +354,13 @@ prompt_ensemble_caer = [
     ],
     [ # Neutral (Class 4)
         "A photo of a calm composed individual with impassive expression.",
-        "A resting facial expression with relaxed brows, smooth forehead, and natural mouth.",
+        "A resting facial expression with relaxed brows, smooth forehead, and natural unsmiling mouth.",
         "A relaxed natural sitting or standing posture with no strong emotional tension.",
         "A person quietly observing their surroundings with a serene indifferent gaze.",
-        "An emotionless face showing neither joy nor distress in an everyday setting.",
+        "An emotionless face showing neither joy nor distress despite activity in the scene.",
         "A tranquil character with steady gaze and neutral resting body language.",
-        "An everyday resting posture, composed and balanced in an ordinary room.",
-        "A calm impassive person going about regular daily routine quietly."
+        "A person with a blank detached facial expression, showing neither anger nor happiness.",
+        "A calm impassive person remaining entirely neutral and unimpressed by the surrounding context."
     ],
     [ # Sad (Class 5)
         "A photo of a sorrowful dejected person looking down with profound grief.",

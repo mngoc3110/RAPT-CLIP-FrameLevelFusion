@@ -16,8 +16,11 @@ import json
 import os
 import glob
 import re
-import pandas as pd
-from tqdm import tqdm
+import csv
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda x: x
 
 LABEL_MAP = {
     'anger': 0, 'angry': 0,
@@ -40,8 +43,10 @@ def parse_args():
 def extract_class_from_filename_or_path(csv_p, row, raw_name):
     """Trích xuất tên class kể cả khi CSV thiếu cột class"""
     for col in ['class', 'Emotions', 'emotion', 'label']:
-        if col in row and pd.notna(row[col]):
-            return str(row[col]).strip()
+        if col in row and row[col] is not None:
+            val = str(row[col]).strip()
+            if val and val.lower() != 'nan':
+                return val
     
     # Thử trích xuất từ tên file CSV (ví dụ bbox_test_Angry.csv -> Angry)
     m = re.search(r'bbox_[a-zA-Z]+_([a-zA-Z]+)\.csv', os.path.basename(csv_p), re.IGNORECASE)
@@ -58,42 +63,75 @@ def extract_class_from_filename_or_path(csv_p, row, raw_name):
     return None
 
 def find_csv_files(data_dir, split_name):
-    patterns = [
-        os.path.join(data_dir, split_name, split_name, f"bbox_{split_name}_*.csv"),
-        os.path.join(data_dir, split_name, f"bbox_{split_name}_*.csv"),
-        os.path.join(data_dir, split_name, split_name, "bbox_*.csv"),
-        os.path.join(data_dir, split_name, "bbox_*.csv"),
-    ]
+    aliases = [split_name]
+    if split_name.lower() in ['val', 'valid', 'validation']:
+        aliases = ['valid', 'val', 'validation']
+    elif split_name.lower() in ['train', 'training']:
+        aliases = ['train', 'training']
+    elif split_name.lower() in ['test', 'testing']:
+        aliases = ['test', 'testing']
+
     files = []
-    for p in patterns:
-        files = glob.glob(p)
+    for s in aliases:
+        for sub in aliases:
+            patterns = [
+                os.path.join(data_dir, s, s, f"bbox_{sub}_*.csv"),
+                os.path.join(data_dir, s, f"bbox_{sub}_*.csv"),
+                os.path.join(data_dir, s, s, f"bbox_*.csv"),
+                os.path.join(data_dir, s, f"bbox_*.csv"),
+                os.path.join(data_dir, f"bbox_{sub}_*.csv"),
+                os.path.join(data_dir, f"bbox_*.csv"),
+            ]
+            for p in patterns:
+                matched = glob.glob(p)
+                if matched:
+                    files.extend(matched)
         if files:
             break
-    if not files and split_name in ['val', 'validation']:
-        alt = 'val' if split_name == 'validation' else 'validation'
-        for p in [os.path.join(data_dir, alt, alt, f"bbox_{alt}_*.csv"),
-                  os.path.join(data_dir, alt, f"bbox_{alt}_*.csv")]:
-            files = glob.glob(p)
-            if files:
+
+    if not files:
+        # Fallback recursive search
+        for s in aliases:
+            cand = glob.glob(os.path.join(data_dir, f"**/*{s}*/**/bbox_*.csv"), recursive=True)
+            if not cand:
+                cand = glob.glob(os.path.join(data_dir, f"**/bbox_{s}_*.csv"), recursive=True)
+            if cand:
+                files = cand
                 break
-    return files
+
+    return sorted(list(set(files)))
 
 def find_image_path(data_dir, split_name, class_name, filename):
-    candidates = [
-        os.path.join(split_name, split_name, class_name, filename),
-        os.path.join(split_name, class_name, filename),
-    ]
-    if split_name in ['val', 'validation']:
-        alt = 'val' if split_name == 'validation' else 'validation'
-        candidates.extend([
-            os.path.join(alt, alt, class_name, filename),
-            os.path.join(alt, class_name, filename),
-        ])
+    cls_candidates = [class_name]
+    if class_name.lower() in ['angry', 'anger']:
+        cls_candidates.extend(['Angry', 'Anger', 'angry', 'anger'])
+    elif class_name.lower() in ['happy', 'happiness']:
+        cls_candidates.extend(['Happy', 'Happiness', 'happy'])
+    elif class_name.lower() in ['sad', 'sadness']:
+        cls_candidates.extend(['Sad', 'Sadness', 'sad'])
+    elif class_name.lower() in ['neutral', 'neutrality']:
+        cls_candidates.extend(['Neutral', 'Neutrality', 'neutral'])
 
-    for rel in candidates:
-        full = os.path.join(data_dir, rel)
-        if os.path.exists(full):
-            return rel
+    split_candidates = [split_name]
+    if split_name.lower() in ['val', 'valid', 'validation']:
+        split_candidates = ['valid', 'val', 'validation']
+    elif split_name.lower() in ['train', 'training']:
+        split_candidates = ['train', 'training']
+    elif split_name.lower() in ['test', 'testing']:
+        split_candidates = ['test', 'testing']
+
+    for s in split_candidates:
+        for c in cls_candidates:
+            candidates = [
+                os.path.join(s, s, c, filename),
+                os.path.join(s, c, filename),
+                os.path.join('CAER-S', s, s, c, filename),
+                os.path.join('CAER-S', s, c, filename),
+            ]
+            for rel in candidates:
+                full = os.path.join(data_dir, rel)
+                if os.path.exists(full):
+                    return rel
     return None
 
 def main():
@@ -113,13 +151,11 @@ def main():
     all_face_boxes = {}
     all_body_boxes = {}
 
-    splits = [('train', 'train.txt'), ('val', 'validation.txt'), ('test', 'test.txt')]
+    splits = [('train', 'train.txt'), ('valid', 'validation.txt'), ('test', 'test.txt')]
     verified_sample = None
 
     for split_key, out_txt_name in splits:
         csv_files = find_csv_files(data_dir, split_key)
-        if not csv_files and split_key == 'val':
-            csv_files = find_csv_files(data_dir, 'validation')
 
         if not csv_files:
             print(f"=> [WARNING] No CSV files found for split '{split_key}'! Skipping.")
@@ -129,87 +165,90 @@ def main():
         split_records = []
 
         for csv_p in sorted(csv_files):
-            df = pd.read_csv(csv_p)
-            bbox_col = None
-            for col in ['box', 'bbox', 'bounding_box', 'coordinates']:
-                if col in df.columns:
-                    bbox_col = col
-                    break
-
             converted_rows = []
+            with open(csv_p, mode='r', encoding='utf-8', errors='ignore') as f:
+                reader = csv.DictReader(f)
+                fieldnames = reader.fieldnames or []
+                bbox_col = None
+                for col in ['box', 'bbox', 'bounding_box', 'coordinates']:
+                    if col in fieldnames:
+                        bbox_col = col
+                        break
 
-            for _, row in df.iterrows():
-                # Lấy tên file gốc từ đường dẫn Colab
-                raw_name = str(row['image_name'] if 'image_name' in row and pd.notna(row['image_name']) else row['image_path'])
-                filename = os.path.basename(raw_name)
+                for row in reader:
+                    # Lấy tên file gốc từ đường dẫn Colab
+                    raw_name = str(row.get('image_name') or row.get('image_path') or list(row.values())[0])
+                    filename = os.path.basename(raw_name)
 
-                raw_cls = extract_class_from_filename_or_path(csv_p, row, raw_name)
-                if not raw_cls:
-                    continue
+                    raw_cls = extract_class_from_filename_or_path(csv_p, row, raw_name)
+                    if not raw_cls:
+                        continue
 
-                label_id = LABEL_MAP.get(raw_cls.lower())
-                if label_id is None:
-                    continue
+                    label_id = LABEL_MAP.get(raw_cls.lower())
+                    if label_id is None:
+                        continue
 
-                # Tìm đường dẫn thực tế trên Kaggle
-                rel_img_path = find_image_path(data_dir, split_key, raw_cls, filename)
-                if not rel_img_path:
-                    # Fallback tìm kiếm trực tiếp trong split
-                    for cand in [os.path.join(split_key, split_key, filename), os.path.join(split_key, filename)]:
-                        if os.path.exists(os.path.join(data_dir, cand)):
-                            rel_img_path = cand
-                            break
+                    # Tìm đường dẫn thực tế trên Kaggle
+                    rel_img_path = find_image_path(data_dir, split_key, raw_cls, filename)
+                    if not rel_img_path:
+                        # Fallback tìm kiếm trực tiếp trong split
+                        for cand in [os.path.join(split_key, split_key, filename), os.path.join(split_key, filename)]:
+                            if os.path.exists(os.path.join(data_dir, cand)):
+                                rel_img_path = cand
+                                break
 
-                if not rel_img_path:
-                    continue
+                    if not rel_img_path:
+                        continue
 
-                full_kaggle_path = os.path.join(data_dir, rel_img_path)
-                if verified_sample is None:
-                    verified_sample = (raw_name, full_kaggle_path)
+                    full_kaggle_path = os.path.join(data_dir, rel_img_path)
+                    if verified_sample is None:
+                        verified_sample = (raw_name, full_kaggle_path)
 
-                # Dòng lưu vào train.txt / validation.txt / test.txt
-                split_records.append(f"{rel_img_path} {label_id}")
+                    # Dòng lưu vào train.txt / validation.txt / test.txt
+                    split_records.append(f"{rel_img_path} {label_id}")
 
-                # Bounding box
-                parsed_box = None
-                if bbox_col and pd.notna(row[bbox_col]):
-                    val = row[bbox_col]
-                    try:
-                        box = ast.literal_eval(val) if isinstance(val, str) else list(val)
-                        if isinstance(box, list) and len(box) == 4:
-                            fx1, fy1, fx2, fy2 = [int(v) for v in box]
-                            parsed_box = [fx1, fy1, fx2, fy2]
-                            
-                            # Lưu nhiều dạng keys để đảm bảo match_rate 100% trong Dataloader
-                            for k in [rel_img_path, filename, os.path.splitext(rel_img_path)[0], os.path.splitext(filename)[0]]:
-                                all_face_boxes[k] = parsed_box
+                    # Bounding box
+                    parsed_box = None
+                    if bbox_col and row.get(bbox_col):
+                        val = row[bbox_col]
+                        try:
+                            box = ast.literal_eval(val) if isinstance(val, str) else list(val)
+                            if isinstance(box, list) and len(box) == 4:
+                                fx1, fy1, fx2, fy2 = [int(v) for v in box]
+                                parsed_box = [fx1, fy1, fx2, fy2]
+                                
+                                # Lưu nhiều dạng keys để đảm bảo match_rate 100% trong Dataloader
+                                for k in [rel_img_path, filename, os.path.splitext(rel_img_path)[0], os.path.splitext(filename)[0]]:
+                                    all_face_boxes[k] = parsed_box
 
-                            # Ước lượng Body Bounding Box dựa trên tỷ lệ giải phẫu học
-                            w = fx2 - fx1
-                            h = fy2 - fy1
-                            bx1 = max(0, int(fx1 - 0.7 * w))
-                            by1 = max(0, int(fy1 - 0.1 * h))
-                            bx2 = int(fx2 + 0.7 * w)
-                            by2 = int(fy1 + 3.2 * h)
-                            body_box = [bx1, by1, bx2, by2]
-                            for k in [rel_img_path, filename, os.path.splitext(rel_img_path)[0], os.path.splitext(filename)[0]]:
-                                all_body_boxes[k] = body_box
-                    except Exception:
-                        pass
+                                # Ước lượng Body Bounding Box dựa trên tỷ lệ giải phẫu học
+                                w = fx2 - fx1
+                                h = fy2 - fy1
+                                bx1 = max(0, int(fx1 - 0.7 * w))
+                                by1 = max(0, int(fy1 - 0.1 * h))
+                                bx2 = int(fx2 + 0.7 * w)
+                                by2 = int(fy1 + 3.2 * h)
+                                body_box = [bx1, by1, bx2, by2]
+                                for k in [rel_img_path, filename, os.path.splitext(rel_img_path)[0], os.path.splitext(filename)[0]]:
+                                    all_body_boxes[k] = body_box
+                        except Exception:
+                            pass
 
-                # Lưu vào danh sách CSV đã convert đường dẫn
-                new_row = dict(row)
-                new_row['image_path_colab'] = raw_name
-                new_row['image_path'] = full_kaggle_path
-                new_row['image_name'] = filename
-                new_row['class'] = raw_cls
-                converted_rows.append(new_row)
+                    # Lưu vào danh sách CSV đã convert đường dẫn
+                    new_row = dict(row)
+                    new_row['image_path_colab'] = raw_name
+                    new_row['image_path'] = full_kaggle_path
+                    new_row['image_name'] = filename
+                    new_row['class'] = raw_cls
+                    converted_rows.append(new_row)
 
             # Lưu lại CSV chuẩn hóa đường dẫn Kaggle
             if converted_rows:
-                df_conv = pd.DataFrame(converted_rows)
                 out_csv_p = os.path.join(converted_csv_dir, os.path.basename(csv_p))
-                df_conv.to_csv(out_csv_p, index=False)
+                with open(out_csv_p, mode='w', encoding='utf-8', newline='') as f_out:
+                    writer = csv.DictWriter(f_out, fieldnames=list(converted_rows[0].keys()))
+                    writer.writeheader()
+                    writer.writerows(converted_rows)
 
         out_txt_path = os.path.join(output_dir, out_txt_name)
         with open(out_txt_path, 'w') as f:

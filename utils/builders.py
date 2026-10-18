@@ -48,7 +48,10 @@ def build_model(args: argparse.Namespace, input_text: list) -> torch.nn.Module:
             if "image_encoder" in name:
                 param.requires_grad = True
 
-    trainable_params_keywords = ["temporal_net", "prompt_learner", "temporal_net_body", "project_fc", "face_adapter", "classifier", "cross_attn", "cmaf", "gate_fc"]
+    trainable_params_keywords = ["temporal_net", "temporal_net_body", "project_fc", "face_adapter", "classifier", "cross_attn", "cmaf", "gate_fc"]
+    tune_prompt = str(getattr(args, 'load_and_tune_prompt_learner', True)).lower() in ['true', '1'] and getattr(args, 'lr_prompt_learner', 1e-4) > 0
+    if tune_prompt:
+        trainable_params_keywords.append("prompt_learner")
     
     print('\nTrainable parameters:')
     for name, param in model.named_parameters():
@@ -147,9 +150,7 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         train_transforms = torchvision.transforms.Compose([
             ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
             GroupRandomGrayscale(p=0.1),
-            RandomRotation(10),
             GroupResize(args.image_size),
-            GroupRandomHorizontalFlip(),
             Stack(),
             ToTorchFormatTensor(),
             GroupNormalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),

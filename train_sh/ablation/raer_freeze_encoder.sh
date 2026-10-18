@@ -73,4 +73,5 @@ python main.py \
   --drop-path-rate 0.1 \
   --modality-dropout 0.3 \
   --fusion-type cmaf \
-  --use-context
+  --use-context \
+  "$@"

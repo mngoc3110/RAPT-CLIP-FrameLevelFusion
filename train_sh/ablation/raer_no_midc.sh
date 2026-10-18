@@ -1,13 +1,24 @@
 #!/bin/bash
 # ============================================================================
-# RAER Ablation: NO MI & DC REGULARIZATION (lambda_mi = 0, lambda_dc = 0)
+# RAER Ablation: NO MI & DC REGULARIZATION (Unconstrained Prompt Tuning)
 # ============================================================================
-# Regularization Loss Ablation:
-#   Retains learnable PromptLearner, but disables both:
-#     - Mutual Information Loss (lambda_mi = 0.0)
-#     - Decorrelation Loss (lambda_dc = 0.0)
-#   Tests whether MI and DC prevent semantic drift and prompt collapse
-#   during prompt tuning.
+# PHÂN ĐỊNH BẢN CHẤT KHOA HỌC:
+#   1. "No MI & DC" (Script này) vs. "No Prompt Tuning" (raer_no_prompt_tuning.sh):
+#      - Ở script này: VẪN BẬT Prompt Tuning (lr_prompt_learner=0.0003), cho phép
+#        mô hình tự cập nhật các context vectors. Tuy nhiên, TẮT HOÀN TOÀN cả 2 hàm
+#        ràng buộc (lambda_mi=0.0, lambda_dc=0.0).
+#      - Ở raer_no_prompt_tuning.sh: TẮT HOÀN TOÀN việc học Prompt (lr=0), dùng câu
+#        chữ viết tay cố định (Handcrafted descriptors).
+#
+#   2. CÂU HỎI KHOA HỌC KIỂM CHỨNG:
+#      - "Khi cho mô hình tự học prompt, nếu không có hàm phạt MI (giữ nghĩa gốc)
+#        và DC (chống trùng lặp giữa Mặt và Cảnh) thì có bị Semantic Drift hay không?"
+#
+#   3. ẨN DỤ TRỰC QUAN:
+#      - No MI & DC: Học sinh được tự do viết câu văn mới nhưng không có giám thị chấm,
+#        dẫn đến việc câu tả Mặt và câu tả Cảnh chép y hệt nhau hoặc lạc đề.
+#      - Full RAPT-CLIP: Tự do sáng tạo có định hướng (MI giữ nghĩa gốc, DC chống trùng lặp).
+# ============================================================================
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
@@ -68,4 +79,5 @@ python main.py \
   --drop-path-rate 0.1 \
   --modality-dropout 0.3 \
   --fusion-type cmaf \
-  --use-context
+  --use-context \
+  "$@"

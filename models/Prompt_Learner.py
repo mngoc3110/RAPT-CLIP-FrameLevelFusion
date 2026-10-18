@@ -38,6 +38,9 @@ class PromptLearner(nn.Module):
         is_load_and_tune = str(getattr(args, 'load_and_tune_prompt_learner', True)).lower() in ['true', '1']
 
         ctx_init = getattr(args, 'ctx_init', '')
+        if not ctx_init and not is_load_and_tune:
+            ctx_init = "a video of a student showing"
+
         if ctx_init:
             ctx_init = ctx_init.strip()
             prompt_tokenized = clip.tokenize(ctx_init).to(clip_model.token_embedding.weight.device)
@@ -55,10 +58,14 @@ class PromptLearner(nn.Module):
             if is_class_specific:
                 if is_load_and_tune:
                     print(f"=> Semantically initializing class-specific contexts from '{ctx_init}' ({n_ctx} tokens)")
+                else:
+                    print(f"=> [No-Prompt-Tuning] Static class-specific contexts from '{ctx_init}' ({n_ctx} tokens)")
                 ctx_vectors = init_ctx_vectors.unsqueeze(0).repeat(n_cls, 1, 1)
             else:
                 if is_load_and_tune:
                     print(f"=> Semantically initializing generic context from '{ctx_init}' ({n_ctx} tokens)")
+                else:
+                    print(f"=> [No-Prompt-Tuning] Static generic context from '{ctx_init}' ({n_ctx} tokens)")
                 ctx_vectors = init_ctx_vectors
         else:
             if is_class_specific:
@@ -73,6 +80,8 @@ class PromptLearner(nn.Module):
             prompt_prefix = " ".join(["X"] * n_ctx)
 
         self.ctx = nn.Parameter(ctx_vectors)  # to be optimized
+        if not is_load_and_tune:
+            self.ctx.requires_grad = False
 
         # class_names = [name.replace("_", " ") for name in class_names]
         name_lens = [len(_tokenizer.encode(name)) for name in class_names]

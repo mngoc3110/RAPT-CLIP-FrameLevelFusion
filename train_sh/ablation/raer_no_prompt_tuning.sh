@@ -1,12 +1,22 @@
 #!/bin/bash
 # ============================================================================
-# RAER Ablation: NO PROMPT TUNING (Static Hand-Crafted Prompts)
+# RAER Ablation: NO PROMPT TUNING (Static Hand-Crafted Text Prompts)
 # ============================================================================
-# Language Prompt Ablation:
-#   Ablates learnable prompt contexts (CoOp-style PromptLearner).
-#   Uses fixed hand-crafted prompts without backpropagation into prompt tokens,
-#   and zeroes MI/DC regularizer weights since they constrain learnable prompts.
-#   Tests the impact of text prompt optimization on multimodal alignment.
+# PHÂN ĐỊNH BẢN CHẤT KHOA HỌC:
+#   1. "No Prompt Tuning" (Script này) vs. "No MI & DC" (raer_no_midc.sh):
+#      - Ở script này: TẮT HOÀN TOÀN việc học Prompt (lr_prompt_learner=0.0,
+#        requires_grad=False). Mô hình dùng văn bản cố định do con người viết
+#        (Handcrafted text template: "a video of a student showing [CLASS]").
+#        Vì text đóng băng, lambda_mi và lambda_dc tự động = 0.
+#      - Ở raer_no_midc.sh: VẪN BẬT Prompt Tuning (lr=3e-4), nhưng KHÔNG áp hàm phạt
+#        MI và DC, dẫn tới nguy cơ trôi dạt ngữ nghĩa (Semantic Drift / Prompt Collapse).
+#
+#   2. ẨN DỤ TRỰC QUAN:
+#      - No Prompt Tuning: Học sinh dùng câu văn mẫu từ điển có sẵn, cấm sửa từ nào.
+#      - No MI & DC: Học sinh được tự do viết câu mới nhưng không ai giám thị,
+#        dẫn đến việc câu tả Mặt và câu tả Cảnh chép y hệt nhau.
+#      - Full RAPT-CLIP: Tự do sáng tạo có định hướng (MI giữ nghĩa gốc, DC chống trùng lặp).
+# ============================================================================
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_VISIBLE_DEVICES=0
@@ -59,6 +69,7 @@ python main.py \
   --class-token-position end \
   --class-specific-contexts True \
   --load_and_tune_prompt_learner False \
+  --ctx-init "a video of a student showing" \
   --num-segments 16 \
   --duration 1 \
   --image-size 224 \
@@ -67,4 +78,5 @@ python main.py \
   --drop-path-rate 0.1 \
   --modality-dropout 0.3 \
   --fusion-type cmaf \
-  --use-context
+  --use-context \
+  "$@"

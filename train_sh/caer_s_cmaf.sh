@@ -43,7 +43,7 @@ echo "=> Using CAER-S dataset root: ${DATA_DIR}"
 
 # 2. Tự động chuyển đổi đường dẫn Colab -> Kaggle và tạo file annotation
 ANNOTATION_DIR="/kaggle/working/caers_data"
-if [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ] || [ ! -f "${ANNOTATION_DIR}/validation.txt" ]; then
+if [ "$REGEN" = "1" ] || [ ! -f "${ANNOTATION_DIR}/train.txt" ] || [ ! -f "${ANNOTATION_DIR}/face.json" ] || [ ! -f "${ANNOTATION_DIR}/validation.txt" ]; then
   echo "=> [Preprocessor] Đang tự động chuyển đổi đường dẫn Colab sang Kaggle..."
   python tools/prepare_caers_dataset.py \
     --data-dir "${DATA_DIR}" \
@@ -68,34 +68,72 @@ echo "=> File Face BBox:        ${FACE_BOX}"
 echo "=> File Body BBox:        ${BODY_BOX}"
 echo "=> Thư mục CSVs đã đổi đường dẫn: ${ANNOTATION_DIR}/converted_csvs/"
 
-# 3. Nạp đường dẫn Checkpoint để Resume
-RESUME_PATH="/kaggle/input/models/mngochocsupham/caers/tensorflow2/default/1/CAER-S-model.pth"
+# 3. Checkpoint Resume: Tự động tìm checkpoint thông minh (Auto-Resume)
+RESUME_ARG=()
+TOTAL_EPOCHS=20
 
-# Cho phép ghi đè đường dẫn nếu truyền qua tham số dòng lệnh $1
+# Xử lý tham số truyền vào: bash caer_s_cmaf.sh [CHECKPOINT_PATH] [EPOCHS]
 if [ -n "$1" ]; then
-  RESUME_PATH="$1"
-elif [ ! -f "$RESUME_PATH" ]; then
-  # Fallback nếu chạy test ở local hoặc cấu trúc thư mục Kaggle khác
-  for cp in "outputs/CAER-S/CAER-S-model.pth" "outputs/CAER-S/model_best.pth" "/kaggle/input/caers/tensorflow2/default/1/CAER-S-model.pth" "/kaggle/working/outputs/CAER-S-CMAF/model.pth"; do
-    if [ -f "$cp" ]; then
-      RESUME_PATH="$cp"
-      break
+  if [ -f "$1" ]; then
+    echo "=> [Resume] Sử dụng checkpoint người dùng chỉ định: $1"
+    RESUME_ARG=("--resume" "$1")
+    if [ -n "$2" ]; then
+      TOTAL_EPOCHS="$2"
+      echo "=> [Epochs] Đặt lại tổng số epoch: ${TOTAL_EPOCHS}"
     fi
-  done
+  elif [[ "$1" =~ ^[0-9]+$ ]]; then
+    TOTAL_EPOCHS="$1"
+    echo "=> [Epochs] Người dùng đặt tổng số epoch: ${TOTAL_EPOCHS}"
+  else
+    echo "=> [Cảnh báo] Checkpoint '$1' không tồn tại trên hệ thống!"
+  fi
 fi
 
-echo "=> [Resume] Sử dụng checkpoint: ${RESUME_PATH}"
-RESUME_ARG=("--resume" "${RESUME_PATH}")
+if [ ${#RESUME_ARG[@]} -eq 0 ]; then
+  LATEST_CKPT=""
 
-# 4. Khởi chạy huấn luyện RAPT-CLIP
+  # 1. Quét tìm checkpoint trong outputs/ của session hiện tại (/kaggle/working hoặc local)
+  SEARCH_OUTPUT_DIRS=("/kaggle/working/outputs" "outputs")
+  for out_d in "${SEARCH_OUTPUT_DIRS[@]}"; do
+    if [ -d "$out_d" ]; then
+      FOUND_CKPT=$(find "$out_d" -type f -name "model.pth" 2>/dev/null | sort -V | tail -n 1)
+      if [ -z "$FOUND_CKPT" ]; then
+        FOUND_CKPT=$(find "$out_d" -type f -name "model_best.pth" 2>/dev/null | sort -V | tail -n 1)
+      fi
+      if [ -n "$FOUND_CKPT" ] && [ -f "$FOUND_CKPT" ]; then
+        LATEST_CKPT="$FOUND_CKPT"
+        break
+      fi
+    fi
+  done
+
+  # 2. Quét tìm tự động mọi checkpoint trên /kaggle/input (dù người dùng đặt tên dataset là gì)
+  if [ -z "$LATEST_CKPT" ] && [ -d "/kaggle/input" ]; then
+    # Tìm file có chứa caer hoặc model hoặc best
+    LATEST_CKPT=$(find /kaggle/input -type f \( -name "*caer*.pth" -o -name "*model*.pth" -o -name "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|checkpoint" | head -n 1)
+  fi
+
+  if [ -n "$LATEST_CKPT" ] && [ -f "$LATEST_CKPT" ]; then
+    echo "=> [Auto-Resume] Tự động tìm thấy checkpoint: ${LATEST_CKPT}"
+    RESUME_ARG=("--resume" "${LATEST_CKPT}")
+  else
+    echo "=> [Info] Không tìm thấy checkpoint cũ! Huấn luyện từ đầu (Train from scratch) với pretrained CLIP ViT-B/16!"
+    if [ -d "/kaggle/input" ]; then
+      echo "=> [Gợi ý] Danh sách các file .pth đang có trong /kaggle/input:"
+      find /kaggle/input -type f -name "*.pth" 2>/dev/null || echo "   (Không có file .pth nào)"
+    fi
+  fi
+fi
+
+# 4. Khởi chạy huấn luyện RAPT-CLIP CAER-S Tối Ưu
 python -u main.py \
   --mode train \
   --exper-name CAER-S-CMAF \
   --dataset CAER \
   --gpu 0 \
-  --epochs 20 \
+  --epochs ${TOTAL_EPOCHS} \
   --batch-size 16 \
-  --grad-accum-steps 2 \
+  --grad-accum-steps 1 \
   --print-freq 50 \
   --seed 42 \
   --workers 4 \
@@ -111,6 +149,7 @@ python -u main.py \
   --fusion-type cmaf \
   --fusion-stage frame \
   --temporal-layers 1 \
+  --temporal-pooling attn \
   --use-context \
   --crop-body \
   --mask-context-face \
@@ -147,6 +186,6 @@ python -u main.py \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \
-  --drop-path-rate 0.1 \
-  --modality-dropout 0.3 \
+  --drop-path-rate 0.0 \
+  --modality-dropout 0.0 \
   --use-amp
