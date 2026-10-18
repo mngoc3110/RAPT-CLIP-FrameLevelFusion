@@ -45,7 +45,7 @@ python main.py \
   --bounding-box-face "$FACE_BOX" \
   --bounding-box-body "$BODY_BOX" \
   --epochs 20 \
-  --batch-size 2 \
+  --batch-size 4 \
   --print-freq 50 \
   --use-amp \
   --grad-clip 1.0 \

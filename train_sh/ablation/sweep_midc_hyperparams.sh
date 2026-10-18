@@ -44,7 +44,7 @@ run_sweep_trial() {
       --bounding-box-face RAER/bounding_box/face.json \
       --bounding-box-body RAER/bounding_box/body.json \
       --epochs 20 \
-      --batch-size 2 \
+      --batch-size 4 \
       --print-freq 50 \
       --use-amp \
       --grad-clip 1.0 \
