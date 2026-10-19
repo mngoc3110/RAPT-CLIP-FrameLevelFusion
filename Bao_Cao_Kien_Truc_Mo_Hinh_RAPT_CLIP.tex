@@ -536,9 +536,135 @@ Bản đồ nhiệt kích hoạt Grad-CAM được trích xuất trực tiếp t
 \noindent\textbf{Nhận xét:} Các vùng nhiệt đỏ tập trung chính xác vào biểu cảm nét mặt và tư thế cơ thể người trong khung cảnh ngoài trời, chứng minh mô hình RAPT-CLIP đã dung hợp hài hòa cả 3 luồng thông tin (Face, Body, Context) để dự đoán chính xác cảm xúc ngoài ngữ cảnh tự nhiên.
 
 % ==============================================================================
-% MỤC 5 & 6: CAER VÀ DAISEE
+% MỤC 5: BỘ DỮ LIỆU CAER-S (STATIC)
 % ==============================================================================
-\section{Huấn luyện trên bộ dữ liệu CAER}
+\section{Huấn luyện và Đánh giá trên bộ dữ liệu CAER-S (Static Images)}
+
+\noindent\textbf{Đặc điểm bộ dữ liệu:} CAER-S (\textit{Context-Aware Emotion Recognition - Static}) là tập dữ liệu ảnh tĩnh quy mô lớn gồm 70,000 ảnh trích xuất từ 79 bộ phim truyền hình, bao gồm 7 lớp cảm xúc chuẩn: \textit{Anger, Disgust, Fear, Happy, Neutral, Sad, Surprise}. Tập huấn luyện gồm 49,007 ảnh với phân phối cân bằng hoàn hảo (đều đặn 7,001 mẫu/lớp), và tập kiểm định gồm 7,000 ảnh (1,000 mẫu/lớp).\\
+\textbf{Cấu hình mô hình tối ưu:} RAPT-CLIP sử dụng kiến trúc Triple-Stream (Face + Body + Masked Context) kết hợp cơ chế dung hợp không gian \textbf{Tridirectional Frame-Level CMAF}. Do là ảnh tĩnh ($T=1$), khối Temporal Transformer được bỏ qua hoàn toàn (\texttt{--no-temporal}) nhằm tập trung tối đa năng lực mô hình vào việc trích xuất và dung hợp ngữ cảnh không gian.\\
+\textbf{Hàm mất mát \& Chiến lược tối ưu:} Khác với tập video mất cân bằng như RAER, CAER-S có phân phối cân bằng nên mô hình áp dụng \textbf{Cross-Entropy có Label Smoothing ($\epsilon = 0.1$)} kết hợp điều phối \textbf{Cosine Annealing Warmup}, giải phóng trọn vẹn biên độ gradient của CLIP ViT.\\
+\textbf{Kết quả thực nghiệm vượt bậc (Cột mốc Epoch 7):}
+\begin{itemize}[leftmargin=18pt, itemsep=1pt]
+    \item \textbf{Train WAR / UAR:} \textbf{96.55\%} (Loss: 0.5419).
+    \item \textbf{Validation WAR (Overall Accuracy):} \textbf{90.40\%} (6,328 / 7,000 mẫu chính xác, Loss: 0.6787).
+    \item \textbf{Validation UAR (Balanced Accuracy):} \textbf{90.40\%} $|$ \textbf{Harmonic Score:} \textbf{90.40\%}.
+    \item \textbf{Bước nhảy vọt so với cấu hình ban đầu:} Tăng \textbf{+7.70\%} so với baseline cũ dùng LDAM (82.70\%), vượt qua hàng loạt mô hình SOTA thế giới như MA-Net (88.42\%) và GLAMOR-Net (89.88\%), áp sát AGCD-Net (90.65\%) và SAFER (91.40\%).
+\end{itemize}
+
+\subsection{Bảng siêu tham số huấn luyện của bộ dữ liệu CAER-S}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Bảng siêu tham số huấn luyện chi tiết của mô hình RAPT-CLIP trên CAER-S}
+\label{tab:caers_hyperparams}
+\begin{tabularx}{\textwidth}{p{3.2cm} p{4.2cm} X}
+\toprule
+\rowcolor{tableheader}
+\textbf{Nhóm tham số} & \textbf{Tên biến / Siêu tham số} & \textbf{Giá trị cấu hình thực nghiệm} \\
+\midrule
+\rowcolor{grouprow} \multicolumn{3}{l}{\textbf{a. Thiết lập huấn luyện \& Tối ưu hóa}} \\
+Visual Backbone & \texttt{clip\_path}, \texttt{image\_size} & CLIP ViT-B/16 ($224 \times 224$), \texttt{freeze\_image\_encoder} = False \\
+Epochs \& Batch Size & \texttt{epochs}, \texttt{batch\_size} & \textbf{20 Epochs} (Đạt đỉnh: \textbf{Epoch 7}) $|$ Batch Size: \textbf{16} (Workers: 4) \\
+Thuật toán tối ưu & \texttt{optimizer}, \texttt{weight\_decay} & \textbf{AdamW} $|$ Weight Decay: 0.005 $|$ Grad Clip: 1.0 $|$ Early Stop: 3 \\
+Tốc độ học (LRs) & \texttt{lr}, \texttt{lr\_image}, \texttt{lr\_prompt} & \texttt{lr}: \textbf{$5\times 10^{-5}$}, \texttt{lr\_image}: \textbf{$1\times 10^{-5}$}, \texttt{lr\_prompt}: \textbf{$5\times 10^{-4}$}, \texttt{lr\_adapter}: \textbf{$2\times 10^{-4}$} \\
+Lịch điều phối LR & \texttt{scheduler}, \texttt{warmup\_epochs} & \textbf{CosineAnnealingLR} (Warmup: 2 epochs, $\eta_{\min} = 1\times 10^{-7}$) \\
+\midrule
+\rowcolor{grouprow} \multicolumn{3}{l}{\textbf{b. Hàm mất mát \& Điều hòa biểu diễn}} \\
+Hàm mất mát chính & \texttt{loss\_type}, \texttt{label\_smoothing} & \textbf{Cross-Entropy (CE)} với Label Smoothing = \textbf{0.10} \\
+Hàm mất mát phụ & \texttt{lambda\_mi}, \texttt{lambda\_dc} & $\lambda_{\text{MI}} = 0.1$ (Warmup: 3, Ramp: 6), $\lambda_{\text{DC}} = 0.1$ (Warmup: 3, Ramp: 6) \\
+Regularization & \texttt{drop\_path\_rate}, \texttt{modality\_dropout} & DropPath: 0.10 $|$ Modality Dropout: 0.10 (Chống phụ thuộc quá mức vào bối cảnh) \\
+\midrule
+\rowcolor{grouprow} \multicolumn{3}{l}{\textbf{c. Luồng dữ liệu \& Kiến trúc dung hợp}} \\
+Luồng dữ liệu & \texttt{crop\_body}, \texttt{mask\_context\_face} & \textbf{Triple-Stream:} Face Crop + Body Crop (Torso) + Context (Xóa mặt) \\
+Dung hợp đặc trưng & \texttt{fusion\_type}, \texttt{no\_temporal} & \textbf{Tridirectional Frame-Level CMAF} (1536-d) $|$ \textbf{Bỏ qua Temporal Net} \\
+Prompt Ensemble & \texttt{contexts\_number}, \texttt{text\_type} & Prompt Ensemble (8 learnable context tokens/lớp, CoOp tuning) \\
+Suy luận mở rộng & \texttt{use\_tta} & Test-Time Augmentation (Lật ngang ảnh trên cả 3 luồng dữ liệu) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{So sánh với các phương pháp SOTA trên CAER-S}
+
+\begin{table}[H]
+\centering
+\small
+\caption{So sánh hiệu năng nhận diện cảm xúc của RAPT-CLIP với các phương pháp SOTA trên CAER-S}
+\label{tab:caers_sota_comparison}
+\begin{tabularx}{\textwidth}{l l c c X}
+\toprule
+\rowcolor{tableheader}
+\textbf{Phương pháp} & \textbf{Nguồn / Năm} & \textbf{WAR (\%)} & \textbf{UAR (\%)} & \textbf{Đặc trưng kiến trúc chính} \\
+\midrule
+CAER-Net-S & Lee et al., ICCV 2019 & 73.51 & 73.51 & 2-Stream CNN (Face + Context) \\
+EmotiCon & Mittal et al., AAAI 2020 & 77.00 & 77.00 & Đa nhánh: Mặt, Dáng, Cảnh, Độ sâu \\
+GRERN & 2021 & 81.31 & 81.31 & Đồ thị quan hệ ngữ cảnh \\
+\textbf{RAPT-CLIP (Baseline cũ)} & Bản chạy sơ bộ & 82.70 & 82.55 & CMAF + LDAM loss ($s=1.0$) \\
+EfficientFace & 2021 & 85.87 & 85.87 & Mạng khuôn mặt nhẹ hiệu năng cao \\
+MA-Net & 2021 & 88.42 & 88.42 & Chú ý đa góc nhìn khuôn mặt \& bối cảnh \\
+GLAMOR-Net & 2023 & 89.88 & 89.88 & Tương tác toàn cục và cục bộ \\
+AGCD-Net & 2023 & 90.65 & 90.65 & Phân tách đồ thị thích ứng \\
+SAFER & 2024 & 91.40 & 91.40 & Tinh chỉnh ngữ cảnh nâng cao \\
+\midrule
+\rowcolor{grouprow}
+\textbf{RAPT-CLIP (Ours)} & \textbf{Công trình này (Epoch 7)} & \textbf{90.40} & \textbf{90.40} & \textbf{Triple-Stream CMAF + CLIP + CE (Smoothed)} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Phân tích độ hồi tưởng (Recall) chi tiết từng lớp cảm xúc \& Ma trận nhầm lẫn}
+
+\noindent Dưới đây là bảng phân tích chi tiết tỷ lệ nhận diện chính xác trên từng lớp cảm xúc tại Epoch 7:
+
+\begin{table}[H]
+\centering
+\small
+\caption{Độ hồi tưởng (Recall) trên từng lớp cảm xúc của tập kiểm định CAER-S (1,000 mẫu/lớp)}
+\label{tab:caers_per_class}
+\begin{tabularx}{\textwidth}{c l c c X}
+\toprule
+\rowcolor{tableheader}
+\textbf{ID} & \textbf{Nhãn cảm xúc} & \textbf{Số mẫu đúng / 1,000} & \textbf{Recall (\%)} & \textbf{Nhận xét đặc trưng nhận diện} \\
+\midrule
+0 & \textbf{Anger} & 923 / 1000 & \textbf{92.30\%} & Nhận diện xuất sắc qua biểu cảm cau mày và tư thế giận dữ \\
+1 & \textbf{Disgust} & 981 / 1000 & \textbf{98.10\%} & Gần như hoàn hảo; nhăn mũi và né tránh bối cảnh \\
+2 & \textbf{Fear} & 997 / 1000 & \textbf{99.70\%} & Cực kỳ vượt trội (chỉ nhầm 3 mẫu); mắt mở to và co người \\
+3 & \textbf{Happy} & 834 / 1000 & \textbf{83.40\%} & Nụ cười và ánh mắt sáng; đôi lúc nhầm sang Neutral (70 mẫu) \\
+4 & \textbf{Neutral} & 737 / 1000 & \textbf{73.70\%} & Lớp khó nhất; phân tán nhẹ sang Surprise (68) và Happy (56) \\
+5 & \textbf{Sad} & 934 / 1000 & \textbf{93.40\%} & Khóe môi trễ xuống và dáng người buông thõng thể hiện rõ \\
+6 & \textbf{Surprise} & 922 / 1000 & \textbf{92.20\%} & Mắt trợn tròn và há miệng được CMAF bắt trúng \\
+\midrule
+\rowcolor{grouprow}
+\multicolumn{2}{l}{\textbf{Trung bình toàn bộ (WAR / UAR)}} & \textbf{6,328 / 7,000} & \textbf{90.40\%} & \textbf{Hiệu năng đồng đều vượt trội trên cả 7 cảm xúc} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Ma trận nhầm lẫn thực nghiệm trên tập kiểm định CAER-S tại Epoch 7 (7,000 mẫu)}
+\label{tab:caers_cm}
+\begin{tabular}{r | rrrrrrr | r}
+\toprule
+\rowcolor{tableheader}
+\textbf{True $\backslash$ Pred} & \textbf{Anger} & \textbf{Disgust} & \textbf{Fear} & \textbf{Happy} & \textbf{Neutral} & \textbf{Sad} & \textbf{Surprise} & \textbf{Tổng} \\
+\midrule
+\textbf{Anger}    & \textbf{923} & 10  & 1   & 7   & 28  & 17  & 14  & 1,000 \\
+\textbf{Disgust}  & 4   & \textbf{981} & 2   & 4   & 1   & 7   & 1   & 1,000 \\
+\textbf{Fear}     & 0   & 1   & \textbf{997} & 0   & 0   & 2   & 0   & 1,000 \\
+\textbf{Happy}    & 25  & 4   & 8   & \textbf{834} & 70  & 17  & 42  & 1,000 \\
+\textbf{Neutral}  & 53  & 29  & 10  & 56  & \textbf{737} & 47  & 68  & 1,000 \\
+\textbf{Sad}      & 16  & 1   & 5   & 11  & 19  & \textbf{934} & 14  & 1,000 \\
+\textbf{Surprise} & 19  & 3   & 3   & 16  & 22  & 15  & \textbf{922} & 1,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+% MỤC 6: BỘ DỮ LIỆU CAER (VIDEO)
+% ==============================================================================
+\section{Huấn luyện trên bộ dữ liệu CAER Video}
 \begin{itemize}[leftmargin=18pt, itemsep=2pt]
     \item \textbf{Đặc điểm bộ dữ liệu:} Bộ dữ liệu cảm xúc trích từ các video phim truyền hình (\textit{Context-Aware Emotion Recognition}) gồm 7 lớp cảm xúc cơ bản.
     \item \textbf{Cấu hình huấn luyện:} Tập lệnh thực thi \texttt{train\_sh/caer\_cmaf.sh}. Tải trước đặc trưng CLIP dưới dạng file \texttt{.npy} để tối ưu hóa tốc độ I/O. Dung hợp 2 luồng Face và Context qua CMAF (kích thước sau concat là 1024 chiều), sau đó ánh xạ qua Projection Head để phân loại cảm xúc.

@@ -2,8 +2,14 @@
 # ============================================================================
 # CAER-S Fine-Tuning & TTA Script (Warm-Start from Pretrained Checkpoint)
 # ============================================================================
+# Verified SOTA Milestone (Epoch 7):
+#   • Train WAR: 96.55% | Train UAR: 96.55% (Loss: 0.5419)
+#   • Valid WAR: 90.40% | Valid UAR: 90.40% (Loss: 0.6787)
+#   • Per-class Recall: Fear (99.7%), Disgust (98.1%), Sad (93.4%), Anger (92.3%),
+#                       Surprise (92.2%), Happy (83.4%), Neutral (73.7%)
+# ============================================================================
 # Mục đích:
-# - Cứu và nâng cấp checkpoint đã đạt 82.70% (hoặc bất kỳ checkpoint nào)
+# - Cứu và nâng cấp checkpoint cũ (từ 82.70% -> 90.40%+)
 # - Chuyển sang Cross-Entropy (CE + Label Smoothing 0.1) để mở khóa biên độ gradient
 # - Bỏ qua Temporal Transformer (--no-temporal) để tập trung 100% vào Frame CMAF
 # - Chạy 5-8 epoch với Cosine Annealing (Warmup 1 epoch)

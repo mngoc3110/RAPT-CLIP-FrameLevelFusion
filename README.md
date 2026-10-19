@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/Backbone-CLIP_ViT--B%2F16-4285F4?style=flat-square" />
   <img src="https://img.shields.io/badge/Best_Valid_UAR-77.06%25_(RAER)-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/Valid_WAR-78.79%25_(RAER)-brightgreen?style=flat-square" />
+  <img src="https://img.shields.io/badge/CAER--S_Accuracy-90.40%25-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/Fusion-Tridirectional_CMAF-blueviolet?style=flat-square" />
   <img src="https://img.shields.io/badge/License-Academic-blue?style=flat-square" />
 </p>
@@ -271,6 +272,50 @@ bash valid_sh/valid_raer_framelevelfusion.sh
 | Zero-Shot CLIP | CLIP ViT-B/16 | Video Frames | 58.70% | 52.30% |
 | CAER-Net | 2D CNN | Face + Context | 69.50% | 64.80% |
 | **RAPT-CLIP-FrameLevelFusion (Ours)** | **CLIP ViT-B/16** | **Face + Body + Context** | **78.79%** | **77.06%** |
+
+---
+
+### 4. Benchmark on CAER-S (Static Context-Aware Emotion Recognition)
+
+*Evaluated on the CAER-S benchmark (70,000 static images, 7 classes) at peak Epoch 7:*
+
+| Method | Source / Year | Modalities | Valid WAR (%) | Valid UAR (%) |
+| :--- | :---: | :---: | :---: | :---: |
+| CAER-Net-S | Lee et al., ICCV 2019 | Face + Context | 73.51% | 73.51% |
+| EmotiCon | Mittal et al., AAAI 2020 | Face + Body + Context + Depth | 77.00% | 77.00% |
+| GRERN | 2021 | Context Graph | 81.31% | 81.31% |
+| RAPT-CLIP (Initial Run w/ LDAM) | Baseline | Face + Body + Context | 82.70% | 82.55% |
+| EfficientFace | 2021 | Face Only | 85.87% | 85.87% |
+| MA-Net | 2021 | Face + Context | 88.42% | 88.42% |
+| GLAMOR-Net | 2023 | Global + Local | 89.88% | 89.88% |
+| AGCD-Net | 2023 | Adaptive Graph | 90.65% | 90.65% |
+| SAFER | 2024 | Enhanced Context | 91.40% | 91.40% |
+| **★ RAPT-CLIP (Ours — Epoch 7)** | **This Work** | **Face + Body + Masked Context** | **90.40%** | **90.40%** |
+
+#### CAER-S Per-Class Recall Breakdown (Validation: 1,000 samples/class)
+
+| Class ID | Emotion Class | Correct / 1,000 | Validation Recall (%) | Error Pattern / Analysis |
+| :---: | :--- | :---: | :---: | :--- |
+| 0 | **Anger** | 923 / 1,000 | **92.30%** | Strong recognition; 28 misclassified as Neutral |
+| 1 | **Disgust** | 981 / 1,000 | **98.10%** | Near-perfect; distinctive wrinkled nose & recoil posture |
+| 2 | **Fear** | 997 / 1,000 | **99.70%** | Outstanding (only 3 mistakes out of 1,000 images!) |
+| 3 | **Happy** | 834 / 1,000 | **83.40%** | High precision; subtle smiles occasionally overlap with Neutral (70) |
+| 4 | **Neutral** | 737 / 1,000 | **73.70%** | Most ambiguous class; slight bleed into Surprise (68) and Happy (56) |
+| 5 | **Sad** | 934 / 1,000 | **93.40%** | Robust detection via slumped posture and downturned lips |
+| 6 | **Surprise** | 922 / 1,000 | **92.20%** | High accuracy captured by CMAF face-context interaction |
+| **All** | **Overall (WAR / UAR)** | **6,328 / 7,000** | **90.40%** | **Harmonic Score: 90.40% — Surpasses SOTA MA-Net & GLAMOR-Net** |
+
+```
+Validation Confusion Matrix (7,000 samples):
+             Anger  Disgust   Fear  Happy  Neutral    Sad  Surprise
+Anger   [      923       10      1      7       28     17        14 ]
+Disgust [        4      981      2      4        1      7         1 ]
+Fear    [        0        1    997      0        0      2         0 ]
+Happy   [       25        4      8    834       70     17        42 ]
+Neutral [       53       29     10     56      737     47        68 ]
+Sad     [       16        1      5     11       19    934        14 ]
+Surprise[       19        3      3     16       22     15       922 ]
+```
 
 ---
 
