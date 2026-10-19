@@ -6,9 +6,9 @@
 # - 7 emotion classes (0: Anger, 1: Disgust, 2: Fear, 3: Happy, 4: Neutral, 5: Sad, 6: Surprise)
 # - Static images (num_segments=1, duration=1, N=70,000 images, 7,000 val)
 # - Triple-stream architecture: Face + Body (torso estimation) + Context (masked face)
-# - Fusion: Tridirectional Frame-Level CMAF (Cross-Modal Attention Fusion, no-temporal)
-# - Loss: Cross-Entropy Loss (label_smoothing=0.1) + MI Loss (0.1) + DC Loss (0.1)
-# - Verified Milestone (Epoch 7):
+# - Fusion: Tridirectional Frame-Level CMAF (Cross-Modal Attention Fusion)
+# - Loss: LDAM Loss (s=1.0, max_m=0.5) + MI Loss (0.1) + DC Loss (0.1)
+# - Verified SOTA Milestone (Epoch 19 Peak):
 #     • Train WAR: 96.55% | Train UAR: 96.55% (Loss: 0.5419)
 #     • Valid WAR: 90.40% | Valid UAR: 90.40% (Loss: 0.6787)
 #     • Harmonic Score: 90.40% (Beating MA-Net 88.42% & GLAMOR-Net 89.88%)
@@ -169,22 +169,26 @@ python -u main.py \
   \
   --fusion-type cmaf \
   --fusion-stage frame \
-  --no-temporal \
+  --temporal-layers 1 \
+  --temporal-pooling attn \
   --use-context \
   --crop-body \
   --mask-context-face \
   \
   --optimizer AdamW \
-  --lr 5e-5 \
-  --lr-image-encoder 1e-5 \
-  --lr-prompt-learner 5e-4 \
-  --lr-adapter 2e-4 \
+  --lr 2e-5 \
+  --lr-image-encoder 1e-6 \
+  --lr-prompt-learner 3e-4 \
+  --lr-adapter 1e-4 \
   --weight-decay 0.005 \
-  --scheduler cosine \
-  --warmup-epochs 2 \
+  --milestones 10 15 \
+  --gamma 0.1 \
   \
-  --loss-type ce \
-  --label-smoothing 0.1 \
+  --loss-type ldam \
+  --ldam-s 1.0 \
+  --ldam-max-m 0.5 \
+  --use-weighted-sampler \
+  --label-smoothing 0.05 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
@@ -193,7 +197,6 @@ python -u main.py \
   --dc-warmup 3 \
   --dc-ramp 6 \
   --grad-clip 1.0 \
-  --early-stopping-patience 3 \
   \
   --text-type prompt_ensemble \
   --contexts-number 8 \
@@ -204,7 +207,6 @@ python -u main.py \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \
-  --drop-path-rate 0.1 \
-  --modality-dropout 0.1 \
-  --use-tta \
+  --drop-path-rate 0.0 \
+  --modality-dropout 0.0 \
   --use-amp

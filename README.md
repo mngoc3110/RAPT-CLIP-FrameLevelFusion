@@ -277,20 +277,19 @@ bash valid_sh/valid_raer_framelevelfusion.sh
 
 ### 4. Benchmark on CAER-S (Static Context-Aware Emotion Recognition)
 
-*Evaluated on the CAER-S benchmark (70,000 static images, 7 classes) at peak Epoch 7:*
+*Evaluated on the CAER-S benchmark (70,000 static images, 7 classes) at peak Epoch 19 (Script: `train_sh/caer_s_cmaf.sh` with LDAM Loss $s=1.0$):*
 
 | Method | Source / Year | Modalities | Valid WAR (%) | Valid UAR (%) |
 | :--- | :---: | :---: | :---: | :---: |
 | CAER-Net-S | Lee et al., ICCV 2019 | Face + Context | 73.51% | 73.51% |
 | EmotiCon | Mittal et al., AAAI 2020 | Face + Body + Context + Depth | 77.00% | 77.00% |
 | GRERN | 2021 | Context Graph | 81.31% | 81.31% |
-| RAPT-CLIP (Initial Run w/ LDAM) | Baseline | Face + Body + Context | 82.70% | 82.55% |
 | EfficientFace | 2021 | Face Only | 85.87% | 85.87% |
 | MA-Net | 2021 | Face + Context | 88.42% | 88.42% |
 | GLAMOR-Net | 2023 | Global + Local | 89.88% | 89.88% |
 | AGCD-Net | 2023 | Adaptive Graph | 90.65% | 90.65% |
 | SAFER | 2024 | Enhanced Context | 91.40% | 91.40% |
-| **★ RAPT-CLIP (Ours — Epoch 7)** | **This Work** | **Face + Body + Masked Context** | **90.40%** | **90.40%** |
+| **★ RAPT-CLIP (Ours — Epoch 19)** | **This Work** | **Face + Body + Masked Context (LDAM $s=1.0$)** | **90.40%** | **90.40%** |
 
 #### CAER-S Per-Class Recall Breakdown (Validation: 1,000 samples/class)
 

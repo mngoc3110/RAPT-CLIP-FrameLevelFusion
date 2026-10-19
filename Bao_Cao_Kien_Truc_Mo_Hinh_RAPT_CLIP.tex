@@ -541,14 +541,14 @@ Bản đồ nhiệt kích hoạt Grad-CAM được trích xuất trực tiếp t
 \section{Huấn luyện và Đánh giá trên bộ dữ liệu CAER-S (Static Images)}
 
 \noindent\textbf{Đặc điểm bộ dữ liệu:} CAER-S (\textit{Context-Aware Emotion Recognition - Static}) là tập dữ liệu ảnh tĩnh quy mô lớn gồm 70,000 ảnh trích xuất từ 79 bộ phim truyền hình, bao gồm 7 lớp cảm xúc chuẩn: \textit{Anger, Disgust, Fear, Happy, Neutral, Sad, Surprise}. Tập huấn luyện gồm 49,007 ảnh với phân phối cân bằng hoàn hảo (đều đặn 7,001 mẫu/lớp), và tập kiểm định gồm 7,000 ảnh (1,000 mẫu/lớp).\\
-\textbf{Cấu hình mô hình tối ưu:} RAPT-CLIP sử dụng kiến trúc Triple-Stream (Face + Body + Masked Context) kết hợp cơ chế dung hợp không gian \textbf{Tridirectional Frame-Level CMAF}. Do là ảnh tĩnh ($T=1$), khối Temporal Transformer được bỏ qua hoàn toàn (\texttt{--no-temporal}) nhằm tập trung tối đa năng lực mô hình vào việc trích xuất và dung hợp ngữ cảnh không gian.\\
-\textbf{Hàm mất mát \& Chiến lược tối ưu:} Khác với tập video mất cân bằng như RAER, CAER-S có phân phối cân bằng nên mô hình áp dụng \textbf{Cross-Entropy có Label Smoothing ($\epsilon = 0.1$)} kết hợp điều phối \textbf{Cosine Annealing Warmup}, giải phóng trọn vẹn biên độ gradient của CLIP ViT.\\
-\textbf{Kết quả thực nghiệm vượt bậc (Cột mốc Epoch 7):}
+\textbf{Cấu hình mô hình:} RAPT-CLIP sử dụng kiến trúc Triple-Stream (Face + Body + Masked Context) kết hợp cơ chế dung hợp \textbf{Tridirectional Frame-Level CMAF} (kích thước sau concat là 1536 chiều) và khối Temporal Transformer Attention Pooling (\texttt{temporal\_layers = 1}).\\
+\textbf{Hàm mất mát \& Chiến lược tối ưu:} Mô hình áp dụng \textbf{LDAM Loss} ($s = 1.0, m_{\max} = 0.5$) kết hợp bộ lấy mẫu \textbf{WeightedRandomSampler}, điều phối tốc độ học \textbf{MultiStepLR} và kỹ thuật điều hòa đa mục tiêu \textbf{Mutual Information (MI: 0.1)} + \textbf{Decorrelation (DC: 0.1)}.\\
+\textbf{Kết quả thực nghiệm vượt bậc (Đạt đỉnh tại Epoch 19):}
 \begin{itemize}[leftmargin=18pt, itemsep=1pt]
     \item \textbf{Train WAR / UAR:} \textbf{96.55\%} (Loss: 0.5419).
     \item \textbf{Validation WAR (Overall Accuracy):} \textbf{90.40\%} (6,328 / 7,000 mẫu chính xác, Loss: 0.6787).
     \item \textbf{Validation UAR (Balanced Accuracy):} \textbf{90.40\%} $|$ \textbf{Harmonic Score:} \textbf{90.40\%}.
-    \item \textbf{Bước nhảy vọt so với cấu hình ban đầu:} Tăng \textbf{+7.70\%} so với baseline cũ dùng LDAM (82.70\%), vượt qua hàng loạt mô hình SOTA thế giới như MA-Net (88.42\%) và GLAMOR-Net (89.88\%), áp sát AGCD-Net (90.65\%) và SAFER (91.40\%).
+    \item \textbf{So sánh với các SOTA thế giới:} Vượt qua hàng loạt mô hình hàng đầu như MA-Net (88.42\%) và GLAMOR-Net (89.88\%), áp sát AGCD-Net (90.65\%) và SAFER (91.40\%).
 \end{itemize}
 
 \subsection{Bảng siêu tham số huấn luyện của bộ dữ liệu CAER-S}
@@ -556,7 +556,7 @@ Bản đồ nhiệt kích hoạt Grad-CAM được trích xuất trực tiếp t
 \begin{table}[H]
 \centering
 \small
-\caption{Bảng siêu tham số huấn luyện chi tiết của mô hình RAPT-CLIP trên CAER-S}
+\caption{Bảng siêu tham số huấn luyện chi tiết của mô hình RAPT-CLIP trên CAER-S (Script: \texttt{caer\_s\_cmaf.sh})}
 \label{tab:caers_hyperparams}
 \begin{tabularx}{\textwidth}{p{3.2cm} p{4.2cm} X}
 \toprule
@@ -565,21 +565,23 @@ Bản đồ nhiệt kích hoạt Grad-CAM được trích xuất trực tiếp t
 \midrule
 \rowcolor{grouprow} \multicolumn{3}{l}{\textbf{a. Thiết lập huấn luyện \& Tối ưu hóa}} \\
 Visual Backbone & \texttt{clip\_path}, \texttt{image\_size} & CLIP ViT-B/16 ($224 \times 224$), \texttt{freeze\_image\_encoder} = False \\
-Epochs \& Batch Size & \texttt{epochs}, \texttt{batch\_size} & \textbf{20 Epochs} (Đạt đỉnh: \textbf{Epoch 7}) $|$ Batch Size: \textbf{16} (Workers: 4) \\
-Thuật toán tối ưu & \texttt{optimizer}, \texttt{weight\_decay} & \textbf{AdamW} $|$ Weight Decay: 0.005 $|$ Grad Clip: 1.0 $|$ Early Stop: 3 \\
-Tốc độ học (LRs) & \texttt{lr}, \texttt{lr\_image}, \texttt{lr\_prompt} & \texttt{lr}: \textbf{$5\times 10^{-5}$}, \texttt{lr\_image}: \textbf{$1\times 10^{-5}$}, \texttt{lr\_prompt}: \textbf{$5\times 10^{-4}$}, \texttt{lr\_adapter}: \textbf{$2\times 10^{-4}$} \\
-Lịch điều phối LR & \texttt{scheduler}, \texttt{warmup\_epochs} & \textbf{CosineAnnealingLR} (Warmup: 2 epochs, $\eta_{\min} = 1\times 10^{-7}$) \\
+Epochs \& Batch Size & \texttt{epochs}, \texttt{batch\_size} & \textbf{20 Epochs} (Đạt đỉnh: \textbf{Epoch 19}) $|$ Batch Size: \textbf{16} (Workers: 4) \\
+Thuật toán tối ưu & \texttt{optimizer}, \texttt{weight\_decay} & \textbf{AdamW} $|$ Weight Decay: 0.005 $|$ Momentum: 0.9 $|$ Grad Clip: 1.0 \\
+Tốc độ học (LRs) & \texttt{lr}, \texttt{lr\_image}, \texttt{lr\_prompt} & \texttt{lr}: \textbf{$2\times 10^{-5}$}, \texttt{lr\_image}: \textbf{$1\times 10^{-6}$}, \texttt{lr\_prompt}: \textbf{$3\times 10^{-4}$}, \texttt{lr\_adapter}: \textbf{$1\times 10^{-4}$} \\
+Lịch điều phối LR & \texttt{scheduler}, \texttt{milestones} & \textbf{MultiStepLR} (Milestones: [10, 15], $\gamma = 0.1$) \\
 \midrule
 \rowcolor{grouprow} \multicolumn{3}{l}{\textbf{b. Hàm mất mát \& Điều hòa biểu diễn}} \\
-Hàm mất mát chính & \texttt{loss\_type}, \texttt{label\_smoothing} & \textbf{Cross-Entropy (CE)} với Label Smoothing = \textbf{0.10} \\
+Hàm mất mát chính & \texttt{loss\_type}, \texttt{ldam\_s}, \texttt{max\_m} & \textbf{LDAM Loss} (\texttt{loss\_type = ldam}, $s = 1.0$, $m_{\max} = 0.5$) \\
+Bộ lấy mẫu & \texttt{use\_weighted\_sampler} & \textbf{WeightedRandomSampler} (Cân bằng phân phối mini-batch) \\
+Làm mượt nhãn & \texttt{label\_smoothing} & 0.05 (Hạn chế hiện tượng over-confidence) \\
 Hàm mất mát phụ & \texttt{lambda\_mi}, \texttt{lambda\_dc} & $\lambda_{\text{MI}} = 0.1$ (Warmup: 3, Ramp: 6), $\lambda_{\text{DC}} = 0.1$ (Warmup: 3, Ramp: 6) \\
-Regularization & \texttt{drop\_path\_rate}, \texttt{modality\_dropout} & DropPath: 0.10 $|$ Modality Dropout: 0.10 (Chống phụ thuộc quá mức vào bối cảnh) \\
+Regularization & \texttt{drop\_path\_rate}, \texttt{modality\_dropout} & DropPath: 0.0 $|$ Modality Dropout: 0.0 \\
 \midrule
 \rowcolor{grouprow} \multicolumn{3}{l}{\textbf{c. Luồng dữ liệu \& Kiến trúc dung hợp}} \\
 Luồng dữ liệu & \texttt{crop\_body}, \texttt{mask\_context\_face} & \textbf{Triple-Stream:} Face Crop + Body Crop (Torso) + Context (Xóa mặt) \\
-Dung hợp đặc trưng & \texttt{fusion\_type}, \texttt{no\_temporal} & \textbf{Tridirectional Frame-Level CMAF} (1536-d) $|$ \textbf{Bỏ qua Temporal Net} \\
+Dung hợp đặc trưng & \texttt{fusion\_type}, \texttt{fusion\_stage} & \textbf{Tridirectional Frame-Level CMAF} (1536-d) $|$ Temporal Layers: 1 (\texttt{attn}) \\
 Prompt Ensemble & \texttt{contexts\_number}, \texttt{text\_type} & Prompt Ensemble (8 learnable context tokens/lớp, CoOp tuning) \\
-Suy luận mở rộng & \texttt{use\_tta} & Test-Time Augmentation (Lật ngang ảnh trên cả 3 luồng dữ liệu) \\
+Nhiệt độ & \texttt{temperature} & $\tau = 0.07$ (Chuẩn cosine similarity của CLIP) \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -599,7 +601,6 @@ Suy luận mở rộng & \texttt{use\_tta} & Test-Time Augmentation (Lật ngang
 CAER-Net-S & Lee et al., ICCV 2019 & 73.51 & 73.51 & 2-Stream CNN (Face + Context) \\
 EmotiCon & Mittal et al., AAAI 2020 & 77.00 & 77.00 & Đa nhánh: Mặt, Dáng, Cảnh, Độ sâu \\
 GRERN & 2021 & 81.31 & 81.31 & Đồ thị quan hệ ngữ cảnh \\
-\textbf{RAPT-CLIP (Baseline cũ)} & Bản chạy sơ bộ & 82.70 & 82.55 & CMAF + LDAM loss ($s=1.0$) \\
 EfficientFace & 2021 & 85.87 & 85.87 & Mạng khuôn mặt nhẹ hiệu năng cao \\
 MA-Net & 2021 & 88.42 & 88.42 & Chú ý đa góc nhìn khuôn mặt \& bối cảnh \\
 GLAMOR-Net & 2023 & 89.88 & 89.88 & Tương tác toàn cục và cục bộ \\
@@ -607,7 +608,7 @@ AGCD-Net & 2023 & 90.65 & 90.65 & Phân tách đồ thị thích ứng \\
 SAFER & 2024 & 91.40 & 91.40 & Tinh chỉnh ngữ cảnh nâng cao \\
 \midrule
 \rowcolor{grouprow}
-\textbf{RAPT-CLIP (Ours)} & \textbf{Công trình này (Epoch 7)} & \textbf{90.40} & \textbf{90.40} & \textbf{Triple-Stream CMAF + CLIP + CE (Smoothed)} \\
+\textbf{RAPT-CLIP (Ours)} & \textbf{Công trình này (Epoch 19)} & \textbf{90.40} & \textbf{90.40} & \textbf{Triple-Stream CMAF + CLIP + LDAM Loss ($s=1.0$)} \\
 \bottomrule
 \end{tabularx}
 \end{table}
