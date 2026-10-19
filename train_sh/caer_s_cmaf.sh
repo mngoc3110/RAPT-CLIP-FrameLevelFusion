@@ -107,7 +107,19 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
     fi
   done
 
-  # 2. Quét tìm tự động mọi checkpoint trên /kaggle/input (dù người dùng đặt tên dataset là gì)
+  # 2. Quét tìm tự động mọi checkpoint trên /kaggle/input (ưu tiên đường dẫn chỉ định)
+  KNOWN_CKPTS=(
+    "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth"
+    "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model.pth"
+  )
+  for ckpt in "${KNOWN_CKPTS[@]}"; do
+    if [ -f "$ckpt" ]; then
+      LATEST_CKPT="$ckpt"
+      echo "=> [Auto-Detect] Tìm thấy checkpoint mục tiêu: ${LATEST_CKPT}"
+      break
+    fi
+  done
+
   if [ -z "$LATEST_CKPT" ] && [ -d "/kaggle/input" ]; then
     # Tìm file có chứa caer hoặc model hoặc best
     LATEST_CKPT=$(find /kaggle/input -type f \( -name "*caer*.pth" -o -name "*model*.pth" -o -name "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|checkpoint" | head -n 1)

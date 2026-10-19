@@ -91,6 +91,21 @@ if [ -n "$1" ]; then
 fi
 
 if [ -z "$FINETUNE_CKPT" ]; then
+  # Ưu tiên trực tiếp đường dẫn checkpoint người dùng cung cấp
+  KNOWN_CKPTS=(
+    "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth"
+    "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model.pth"
+  )
+  for ckpt in "${KNOWN_CKPTS[@]}"; do
+    if [ -f "$ckpt" ]; then
+      FINETUNE_CKPT="$ckpt"
+      echo "=> [Auto-Detect] Tìm thấy checkpoint mục tiêu: ${FINETUNE_CKPT}"
+      break
+    fi
+  done
+fi
+
+if [ -z "$FINETUNE_CKPT" ]; then
   # Quét tìm trong outputs/ hiện tại
   SEARCH_OUTPUT_DIRS=("/kaggle/working/outputs" "outputs")
   for out_d in "${SEARCH_OUTPUT_DIRS[@]}"; do
