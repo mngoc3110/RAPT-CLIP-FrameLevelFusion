@@ -109,6 +109,8 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
 
   # 2. Quét tìm tự động mọi checkpoint trên /kaggle/input (ưu tiên đường dẫn chỉ định)
   KNOWN_CKPTS=(
+    "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth"
+    "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model.pth"
     "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth"
     "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model.pth"
   )

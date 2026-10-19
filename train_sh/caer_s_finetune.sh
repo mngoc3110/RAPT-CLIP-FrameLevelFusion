@@ -93,6 +93,8 @@ fi
 if [ -z "$FINETUNE_CKPT" ]; then
   # Ưu tiên trực tiếp đường dẫn checkpoint người dùng cung cấp
   KNOWN_CKPTS=(
+    "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth"
+    "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model.pth"
     "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth"
     "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model.pth"
   )

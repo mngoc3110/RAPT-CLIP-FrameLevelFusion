@@ -77,7 +77,7 @@ def evaluate_stream(loader, model, device, class_names, use_tta=False):
 
 def main():
     parser = argparse.ArgumentParser(description="CAER-S TTA Benchmark Evaluator")
-    parser.add_argument('--checkpoint', type=str, default='/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth', help='Path to checkpoint (model_best.pth or model.pth)')
+    parser.add_argument('--checkpoint', type=str, default='/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth', help='Path to checkpoint (model_best.pth or model.pth)')
     parser.add_argument('--data-dir', type=str, default='/kaggle/input/datasets/lcngtr/caer-s', help='CAER-S root dir')
     parser.add_argument('--annotation-dir', type=str, default='/kaggle/working/caers_data', help='Annotations dir')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
