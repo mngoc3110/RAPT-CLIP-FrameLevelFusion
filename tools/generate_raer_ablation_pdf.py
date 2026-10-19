@@ -56,6 +56,13 @@ def build_pdf():
     # EMOTIC results images
     emotic_ranking_img = get_base64_image(os.path.join(root_dir, "outputs", "EMOTIC", "emotic_test_ranking_barchart.png"))
     emotic_val_test_img = get_base64_image(os.path.join(root_dir, "outputs", "EMOTIC", "emotic_val_test_comparison_barchart.png"))
+    emotic_grad_1 = get_base64_image(os.path.join(root_dir, "outputs", "Gradcam-Emotic", "1.jpeg"))
+    emotic_grad_2 = get_base64_image(os.path.join(root_dir, "outputs", "Gradcam-Emotic", "2.jpeg"))
+    emotic_grad_3 = get_base64_image(os.path.join(root_dir, "outputs", "Gradcam-Emotic", "3.jpeg"))
+
+    # CAER-S results images
+    caers_cm_img = get_base64_image(os.path.join(root_dir, "outputs", "CAER-S", "caer_s_confusion_matrix.png"))
+    caers_recall_img = get_base64_image(os.path.join(root_dir, "outputs", "CAER-S", "caer_s_recall_barchart.png"))
 
     html = f"""<!DOCTYPE html>
 <html lang="vi">
@@ -306,6 +313,29 @@ def build_pdf():
     table.two-col-figures img {{
         width: 98%;
         max-height: 165px;
+        object-fit: contain;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+    }}
+
+    table.three-col-figures {{
+        width: 100%;
+        border-collapse: collapse;
+        margin: 3px 0 5px 0;
+        page-break-inside: avoid;
+    }}
+
+    table.three-col-figures td {{
+        width: 33.33%;
+        padding: 1px 3px;
+        vertical-align: top;
+        text-align: center;
+        border: none;
+    }}
+
+    table.three-col-figures img {{
+        width: 98%;
+        max-height: 125px;
         object-fit: contain;
         border: 1px solid #ccc;
         border-radius: 3px;
@@ -822,23 +852,23 @@ def build_pdf():
 <div class="page-break"></div>
 <h2 class="section-title">5. Đánh Giá Khả Năng Mở Rộng Đa Miền: Kiểm Chứng Mô Hình RAPT-CLIP Trên Bộ Dữ Liệu Tự Nhiên Đa Nhãn EMOTIC</h2>
 
-<div class="meta-bar" style="margin-bottom: 6px;">
+<div class="meta-bar" style="margin-bottom: 5px;">
     <span><strong>Tập dữ liệu:</strong> EMOTIC (Context-Aware Multi-Label Emotion)</span>
     <span><strong>Kiểm thử Test:</strong> 5,292 ảnh tự nhiên (Unseen Data)</span>
-    <span><strong>Hàm mất mát:</strong> Asymmetric Loss (ASL, &gamma;<sub>-</sub>=3.0, &gamma;<sub>+</sub>=0.0, clip=0.05)</span>
+    <span><strong>Hàm mất mát:</strong> Dynamic ASL (&gamma;<sub>-</sub>=4.0, &gamma;<sub>+</sub>=0.0, clip=0.05)</span>
     <span><strong>Macro mAP Test:</strong> <strong style="color: #2e7d32; font-size: 8.8pt;">34.76%</strong> (Val mAP: 46.98%)</span>
 </div>
 
 <p>
-    Để khẳng định <strong>RAPT-CLIP</strong> là một <strong>Mô hình Nền tảng Đa Phương thức Hợp nhất (Unified Multimodal Foundation Framework)</strong> có khả năng tổng quát hóa xuyên miền (Cross-Domain Generalization) chứ không chỉ hoạt động tốt trong lớp học chuyên biệt (RAER / DAiSEE), chúng tôi tiến hành đánh giá mô hình trên <strong>EMOTIC</strong> &mdash; bộ dữ liệu cảm xúc bối cảnh tự nhiên quy mô lớn và thử thách bậc nhất với 26 nhãn cảm xúc xuất hiện đồng thời.
+    Để khẳng định <strong>RAPT-CLIP</strong> là một <strong>Mô hình Nền tảng Đa Phương thức Hợp nhất (Unified Multimodal Foundation Framework)</strong> có khả năng tổng quát hóa xuyên miền (Cross-Domain Generalization), chúng tôi tiến hành đánh giá mô hình trên <strong>EMOTIC</strong> &mdash; bộ dữ liệu cảm xúc bối cảnh tự nhiên quy mô lớn gồm 26 nhãn cảm xúc xuất hiện đồng thời và 3 chiều cảm xúc liên tục VAD (Valence, Arousal, Dominance).
 </p>
 
-<!-- Bảng đối sánh SOTA Benchmark -->
-<table class="data-table" style="margin-bottom: 6px;">
+<!-- Bảng đối sánh SOTA Benchmark EMOTIC -->
+<table class="data-table" style="margin-bottom: 5px;">
     <thead>
         <tr>
             <th style="width: 32%;">Phương pháp công bố</th>
-            <th style="width: 30%;">Backbone & Cơ chế Dung hợp</th>
+            <th style="width: 30%;">Backbone &amp; Cơ chế Dung hợp</th>
             <th style="width: 18%; text-align: center;">Test Macro mAP (%)</th>
             <th style="width: 20%; text-align: center;">So với RAPT-CLIP</th>
         </tr>
@@ -852,7 +882,7 @@ def build_pdf():
         </tr>
         <tr>
             <td><strong>EmotiCon (CVPR 2020)</strong></td>
-            <td>ResNet-50 + Depth & Context Graph</td>
+            <td>ResNet-50 + Depth &amp; Context Graph</td>
             <td style="text-align: center;">33.10%</td>
             <td style="text-align: center; color: #2e7d32; font-weight: bold;">+1.66%</td>
         </tr>
@@ -865,7 +895,88 @@ def build_pdf():
     </tbody>
 </table>
 
-<table class="two-col-figures" style="margin-top: 5px;">
+<!-- Bảng siêu tham số huấn luyện chi tiết của EMOTIC -->
+<table class="data-table" style="margin-bottom: 5px;">
+    <thead>
+        <tr>
+            <th style="width: 25%;">Nhóm tham số</th>
+            <th style="width: 33%;">Tên biến / Siêu tham số</th>
+            <th style="width: 42%;">Giá trị cấu hình thực nghiệm</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr class="group-header"><td colspan="3">a. Thiết lập huấn luyện chung &amp; Tối ưu hóa</td></tr>
+        <tr>
+            <td><strong>Visual Backbone</strong></td>
+            <td><code>clip_path</code>, <code>image_size</code></td>
+            <td>CLIP ViT-B/16 (224 &times; 224), <code>freeze_image_encoder=False</code></td>
+        </tr>
+        <tr>
+            <td><strong>Epochs &amp; Batch Size</strong></td>
+            <td><code>epochs</code>, <code>batch_size</code>, <code>workers</code></td>
+            <td><strong>25 Epochs</strong> (Đạt đỉnh: <strong>Epoch 6</strong>) | Batch Size: <strong>16</strong> (Workers: 4)</td>
+        </tr>
+        <tr>
+            <td><strong>Thuật toán tối ưu</strong></td>
+            <td><code>optimizer</code>, <code>weight_decay</code>, <code>grad_clip</code></td>
+            <td><strong>AdamW</strong> | Weight Decay: 0.005 | Momentum: 0.9 | Grad Clip: 1.0</td>
+        </tr>
+        <tr>
+            <td><strong>Tốc độ học (LRs)</strong></td>
+            <td><code>lr</code>, <code>lr_image</code>, <code>lr_prompt</code>, <code>lr_adapter</code></td>
+            <td>Base: <code>1e-4</code> | ViT: <code>1e-5</code> | Prompt: <code>5e-5</code> | CMAF Adapter: <code>1e-4</code></td>
+        </tr>
+        <tr>
+            <td><strong>Lịch điều phối LR</strong></td>
+            <td><code>scheduler</code>, <code>milestones</code>, <code>gamma</code></td>
+            <td>MultiStepLR (Milestones: [10, 15], &gamma; = 0.1, Warmup Epochs: 3)</td>
+        </tr>
+        <tr class="group-header"><td colspan="3">b. Hàm mất mát &amp; Xử lý mất cân bằng đa nhãn</td></tr>
+        <tr>
+            <td><strong>Hàm mất mát chính</strong></td>
+            <td><code>loss_type</code> (Dynamic ASL)</td>
+            <td><strong>Dynamic Asymmetric Loss</strong> chuyên trị dữ liệu đa nhãn đuôi dài</td>
+        </tr>
+        <tr>
+            <td><strong>Tham số ASL</strong></td>
+            <td><code>asl_gamma_neg</code>, <code>asl_gamma_pos</code>, <code>clip</code></td>
+            <td>&gamma;<sub>-</sub> = <strong>4.0</strong>, &gamma;<sub>+</sub> = <strong>0.0</strong>, <code>clip = 0.05</code> (Hạ áp lực gradient nhãn âm)</td>
+        </tr>
+        <tr>
+            <td><strong>Hàm mất mát phụ</strong></td>
+            <td><code>lambda_mi</code>, <code>lambda_dc</code></td>
+            <td>&lambda;<sub>MI</sub> = 0.1 (Warmup: 7, Ramp: 5), &lambda;<sub>DC</sub> = 0.1 (Warmup: 7, Ramp: 5)</td>
+        </tr>
+        <tr>
+            <td><strong>Làm mượt nhãn</strong></td>
+            <td><code>label_smoothing</code></td>
+            <td>0.05 (Hạn chế hiện tượng over-confidence trên các nhãn tần suất cao)</td>
+        </tr>
+        <tr class="group-header"><td colspan="3">c. Kiến trúc luồng dữ liệu &amp; Cơ chế suy luận</td></tr>
+        <tr>
+            <td><strong>Luồng dữ liệu</strong></td>
+            <td><code>crop_body</code>, <code>use_context</code></td>
+            <td><strong>Triple-Stream:</strong> Face Crop + Body Crop + Context (Toàn cảnh nguyên bản)</td>
+        </tr>
+        <tr>
+            <td><strong>Dung hợp đặc trưng</strong></td>
+            <td><code>fusion_type</code>, <code>fusion_stage</code></td>
+            <td><strong>CMAF Frame-Level Fusion</strong> (<code>stage=frame</code>, <code>modality_dropout=0.3</code>)</td>
+        </tr>
+        <tr>
+            <td><strong>Prompt Ensemble</strong></td>
+            <td><code>contexts_number</code>, <code>text_type</code></td>
+            <td>Prompt Ensemble (8 learnable context tokens/lớp, <code>class_specific=True</code>)</td>
+        </tr>
+        <tr>
+            <td><strong>Nhiệt độ &amp; Ngưỡng</strong></td>
+            <td><code>temperature</code>, <code>emotic_threshold.json</code></td>
+            <td>Temperature &tau; = 1.0 | Ngưỡng F1 tối ưu quét trên tập Validation (0.15 - 0.40)</td>
+        </tr>
+    </tbody>
+</table>
+
+<table class="two-col-figures" style="margin-top: 4px;">
     <tr>
         <td style="width: 50%;">
             <img src="{emotic_ranking_img}" alt="EMOTIC Test AP Ranking">
@@ -878,15 +989,245 @@ def build_pdf():
     </tr>
 </table>
 
-<div class="warning-box" style="padding: 5px 8px; margin: 4px 0; font-size: 7.9pt; line-height: 1.34;">
-    <strong>PHÂN TÍCH CHUYÊN SÂU TỪ KẾT QUẢ THỰC NGHIỆM TRÊN TẬP EMOTIC:</strong><br>
-    1. <strong>Sức mạnh áp đảo ở các cảm xúc phụ thuộc ngữ cảnh cao (Context-Dependent Emotions):</strong><br>
-    RAPT-CLIP bứt phá với độ chính xác rất cao ở các nhóm cảm xúc đòi hỏi mô hình phải hiểu toàn diện hành động và môi trường: <em>Engagement</em> (<strong>87.80%</strong>), <em>Confidence</em> (<strong>81.77%</strong>), <em>Happiness</em> (<strong>81.50%</strong>), <em>Excitement</em> (<strong>77.23%</strong>), <em>Anticipation</em> (<strong>59.22%</strong>), và <em>Pleasure</em> (<strong>57.34%</strong>). Khi mặt đối tượng bị quay nghiêng hoặc che khuất ngoài đời thực, khối CMAF Tri-Stream kết hợp cử chỉ thân người (Body) và khung cảnh (Context) đã bù đắp thông tin xuất sắc.<br>
-    2. <strong>Cơ chế Thích Ứng Hàm Mục Tiêu (Loss Function Adaptation: LDAM &rarr; ASL):</strong><br>
-    Trong bài toán đa nhãn 26 lớp, có tới &gt;95% nhãn là âm (negative) đối với mỗi bức ảnh. Nếu dùng BCE chuẩn, gradient từ các nhãn âm sẽ nhấn chìm các cảm xúc tích cực hiếm. Bằng việc chuyển sang <strong>Asymmetric Loss (ASL)</strong> với &gamma;<sub>-</sub> = 3.0 và hệ số xác suất bất đối xứng, mô hình triệt tiêu hoàn toàn nhiễu nhãn âm, duy trì khả năng trích xuất đặc trưng sắc nét mà không cần thay đổi kiến trúc trích xuất thị giác.<br>
-    3. <strong>Minh chứng quyết định cho bài báo Q1 (Generalization Rigor):</strong><br>
-    Thành tích vượt trội hơn cả Kosti et al. (CVPR 2017) tới <strong>+7.38% mAP</strong> và EmotiCon (CVPR 2020) tới <strong>+1.66% mAP</strong> trên tập kiểm thử độc lập 5,292 mẫu chứng minh rằng: Cơ chế Frame-Level Cross-Modal Attention Fusion (CMAF) và Text Branch Dual-View của RAPT-CLIP có giá trị học thuật phổ quát, ứng dụng hiệu quả cho cả Video chuỗi thời gian lẫn Ảnh tĩnh bối cảnh tự nhiên.
+<!-- TRANG 8: TRỰC QUAN HÓA GRAD-CAM EMOTIC & HUẤN LUYỆN CAER-S -->
+<div class="page-break"></div>
+<h3 class="subsection-title">5.2 Trực Quan Hóa Grad-CAM Trên Tập Dữ Liệu Tự Nhiên EMOTIC</h3>
+<p>
+    Bản đồ nhiệt kích hoạt Grad-CAM được trích xuất trực tiếp từ mô hình tối ưu (<code>model_best.zip</code>) trên các mẫu kiểm thử tự nhiên của tập dữ liệu EMOTIC (Thư mục thực nghiệm: <code>outputs/Gradcam-Emotic/</code>):
+</p>
+
+<table class="three-col-figures">
+    <tr>
+        <td>
+            <img src="{emotic_grad_1}" alt="Grad-CAM EMOTIC 1">
+            <div class="figure-caption">Hình 10a: Mẫu 1 (Tương tác Mặt &amp; Cảnh)</div>
+        </td>
+        <td>
+            <img src="{emotic_grad_2}" alt="Grad-CAM EMOTIC 2">
+            <div class="figure-caption">Hình 10b: Mẫu 2 (Cử chỉ Hành vi Cơ thể)</div>
+        </td>
+        <td>
+            <img src="{emotic_grad_3}" alt="Grad-CAM EMOTIC 3">
+            <div class="figure-caption">Hình 10c: Mẫu 3 (Cảm xúc Phức hợp Ngoại cảnh)</div>
+        </td>
+    </tr>
+</table>
+
+<div class="highlight-box" style="margin-top: 4px; margin-bottom: 6px;">
+    <strong>NHẬN XÉT PHÂN TÍCH BẢN ĐỒ KÍCH HOẠT GRAD-CAM TRÊN TẬP EMOTIC:</strong><br>
+    &bull; <strong>Hợp nhất tri giác đa luồng (Tri-Stream Synergy):</strong> Các vùng nhiệt đỏ rực tập trung chính xác vào biểu cảm nét mặt và tư thế vận động của nhân vật trong khung cảnh ngoại trời. Khối CMAF Tri-Stream giải quyết triệt để điểm yếu của các mô hình chỉ nhìn mặt: khi khuôn mặt bị quay nghiêng hoặc che khuất ngoài đời thực, mô hình tự động chuyển trọng tâm chú ý sang cử chỉ tay, dáng người (Body) và vật thể xung quanh (Context) để suy luận cảm xúc.<br>
+    &bull; <strong>Định vị chính xác không gian ngữ nghĩa (Semantic Spatial Localization):</strong>
+    - <em>Hình 10a (Mẫu 1 - Tương tác Mặt &amp; Cảnh):</em> Vùng chú ý bao quát sự kết nối giữa hướng nhìn của ánh mắt và bối cảnh sự kiện trước mặt, thể hiện các cảm xúc <em>Engagement</em> (87.80%) và <em>Anticipation</em> (59.22%).<br>
+    - <em>Hình 10b (Mẫu 2 - Cử chỉ Hành vi Cơ thể):</em> Năng lượng gradient tập trung cao độ vào bờ vai, cánh tay và tư thế thân trên, chứng minh luồng Body là nguồn thông tin chủ đạo khi nét mặt ở trạng thái trung tính.<br>
+    - <em>Hình 10c (Mẫu 3 - Cảm xúc Phức hợp Ngoại cảnh):</em> Mô hình phân bổ bản đồ nhiệt đồng thời lên cả chủ thể lẫn các yếu tố môi trường nền, giúp nhận diện chính xác các nhãn đa cảm xúc tự nhiên phức tạp.
 </div>
+
+<div class="warning-box" style="margin-top: 4px; margin-bottom: 6px; font-size: 8pt; line-height: 1.34;">
+    <strong>VAI TRÒ QUYẾT ĐỊNH CỦA DYNAMIC ASL (&gamma;<sub>-</sub>=4.0, clip=0.05) TRONG ĐỘ SẮC NÉT CỦA BẢN ĐỒ GRAD-CAM:</strong><br>
+    Trong bài toán phân loại đa nhãn 26 lớp của EMOTIC, hơn 95% nhãn gán là âm (negative). Nếu sử dụng hàm mất mát Binary Cross-Entropy (BCE) thông thường, gradient tích lũy từ hàng chục nhãn âm sẽ tràn ngập và làm loãng không gian biểu diễn, khiến bản đồ Grad-CAM bị kích hoạt phân tán khắp toàn bộ bức ảnh. Nhờ cơ chế bất đối xứng của <strong>Dynamic ASL</strong> (&gamma;<sub>-</sub> = 4.0 và ngưỡng xác suất <code>clip = 0.05</code>), các mẫu nhãn âm có xác suất thấp bị triệt tiêu hoàn toàn gradient (gradient zeroing), chỉ giữ lại các tín hiệu giám sát mạnh mẽ từ các nhãn dương hiếm. Điều này giải thích tại sao bản đồ Grad-CAM của RAPT-CLIP tập trung cực kỳ gọn gàng và chuẩn xác vào các vùng giải phẫu học cơ thể và tương tác ngữ cảnh.
+</div>
+
+<!-- TRANG 9: HUẤN LUYỆN VÀ ĐÁNH GIÁ TRÊN BỘ DỮ LIỆU CAER-S -->
+<div class="page-break"></div>
+<h2 class="section-title">6. Huấn Luyện và Đánh Giá Trên Bộ Dữ Liệu CAER-S (Static Images)</h2>
+
+<div class="meta-bar" style="margin-bottom: 5px;">
+    <span><strong>Tập dữ liệu:</strong> CAER-S (Context-Aware Static)</span>
+    <span><strong>Quy mô:</strong> 70,000 ảnh (49,007 train, 7,000 val)</span>
+    <span><strong>Hàm mất mát:</strong> LDAM Loss (s=1.0, m<sub>max</sub>=0.5)</span>
+    <span><strong>Đạt đỉnh:</strong> <strong style="color: #0d47a1;">Epoch 19</strong> (WAR: 90.40% | UAR: 90.40%)</span>
+</div>
+
+
+<p>
+    <strong>CAER-S</strong> là bộ dữ liệu ảnh tĩnh quy mô lớn gồm 70,000 ảnh trích xuất từ 79 bộ phim truyền hình, bao gồm 7 lớp cảm xúc chuẩn: <em>Anger, Disgust, Fear, Happy, Neutral, Sad, Surprise</em>. Tập huấn luyện gồm 49,007 ảnh với phân phối cân bằng hoàn hảo (đều đặn 7,001 mẫu/lớp), và tập kiểm định gồm 7,000 ảnh (1,000 mẫu/lớp). RAPT-CLIP áp dụng kiến trúc Triple-Stream (Face + Body + Masked Context) kết hợp cơ chế dung hợp <strong>Tridirectional Frame-Level CMAF</strong> (kích thước sau concat là 1536 chiều) và khối Temporal Transformer Attention Pooling (1 layer).
+</p>
+
+<!-- Bảng đối sánh SOTA Benchmark CAER-S -->
+<table class="data-table" style="margin-bottom: 5px;">
+    <thead>
+        <tr>
+            <th style="width: 25%;">Phương pháp</th>
+            <th style="width: 25%;">Nguồn / Năm</th>
+            <th style="width: 13%; text-align: center;">WAR (%)</th>
+            <th style="width: 13%; text-align: center;">UAR (%)</th>
+            <th style="width: 24%;">Đặc trưng kiến trúc chính</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td>CAER-Net-S</td><td>Lee et al., ICCV 2019</td><td style="text-align: center;">73.51%</td><td style="text-align: center;">73.51%</td><td>2-Stream CNN (Face + Context)</td></tr>
+        <tr><td>EmotiCon</td><td>Mittal et al., AAAI 2020</td><td style="text-align: center;">77.00%</td><td style="text-align: center;">77.00%</td><td>Đa nhánh: Mặt, Dáng, Cảnh, Độ sâu</td></tr>
+        <tr><td>GRERN</td><td>2021</td><td style="text-align: center;">81.31%</td><td style="text-align: center;">81.31%</td><td>Đồ thị quan hệ ngữ cảnh</td></tr>
+        <tr><td>EfficientFace</td><td>2021</td><td style="text-align: center;">85.87%</td><td style="text-align: center;">85.87%</td><td>Mạng khuôn mặt nhẹ hiệu năng cao</td></tr>
+        <tr><td>MA-Net</td><td>2021</td><td style="text-align: center;">88.42%</td><td style="text-align: center;">88.42%</td><td>Chú ý đa góc nhìn mặt &amp; bối cảnh</td></tr>
+        <tr><td>GLAMOR-Net</td><td>2023</td><td style="text-align: center;">89.88%</td><td style="text-align: center;">89.88%</td><td>Tương tác toàn cục và cục bộ</td></tr>
+        <tr><td>AGCD-Net</td><td>2023</td><td style="text-align: center;">90.65%</td><td style="text-align: center;">90.65%</td><td>Phân tách đồ thị thích ứng</td></tr>
+        <tr><td>SAFER</td><td>2024</td><td style="text-align: center;">91.40%</td><td style="text-align: center;">91.40%</td><td>Tinh chỉnh ngữ cảnh nâng cao</td></tr>
+        <tr style="background-color: #e8f5e9; font-weight: bold;">
+            <td><strong>RAPT-CLIP (Ours)</strong></td>
+            <td><strong>Công trình này (Epoch 19)</strong></td>
+            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;">90.40%</td>
+            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;">90.40%</td>
+            <td><strong>Triple-Stream CMAF + LDAM (s=1.0)</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Bảng siêu tham số huấn luyện chi tiết của CAER-S -->
+<table class="data-table">
+    <thead>
+        <tr>
+            <th style="width: 25%;">Nhóm tham số</th>
+            <th style="width: 33%;">Tên biến / Siêu tham số</th>
+            <th style="width: 42%;">Giá trị cấu hình thực nghiệm (Script: <code>caer_s_cmaf.sh</code>)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr class="group-header"><td colspan="3">a. Thiết lập huấn luyện &amp; Tối ưu hóa</td></tr>
+        <tr>
+            <td><strong>Visual Backbone</strong></td>
+            <td><code>clip_path</code>, <code>image_size</code></td>
+            <td>CLIP ViT-B/16 (224 &times; 224), <code>freeze_image_encoder=False</code></td>
+        </tr>
+        <tr>
+            <td><strong>Epochs &amp; Batch Size</strong></td>
+            <td><code>epochs</code>, <code>batch_size</code></td>
+            <td><strong>20 Epochs</strong> (Đạt đỉnh: <strong>Epoch 19</strong>) | Batch Size: <strong>16</strong> (Workers: 4)</td>
+        </tr>
+        <tr>
+            <td><strong>Thuật toán tối ưu</strong></td>
+            <td><code>optimizer</code>, <code>weight_decay</code>, <code>grad_clip</code></td>
+            <td><strong>AdamW</strong> | Weight Decay: 0.005 | Momentum: 0.9 | Grad Clip: 1.0</td>
+        </tr>
+        <tr>
+            <td><strong>Tốc độ học (LRs)</strong></td>
+            <td><code>lr</code>, <code>lr_image</code>, <code>lr_prompt</code>, <code>lr_adapter</code></td>
+            <td>Base: <code>2e-5</code> | ViT: <code>1e-6</code> | Prompt: <code>3e-4</code> | Adapter: <code>1e-4</code></td>
+        </tr>
+        <tr>
+            <td><strong>Lịch điều phối LR</strong></td>
+            <td><code>scheduler</code>, <code>milestones</code>, <code>gamma</code></td>
+            <td><strong>MultiStepLR</strong> (Milestones: [10, 15], &gamma; = 0.1)</td>
+        </tr>
+        <tr class="group-header"><td colspan="3">b. Hàm mất mát &amp; Điều hòa biểu diễn</td></tr>
+        <tr>
+            <td><strong>Hàm mất mát chính</strong></td>
+            <td><code>loss_type</code>, <code>ldam_s</code>, <code>max_m</code></td>
+            <td><strong>LDAM Loss</strong> (<code>loss_type=ldam</code>, s = 1.0, m<sub>max</sub> = 0.5)</td>
+        </tr>
+        <tr>
+            <td><strong>Bộ lấy mẫu</strong></td>
+            <td><code>use_weighted_sampler</code></td>
+            <td><strong>WeightedRandomSampler</strong> (Cân bằng phân phối lấy mẫu mini-batch)</td>
+        </tr>
+        <tr>
+            <td><strong>Làm mượt nhãn</strong></td>
+            <td><code>label_smoothing</code></td>
+            <td>0.05 (Hạn chế hiện tượng over-confidence)</td>
+        </tr>
+        <tr>
+            <td><strong>Hàm mất mát phụ</strong></td>
+            <td><code>lambda_mi</code>, <code>lambda_dc</code></td>
+            <td>&lambda;<sub>MI</sub> = 0.1 (Warmup: 3, Ramp: 6), &lambda;<sub>DC</sub> = 0.1 (Warmup: 3, Ramp: 6)</td>
+        </tr>
+        <tr class="group-header"><td colspan="3">c. Luồng dữ liệu &amp; Kiến trúc dung hợp</td></tr>
+        <tr>
+            <td><strong>Luồng dữ liệu</strong></td>
+            <td><code>crop_body</code>, <code>mask_context_face</code></td>
+            <td><strong>Triple-Stream:</strong> Face Crop + Body Crop (Torso) + Context (Xóa mặt)</td>
+        </tr>
+        <tr>
+            <td><strong>Dung hợp đặc trưng</strong></td>
+            <td><code>fusion_type</code>, <code>temporal_layers</code></td>
+            <td><strong>Tridirectional Frame-Level CMAF</strong> (1536-d) | Temporal Attn: 1 layer</td>
+        </tr>
+        <tr>
+            <td><strong>Prompt Ensemble</strong></td>
+            <td><code>contexts_number</code>, <code>temperature</code></td>
+            <td>8 learnable context tokens/lớp (CoOp tuning) | Temperature &tau; = 0.07</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- TRANG 9: PHÂN TÍCH RECALL TỪNG LỚP, MA TRẬN NHẦM LẪN CAER-S & TỔNG KẾT HỌC THUẬT -->
+<div class="page-break"></div>
+<h3 class="subsection-title">6.2 Phân Tích Độ Hồi Tưởng (Recall) Từng Lớp Cảm Xúc &amp; Ma Trận Nhầm Lẫn CAER-S</h3>
+
+<table class="data-table" style="margin-bottom: 5px;">
+    <thead>
+        <tr>
+            <th style="width: 6%;">ID</th>
+            <th style="width: 16%;">Nhãn cảm xúc</th>
+            <th style="width: 20%; text-align: center;">Số mẫu đúng / 1,000</th>
+            <th style="width: 15%; text-align: center;">Recall (%)</th>
+            <th style="width: 43%;">Nhận xét đặc trưng nhận diện</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td>0</td><td><strong>Anger</strong></td><td style="text-align: center;">923 / 1,000</td><td style="text-align: center; font-weight: bold;">92.30%</td><td>Nhận diện xuất sắc qua biểu cảm cau mày và tư thế giận dữ</td></tr>
+        <tr><td>1</td><td><strong>Disgust</strong></td><td style="text-align: center;">981 / 1,000</td><td style="text-align: center; font-weight: bold;">98.10%</td><td>Gần như hoàn hảo; nhăn mũi và né tránh bối cảnh</td></tr>
+        <tr><td>2</td><td><strong>Fear</strong></td><td style="text-align: center;">997 / 1,000</td><td style="text-align: center; font-weight: bold; color: #1b5e20;">99.70%</td><td>Cực kỳ vượt trội (chỉ nhầm 3 mẫu); mắt mở to và co người</td></tr>
+        <tr><td>3</td><td><strong>Happy</strong></td><td style="text-align: center;">834 / 1,000</td><td style="text-align: center; font-weight: bold;">83.40%</td><td>Nụ cười và ánh mắt sáng; đôi lúc nhầm sang Neutral (70 mẫu)</td></tr>
+        <tr><td>4</td><td><strong>Neutral</strong></td><td style="text-align: center;">737 / 1,000</td><td style="text-align: center; font-weight: bold; color: #b71c1c;">73.70%</td><td>Lớp khó nhất; phân tán nhẹ sang Surprise (68) và Happy (56)</td></tr>
+        <tr><td>5</td><td><strong>Sad</strong></td><td style="text-align: center;">934 / 1,000</td><td style="text-align: center; font-weight: bold;">93.40%</td><td>Khóe môi trễ xuống và dáng người buông thõng thể hiện rõ</td></tr>
+        <tr><td>6</td><td><strong>Surprise</strong></td><td style="text-align: center;">922 / 1,000</td><td style="text-align: center; font-weight: bold;">92.20%</td><td>Mắt trợn tròn và há miệng được CMAF bắt trúng</td></tr>
+        <tr style="background-color: #e8f5e9; font-weight: bold;">
+            <td colspan="2"><strong>Trung bình toàn bộ (WAR / UAR)</strong></td>
+            <td style="text-align: center; color: #1b5e20;"><strong>6,328 / 7,000</strong></td>
+            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;"><strong>90.40%</strong></td>
+            <td><strong>Hiệu năng đồng đều vượt trội trên cả 7 cảm xúc (Harmonic: 90.40%)</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Ma trận nhầm lẫn 7x7 số liệu thực nghiệm -->
+<table class="data-table" style="margin-bottom: 5px; text-align: center;">
+    <thead>
+        <tr>
+            <th style="width: 16%;">True &bsol; Pred</th>
+            <th style="width: 12%;">Anger</th>
+            <th style="width: 12%;">Disgust</th>
+            <th style="width: 12%;">Fear</th>
+            <th style="width: 12%;">Happy</th>
+            <th style="width: 12%;">Neutral</th>
+            <th style="width: 12%;">Sad</th>
+            <th style="width: 12%;">Surprise</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td><strong>Anger</strong></td><td style="background-color: #bbdefb; font-weight: bold;">923</td><td>10</td><td>1</td><td>7</td><td>28</td><td>17</td><td>14</td></tr>
+        <tr><td><strong>Disgust</strong></td><td>4</td><td style="background-color: #bbdefb; font-weight: bold;">981</td><td>2</td><td>4</td><td>1</td><td>7</td><td>1</td></tr>
+        <tr><td><strong>Fear</strong></td><td>0</td><td>1</td><td style="background-color: #bbdefb; font-weight: bold;">997</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+        <tr><td><strong>Happy</strong></td><td>25</td><td>4</td><td>8</td><td style="background-color: #bbdefb; font-weight: bold;">834</td><td>70</td><td>17</td><td>42</td></tr>
+        <tr><td><strong>Neutral</strong></td><td>53</td><td>29</td><td>10</td><td>56</td><td style="background-color: #bbdefb; font-weight: bold;">737</td><td>47</td><td>68</td></tr>
+        <tr><td><strong>Sad</strong></td><td>16</td><td>1</td><td>5</td><td>11</td><td>19</td><td style="background-color: #bbdefb; font-weight: bold;">934</td><td>14</td></tr>
+        <tr><td><strong>Surprise</strong></td><td>19</td><td>3</td><td>3</td><td>16</td><td>22</td><td>15</td><td style="background-color: #bbdefb; font-weight: bold;">922</td></tr>
+    </tbody>
+</table>
+
+<table class="two-col-figures" style="margin-top: 4px;">
+    <tr>
+        <td style="width: 48%;">
+            <img src="{caers_recall_img}" alt="CAER-S Per-Class Recall Barchart">
+            <div class="figure-caption">Hình 11a: Biểu đồ thanh Per-Class Recall trên 7 lớp cảm xúc CAER-S (Đỉnh Epoch 19)</div>
+        </td>
+        <td style="width: 52%;">
+            <img src="{caers_cm_img}" alt="CAER-S Confusion Matrix Heatmap">
+            <div class="figure-caption">Hình 11b: Bản đồ nhiệt Ma trận nhầm lẫn thực nghiệm trên 7,000 mẫu kiểm định CAER-S</div>
+        </td>
+    </tr>
+</table>
+
+<div class="success-box" style="margin-top: 4px; padding: 5px 8px; font-size: 7.9pt; line-height: 1.34;">
+    <strong>TỔNG KẾT HỌC THUẬT VÀ NĂNG LỰC TỔNG QUÁT HÓA XUYÊN MIỀN (CROSS-DOMAIN RIGOR):</strong><br>
+    1. <strong>Hiệu năng áp đảo trên CAER-S (90.40% WAR/UAR):</strong> Việc kết hợp <strong>LDAM Loss</strong> (s=1.0, m<sub>max</sub>=0.5) cùng <strong>WeightedRandomSampler</strong> giúp mô hình tạo biên phân định cực rộng giữa các biểu cảm tương đồng (như Sad vs Neutral, Happy vs Neutral). Kết quả 90.40% vượt qua hàng loạt mô hình CNN/GCN chuyên dụng (CAER-Net 73.51%, EmotiCon 77.00%, EfficientFace 85.87%, MA-Net 88.42%, GLAMOR-Net 89.88%) và áp sát SAFER (91.40%).<br>
+    2. <strong>Tính phổ quát trên 3 bộ dữ liệu chuẩn (Benchmark Triad):</strong><br>
+    &bull; <em>Video Cảm xúc Học đường (RAER):</em> <strong>77.08% WAR / 77.66% UAR</strong> &mdash; Thiết lập SOTA tuyệt đối về dung hợp cấp khung hình Frame-Level Fusion.<br>
+    &bull; <em>Ảnh Tĩnh Tự Nhiên Đa Nhãn (EMOTIC):</em> <strong>34.76% Test Macro mAP</strong> &mdash; Vượt qua Kosti et al. (+7.38%) và EmotiCon (+1.66%) bằng hàm Dynamic ASL.<br>
+    &bull; <em>Ảnh Tĩnh Phim Truyền Hình Bối Cảnh (CAER-S):</em> <strong>90.40% WAR / 90.40% UAR</strong> (Đạt đỉnh tại Epoch 19) &mdash; Khẳng định khối CMAF 1536-d trích xuất bối cảnh vượt trội.<br>
+    3. <strong>Ý nghĩa quyết định cho Bài báo Khoa học:</strong> Các thực nghiệm này chứng minh kiến trúc RAPT-CLIP không phải là giải pháp tinh chỉnh riêng lẻ cho 1 tập dữ liệu, mà là một mô hình nền tảng vững chắc có khả năng khái quát hóa mạnh mẽ trên cả video chuỗi thời gian lẫn ảnh tĩnh đa chiều.
+</div>
+
 
 </body>
 </html>
