@@ -345,7 +345,7 @@ def run_training(args: argparse.Namespace) -> None:
         if hasattr(model, 'unified_temporal_net') and model.unified_temporal_net is not None:
             optimizer_grouped_parameters.append({"params": model.unified_temporal_net.parameters(), "lr": args.lr})
     else:
-        if hasattr(model, 'temporal_net_face'):
+        if hasattr(model, 'temporal_net_face') and model.temporal_net_face is not None:
             # Video-Level Fusion (or V2 Architecture)
             optimizer_grouped_parameters = [
                 {"params": model.temporal_net_face.parameters(), "lr": args.lr},
@@ -355,21 +355,21 @@ def run_training(args: argparse.Namespace) -> None:
                 {"params": model.project_fc.parameters(), "lr": args.lr},
                 {"params": model.face_adapter.parameters(), "lr": args.lr_adapter},
             ]
-            if hasattr(model, 'temporal_net_context'):
+            if hasattr(model, 'temporal_net_context') and model.temporal_net_context is not None:
                 optimizer_grouped_parameters.append({"params": model.temporal_net_context.parameters(), "lr": args.lr})
-            if hasattr(model, 'cmaf'):
+            if hasattr(model, 'cmaf') and model.cmaf is not None:
                 optimizer_grouped_parameters.append({"params": model.cmaf.parameters(), "lr": args.lr})
-            if hasattr(model, 'gate_fc'):
+            if hasattr(model, 'gate_fc') and model.gate_fc is not None:
                 optimizer_grouped_parameters.append({"params": model.gate_fc.parameters(), "lr": args.lr})
-            if hasattr(model, 'cross_attn_fb'):
+            if hasattr(model, 'cross_attn_fb') and model.cross_attn_fb is not None:
                 optimizer_grouped_parameters.append({"params": model.cross_attn_fb.parameters(), "lr": args.lr})
-            if hasattr(model, 'cross_attn_fbc'):
+            if hasattr(model, 'cross_attn_fbc') and model.cross_attn_fbc is not None:
                 optimizer_grouped_parameters.append({"params": model.cross_attn_fbc.parameters(), "lr": args.lr})
-            if hasattr(model, 'q2l_attention'):
+            if hasattr(model, 'q2l_attention') and model.q2l_attention is not None:
                 optimizer_grouped_parameters.append({"params": model.q2l_attention.parameters(), "lr": args.lr})
-            if hasattr(model, 'q2l_norm'):
+            if hasattr(model, 'q2l_norm') and model.q2l_norm is not None:
                 optimizer_grouped_parameters.append({"params": model.q2l_norm.parameters(), "lr": args.lr})
-            if hasattr(model, 'classifier'):
+            if hasattr(model, 'classifier') and model.classifier is not None:
                 optimizer_grouped_parameters.append({"params": model.classifier.parameters(), "lr": args.lr})
         else:
             # Frame-Level Fusion (Default SOTA)
