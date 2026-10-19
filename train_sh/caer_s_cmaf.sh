@@ -125,11 +125,11 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
   fi
 fi
 
-# 4. Khởi chạy huấn luyện RAPT-CLIP CAER-S Tối Ưu
+# 4. Khởi chạy huấn luyện RAPT-CLIP CAER-S Tối Ưu (SOTA Pipeline)
 python -u main.py \
   --mode train \
   --exper-name CAER-S-CMAF \
-  --dataset CAER \
+  --dataset CAER-S \
   --gpu 0 \
   --epochs ${TOTAL_EPOCHS} \
   --batch-size 16 \
@@ -148,26 +148,22 @@ python -u main.py \
   \
   --fusion-type cmaf \
   --fusion-stage frame \
-  --temporal-layers 1 \
-  --temporal-pooling attn \
+  --no-temporal \
   --use-context \
   --crop-body \
   --mask-context-face \
   \
   --optimizer AdamW \
-  --lr 2e-5 \
-  --lr-image-encoder 1e-6 \
-  --lr-prompt-learner 3e-4 \
-  --lr-adapter 1e-4 \
+  --lr 5e-5 \
+  --lr-image-encoder 1e-5 \
+  --lr-prompt-learner 5e-4 \
+  --lr-adapter 2e-4 \
   --weight-decay 0.005 \
-  --milestones 10 15 \
-  --gamma 0.1 \
+  --scheduler cosine \
+  --warmup-epochs 2 \
   \
-  --loss-type ldam \
-  --ldam-s 1.0 \
-  --ldam-max-m 0.5 \
-  --use-weighted-sampler \
-  --label-smoothing 0.05 \
+  --loss-type ce \
+  --label-smoothing 0.1 \
   --mixup-alpha 0.0 \
   --lambda_mi 0.1 \
   --lambda_dc 0.1 \
@@ -176,6 +172,7 @@ python -u main.py \
   --dc-warmup 3 \
   --dc-ramp 6 \
   --grad-clip 1.0 \
+  --early-stopping-patience 3 \
   \
   --text-type prompt_ensemble \
   --contexts-number 8 \
@@ -186,6 +183,7 @@ python -u main.py \
   --duration 1 \
   --image-size 224 \
   --temperature 0.07 \
-  --drop-path-rate 0.0 \
-  --modality-dropout 0.0 \
+  --drop-path-rate 0.1 \
+  --modality-dropout 0.1 \
+  --use-tta \
   --use-amp

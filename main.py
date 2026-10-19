@@ -83,6 +83,8 @@ train_group.add_argument('--grad-accum-steps', type=int, default=1, help='Number
 train_group.add_argument('--print-freq', type=int, default=10, help='Frequency of printing training logs.')
 train_group.add_argument('--use-amp', action='store_true', help='Use Automatic Mixed Precision.')
 train_group.add_argument('--grad-clip', type=float, default=1.0, help='Gradient clipping value.')
+train_group.add_argument('--finetune-from', type=str, default='', help='Path to checkpoint to fine-tune from (loads model weights with strict=False, starts at epoch 0 with fresh optimizer & scheduler).')
+train_group.add_argument('--use-tta', action='store_true', help='Enable Test-Time Augmentation (Horizontal Flip) during test evaluation.')
 
 # --- Optimizer & Learning Rate ---
 optim_group = parser.add_argument_group('Optimizer & LR', 'Hyperparameters for the optimizer and scheduler')
@@ -397,6 +399,19 @@ def run_training(args: argparse.Namespace) -> None:
     else:
         raise ValueError(f"Optimizer {args.optimizer} not supported.")
 
+    # Fine-tuning warm start from checkpoint (loads weights, starts at epoch 0 with fresh optimizer & scheduler)
+    if getattr(args, 'finetune_from', '') and os.path.isfile(args.finetune_from):
+        print(f"\n=> [Fine-tune Warm Start] Loading pretrained weights from '{args.finetune_from}'...")
+        ckpt = torch.load(args.finetune_from, map_location=args.device, weights_only=False)
+        sd = ckpt['state_dict'] if 'state_dict' in ckpt else ckpt
+        msg = model.load_state_dict(sd, strict=False)
+        prev_best = ckpt.get('best_acc', 0.0)
+        prev_epoch = ckpt.get('epoch', '?')
+        print(f"   • Weights loaded successfully (strict=False). Result: {msg}")
+        print(f"   • Checkpoint origin: epoch {prev_epoch} (Previous metric: {prev_best:.2f}%)")
+        print(f"   • Starting fresh fine-tune schedule: epochs 0 -> {args.epochs} with clean optimizer.\n")
+        start_epoch = 0
+
     # Resume from checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -619,8 +634,22 @@ def run_training(args: argparse.Namespace) -> None:
             class_names=class_names,
             log_confusion_matrix_path=log_confusion_matrix_path,
             log_txt_path=log_txt_path,
-            title=f"Confusion Matrix on {args.dataset} (Best Val Ckpt)"
+            title=f"Confusion Matrix on {args.dataset} (Best Val Ckpt)",
+            use_tta=False
         )
+        if getattr(args, 'use_tta', False):
+            print("\n=> [TTA Evaluation] Evaluating Best Val Ckpt with Test-Time Augmentation (Horizontal Flip)...")
+            tta_cm_path = os.path.join(args.output_path, 'confusion_matrix_best_tta.png')
+            computer_uar_war(
+                val_loader=test_loader,
+                model=model,
+                device=args.device,
+                class_names=class_names,
+                log_confusion_matrix_path=tta_cm_path,
+                log_txt_path=log_txt_path,
+                title=f"Confusion Matrix on {args.dataset} (Best Val Ckpt + TTA)",
+                use_tta=True
+            )
 
     # Also evaluate the last epoch model (model.pth) to verify post-warmup convergence
     if os.path.exists(checkpoint_path):
@@ -643,8 +672,22 @@ def run_training(args: argparse.Namespace) -> None:
                 class_names=class_names,
                 log_confusion_matrix_path=last_cm_path,
                 log_txt_path=log_txt_path,
-                title=f"Confusion Matrix on {args.dataset} (Last Epoch Ckpt)"
+                title=f"Confusion Matrix on {args.dataset} (Last Epoch Ckpt)",
+                use_tta=False
             )
+            if getattr(args, 'use_tta', False):
+                print("\n=> [TTA Evaluation] Evaluating Last Epoch Ckpt with Test-Time Augmentation (Horizontal Flip)...")
+                tta_last_cm_path = os.path.join(args.output_path, 'confusion_matrix_last_tta.png')
+                computer_uar_war(
+                    val_loader=test_loader,
+                    model=model,
+                    device=args.device,
+                    class_names=class_names,
+                    log_confusion_matrix_path=tta_last_cm_path,
+                    log_txt_path=log_txt_path,
+                    title=f"Confusion Matrix on {args.dataset} (Last Epoch Ckpt + TTA)",
+                    use_tta=True
+                )
 
 def run_eval(args: argparse.Namespace) -> None:
     print("=> Starting evaluation mode...")
@@ -679,7 +722,8 @@ def run_eval(args: argparse.Namespace) -> None:
             class_names=class_names,
             log_confusion_matrix_path=log_confusion_matrix_path,
             log_txt_path=log_txt_path,
-            title=f"Confusion Matrix on {args.dataset}"
+            title=f"Confusion Matrix on {args.dataset}" + (" (TTA)" if getattr(args, 'use_tta', False) else ""),
+            use_tta=getattr(args, 'use_tta', False)
         )
     print("=> Evaluation complete.")
 

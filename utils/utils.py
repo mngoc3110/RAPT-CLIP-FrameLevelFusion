@@ -206,13 +206,14 @@ def plot_confusion_matrix(cm, classes, normalize=True, title='confusion matrix',
     plt.tight_layout()
 
 
-def computer_uar_war(val_loader, model, device, class_names, log_confusion_matrix_path, log_txt_path, title="Confusion Matrix"):
+def computer_uar_war(val_loader, model, device, class_names, log_confusion_matrix_path, log_txt_path, title="Confusion Matrix", use_tta: bool = False):
     model.eval()
     all_predicted = []
     all_targets = []
     
+    desc_str = f"Calculating Metrics ({'TTA Enabled' if use_tta else 'Standard'})"
     with torch.no_grad():
-        for i, batch in enumerate(tqdm.tqdm(val_loader, desc="Calculating Metrics")):
+        for i, batch in enumerate(tqdm.tqdm(val_loader, desc=desc_str)):
             if len(batch) == 4:
                 images_face, images_body, images_context, target = batch
                 images_context = images_context.to(device)
@@ -224,11 +225,23 @@ def computer_uar_war(val_loader, model, device, class_names, log_confusion_matri
             images_body = images_body.to(device)
             target = target.to(device)
 
-            # Model now returns 4 values: output, text_features, hand_crafted_text_features, moco_logits
+            # Model returns 4 values: output, text_features, hand_crafted_text_features, moco_logits
             if images_context is not None:
                 output, _, _, _ = model(images_face, images_body, images_context)
+                if use_tta:
+                    # Test-Time Augmentation: horizontal flip on all streams (last dim is width)
+                    f_face = torch.flip(images_face, dims=[-1])
+                    f_body = torch.flip(images_body, dims=[-1])
+                    f_context = torch.flip(images_context, dims=[-1])
+                    output_flip, _, _, _ = model(f_face, f_body, f_context)
+                    output = (output.softmax(dim=-1) + output_flip.softmax(dim=-1)) / 2.0
             else:
                 output, _, _, _ = model(images_face, images_body)
+                if use_tta:
+                    f_face = torch.flip(images_face, dims=[-1])
+                    f_body = torch.flip(images_body, dims=[-1])
+                    output_flip, _, _, _ = model(f_face, f_body)
+                    output = (output.softmax(dim=-1) + output_flip.softmax(dim=-1)) / 2.0
             predicted = output.argmax(dim=1)
             
             all_predicted.append(predicted.cpu())
