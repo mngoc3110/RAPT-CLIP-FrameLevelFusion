@@ -614,6 +614,35 @@ class VideoDataset(data.Dataset):
                         cached_rule = new_rule
                     resolved_samples.append([real_p] + item[1:])
             self.video_list = [VideoRecord(item) for item in resolved_samples]
+        elif self.dataset_name == 'RAER':
+            resolved_samples = []
+            for item in self.sample_list:
+                rel_p = item[0]
+                full_cand = os.path.join(self.root_dir, rel_p)
+                if os.path.exists(full_cand) or os.path.isdir(full_cand):
+                    resolved_samples.append([full_cand] + item[1:])
+                    continue
+                # Handle double RAER prefix (e.g. root_dir='.../RAER' and rel_p='RAER/images/...')
+                norm_root = self.root_dir.rstrip('/\\')
+                if (rel_p.startswith('RAER/') or rel_p.startswith('RAER\\')) and (norm_root.endswith('/RAER') or norm_root.endswith('\\RAER') or norm_root == 'RAER'):
+                    sub_p = rel_p[5:]
+                    cand2 = os.path.join(norm_root, sub_p)
+                    if os.path.exists(cand2) or os.path.isdir(cand2):
+                        resolved_samples.append([cand2] + item[1:])
+                        continue
+                # Try parent directory if root_dir ends with RAER
+                parent_dir = os.path.dirname(norm_root) if os.path.dirname(norm_root) else '.'
+                cand3 = os.path.join(parent_dir, rel_p)
+                if os.path.exists(cand3) or os.path.isdir(cand3):
+                    resolved_samples.append([cand3] + item[1:])
+                    continue
+                # Strip duplicate /RAER/RAER/ substring
+                clean_full = full_cand.replace('/RAER/RAER/', '/RAER/').replace('\\RAER\\RAER\\', '\\RAER\\')
+                if os.path.exists(clean_full) or os.path.isdir(clean_full):
+                    resolved_samples.append([clean_full] + item[1:])
+                    continue
+                resolved_samples.append([full_cand] + item[1:])
+            self.video_list = [VideoRecord(item) for item in resolved_samples]
         else:
             self.video_list = [VideoRecord([os.path.join(self.root_dir, item[0])] + item[1:]) for item in self.sample_list]
 
@@ -702,6 +731,13 @@ class VideoDataset(data.Dataset):
                 real_p, _ = resolve_daisee_path(record.path, self.root_dir)
                 if os.path.exists(real_p) or os.path.isdir(real_p):
                     record._data[0] = real_p
+        elif self.dataset_name == 'RAER':
+            # Fix duplicate /RAER/RAER/ prefix if present
+            if not os.path.exists(record.path) and not os.path.isdir(record.path):
+                if '/RAER/RAER/' in record.path or '\\RAER\\RAER\\' in record.path:
+                    fixed_p = record.path.replace('/RAER/RAER/', '/RAER/').replace('\\RAER\\RAER\\', '\\RAER\\')
+                    if os.path.exists(fixed_p) or os.path.isdir(fixed_p):
+                        record._data[0] = fixed_p
 
             # Now evaluate the resolved path
             if os.path.isdir(record.path):

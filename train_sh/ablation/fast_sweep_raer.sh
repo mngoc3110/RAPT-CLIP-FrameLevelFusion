@@ -93,6 +93,7 @@ if [ "$NEEDS_EXTRACT" = true ]; then
   echo "   (This runs once, producing ~170MB .pt files for instant 300x ablations)"
   
   python tools/extract_raer_features.py \
+    --root-dir "." \
     --out-dir "$FEATURES_DIR" \
     --batch-size "$BATCH_SIZE" \
     --workers "$WORKERS" \

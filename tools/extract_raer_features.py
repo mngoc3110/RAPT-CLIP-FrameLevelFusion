@@ -36,7 +36,7 @@ RAER_CLASSES = ['Neutrality', 'Enjoyment', 'Confusion', 'Fatigue', 'Distraction'
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Extract and Cache RAER Visual Features")
-    parser.add_argument('--root-dir', type=str, default='RAER',
+    parser.add_argument('--root-dir', type=str, default='.',
                         help='Root directory for RAER dataset')
     parser.add_argument('--train-annotation', type=str, default='RAER/annotation/train.txt',
                         help='Path to train.txt')
