@@ -16,8 +16,62 @@ export CUDA_VISIBLE_DEVICES=0
 export OPENCV_LOG_LEVEL=OFF
 export OPENCV_FFMPEG_LOGLEVEL=0
 
-CHECKPOINT_PATH="${1:-model_daisee.zip}"
-EPOCHS="${2:-8}"
+CHECKPOINT_PATH=""
+EPOCHS=8
+GEN_BBOX="${GEN_BBOX:-0}"
+EXTRA_ARGS=()
+
+for arg in "$@"; do
+  case "$arg" in
+    --gen-bbox)
+      GEN_BBOX=1
+      ;;
+    --epochs=*)
+      EPOCHS="${arg#*=}"
+      ;;
+    --checkpoint=*)
+      CHECKPOINT_PATH="${arg#*=}"
+      ;;
+    --*)
+      EXTRA_ARGS+=("$arg")
+      ;;
+    *)
+      if [ -z "$CHECKPOINT_PATH" ] && ([ -f "$arg" ] || [[ "$arg" == *.pth ]] || [[ "$arg" == *.zip ]]); then
+        CHECKPOINT_PATH="$arg"
+      elif [[ "$arg" =~ ^[0-9]+$ ]]; then
+        EPOCHS="$arg"
+      elif [ -z "$CHECKPOINT_PATH" ]; then
+        CHECKPOINT_PATH="$arg"
+      else
+        EXTRA_ARGS+=("$arg")
+      fi
+      ;;
+  esac
+done
+
+# Tự động tìm checkpoint nếu chưa có
+if [ -z "$CHECKPOINT_PATH" ]; then
+  KNOWN_CKPTS=(
+    "/kaggle/input/models/bearmn/daisy-model/tensorflow2/default/1/model_daisee.pth"
+    "model_daisee.zip"
+    "model_clean.pth"
+  )
+  for ckpt in "${KNOWN_CKPTS[@]}"; do
+    if [ -f "$ckpt" ]; then
+      CHECKPOINT_PATH="$ckpt"
+      break
+    fi
+  done
+  if [ -z "$CHECKPOINT_PATH" ] && [ -d "/kaggle/input" ]; then
+    FOUND_C=$(find /kaggle/input -type f \( -name "*daisee*.pth" -o -name "*daisy*.pth" -o -name "*model_daisee*.zip" \) 2>/dev/null | head -n 1)
+    if [ -n "$FOUND_C" ]; then
+      CHECKPOINT_PATH="$FOUND_C"
+    fi
+  fi
+  if [ -z "$CHECKPOINT_PATH" ]; then
+    CHECKPOINT_PATH="model_daisee.zip"
+  fi
+fi
 
 echo "============================================================================"
 echo "🎯 RAPT-CLIP DAiSEE TARGETED FINE-TUNING"
@@ -97,13 +151,6 @@ for f in "$DATA_DIR/daisee_face_bbox.json" "$DATA_DIR/face_bbox.json" "/kaggle/w
   fi
 done
 
-GEN_BBOX="${GEN_BBOX:-0}"
-for arg in "$@"; do
-  if [ "$arg" = "--gen-bbox" ]; then
-    GEN_BBOX="1"
-  fi
-done
-
 if [ "$FACE_BBOX_PATH" = "none" ] && [ "$GEN_BBOX" = "1" ] && [ -f "tools/generate_daisee_face_boxes.py" ]; then
   echo "=> [YuNet] Đang sinh Face Bounding Box bằng YuNet detector..."
   OUT_BBOX="DAiSEE/daisee_face_bbox.json"
@@ -152,7 +199,7 @@ python -u main.py \
   --clip-path ViT-B/16 \
   --bounding-box-face "$FACE_BBOX_PATH" \
   --bounding-box-body "none" \
-  --resume "$CHECKPOINT_PATH" \
+  --finetune-from "$CHECKPOINT_PATH" \
   \
   --fusion-type cmaf \
   --temporal-layers 1 \
@@ -184,4 +231,4 @@ python -u main.py \
   --image-size 224 \
   --temperature 0.07 \
   --drop-path-rate 0.1 \
-  "$@"
+  "${EXTRA_ARGS[@]}"
