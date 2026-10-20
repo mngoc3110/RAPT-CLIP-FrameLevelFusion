@@ -79,61 +79,73 @@ echo "• Base Checkpoint: ${CHECKPOINT_PATH}"
 echo "• Target Epochs:   ${EPOCHS}"
 echo "============================================================================"
 
-# 1. Nhận diện thư mục dữ liệu DAiSEE
-POSSIBLE_DATA_DIRS=(
-  "DAiSEE"
-  "DAiSEE/DataSet"
-  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE"
-  "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet"
-  "/kaggle/input/datasets/olgaparfenova/daisee"
-  "/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data"
-  "/kaggle/input/datasets/mngochocsupham/daisee"
-  "/kaggle/input/daisee/DAiSEE_data"
-  "/kaggle/input/daisee/DAiSEE"
-  "/kaggle/input/daisee"
-  "/kaggle/input/DAiSEE_data"
-  "/kaggle/input/DAiSEE"
-)
-
+# 1. Nhận diện thư mục dữ liệu DAiSEE (Chứa video thực tế)
 DATA_DIR=""
-for d in "${POSSIBLE_DATA_DIRS[@]}"; do
-  if [ -f "$d/DataSet/Validation.txt" ] || [ -f "$d/Validation.txt" ] || [ -f "$d/daisee_train.txt" ] || [ -f "$d/train.txt" ] || [ -f "$d/Labels/TrainLabels.csv" ]; then
-    DATA_DIR="$d"
-    break
-  fi
-done
-
-if [ -z "$DATA_DIR" ] && [ -d "/kaggle/input" ]; then
-  DETECTED_FILE=$(find /kaggle/input -maxdepth 8 \( -iname "Validation.txt" -o -iname "daisee_train.txt" -o -iname "TrainLabels.csv" \) 2>/dev/null | head -n 1)
-  if [ -n "$DETECTED_FILE" ]; then
-    DIRNAME=$(dirname "$DETECTED_FILE")
-    if [ "$(basename "$DIRNAME")" = "DataSet" ] || [ "$(basename "$DIRNAME")" = "Labels" ]; then
-      DATA_DIR=$(dirname "$DIRNAME")
-    else
-      DATA_DIR="$DIRNAME"
+if [ -d "/kaggle/input" ]; then
+  KAGGLE_CANDIDATES=(
+    "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE"
+    "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet"
+    "/kaggle/input/datasets/olgaparfenova/daisee"
+    "/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data"
+    "/kaggle/input/datasets/mngochocsupham/daisee"
+    "/kaggle/input/daisee/DAiSEE_data"
+    "/kaggle/input/daisee/DAiSEE"
+    "/kaggle/input/daisee"
+    "/kaggle/input/DAiSEE_data"
+    "/kaggle/input/DAiSEE"
+  )
+  for d in "${KAGGLE_CANDIDATES[@]}"; do
+    if [ -d "$d/DataSet" ] || [ -d "$d/Train" ] || [ -f "$d/DataSet/Train.txt" ] || [ -f "$d/DataSet/Validation.txt" ]; then
+      DATA_DIR="$d"
+      break
+    fi
+  done
+  if [ -z "$DATA_DIR" ]; then
+    DETECTED_DS=$(find /kaggle/input -maxdepth 5 -type d \( -name "DataSet" -o -name "DAiSEE_data" \) 2>/dev/null | head -n 1)
+    if [ -n "$DETECTED_DS" ]; then
+      if [ "$(basename "$DETECTED_DS")" = "DataSet" ] || [ "$(basename "$DETECTED_DS")" = "DAiSEE_data" ]; then
+        DATA_DIR="$(dirname "$DETECTED_DS")"
+      else
+        DATA_DIR="$DETECTED_DS"
+      fi
     fi
   fi
+fi
+
+if [ -z "$DATA_DIR" ]; then
+  LOCAL_CANDIDATES=(
+    "DAiSEE"
+    "DAiSEE/DataSet"
+    "/Users/macbook/Downloads/RAPT-CLIP/DAiSEE"
+  )
+  for d in "${LOCAL_CANDIDATES[@]}"; do
+    if [ -d "$d" ]; then
+      DATA_DIR="$d"
+      break
+    fi
+  done
 fi
 
 if [ -z "$DATA_DIR" ]; then
   DATA_DIR="DAiSEE"
 fi
 
-echo "=> [1/4] Thư mục DAiSEE: ${DATA_DIR}"
+echo "=> [1/4] Thư mục DAiSEE data root: ${DATA_DIR}"
 
 # 2. File danh sách dữ liệu (Train / Val / Test)
+# Ưu tiên các file annotation đã track trong repo git
 TRAIN_TXT=""
-for t in "$DATA_DIR/daisee_train.txt" "$DATA_DIR/DataSet/Train.txt" "$DATA_DIR/Train.txt" "$DATA_DIR/Labels/TrainLabels.csv"; do
+for t in "DAiSEE/daisee_train.txt" "$DATA_DIR/daisee_train.txt" "$DATA_DIR/DataSet/Train.txt" "$DATA_DIR/Train.txt" "$DATA_DIR/Labels/TrainLabels.csv"; do
   if [ -f "$t" ]; then TRAIN_TXT="$t"; break; fi
 done
 
 VAL_TXT=""
-for v in "$DATA_DIR/daisee_val.txt" "$DATA_DIR/DataSet/Validation.txt" "$DATA_DIR/Validation.txt" "$DATA_DIR/Labels/ValidationLabels.csv"; do
+for v in "DAiSEE/daisee_val.txt" "$DATA_DIR/daisee_val.txt" "$DATA_DIR/DataSet/Validation.txt" "$DATA_DIR/Validation.txt" "$DATA_DIR/Labels/ValidationLabels.csv"; do
   if [ -f "$v" ]; then VAL_TXT="$v"; break; fi
 done
 
 TEST_TXT=""
-for s in "$DATA_DIR/daisee_test.txt" "$DATA_DIR/DataSet/Test.txt" "$DATA_DIR/Test.txt" "$DATA_DIR/Labels/TestLabels.csv"; do
+for s in "DAiSEE/daisee_test.txt" "$DATA_DIR/daisee_test.txt" "$DATA_DIR/DataSet/Test.txt" "$DATA_DIR/Test.txt" "$DATA_DIR/Labels/TestLabels.csv"; do
   if [ -f "$s" ]; then TEST_TXT="$s"; break; fi
 done
 

@@ -278,7 +278,7 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
     if daisee_merge_low:
         print("=> Option enabled: Merging DAiSEE Low engagement classes.")
 
-    print(f"Loading train data (Standard) for {args.dataset}...")
+    print(f"Loading train data (Standard) for {args.dataset}...", flush=True)
     train_data = train_data_loader(
         root_dir=args.root_dir, list_file=train_annotation_file_path, num_segments=args.num_segments,
         duration=args.duration, image_size=args.image_size, dataset_name=args.dataset,
@@ -289,7 +289,7 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         daisee_merge_low=daisee_merge_low
     )
     
-    print(f"Loading validation data (Standard) for {args.dataset}...")
+    print(f"Loading validation data (Standard) for {args.dataset}...", flush=True)
     val_data = test_data_loader(
         root_dir=args.root_dir, list_file=val_annotation_file_path, num_segments=args.num_segments,
         duration=args.duration, image_size=args.image_size,
@@ -301,7 +301,7 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         daisee_merge_low=daisee_merge_low
     )
 
-    print(f"Loading test data (Standard) for {args.dataset}...")
+    print(f"Loading test data (Standard) for {args.dataset}...", flush=True)
     test_data = test_data_loader(
         root_dir=args.root_dir, list_file=test_annotation_file_path, num_segments=args.num_segments,
         duration=args.duration, image_size=args.image_size,
@@ -313,8 +313,8 @@ def build_dataloaders(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLo
         daisee_merge_low=daisee_merge_low
     )
 
-    print(f"Total number of training images: {len(train_data)}")
-    print("Creating DataLoader instances...")
+    print(f"Total number of training samples: {len(train_data)} | Val: {len(val_data)} | Test: {len(test_data)}", flush=True)
+    print("Creating DataLoader instances...", flush=True)
     
     sampler = None
     shuffle = True

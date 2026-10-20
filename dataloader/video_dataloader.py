@@ -147,8 +147,20 @@ def resolve_daisee_path(raw_path, root_dir, cached_rule=None):
         os.path.join(clean_root, 'DAiSEE_data'),
         os.path.join(clean_root, 'DAiSEE_data', 'DataSet'),
     ]
-    if '/kaggle/input' in root_dir and '/kaggle/input' not in search_roots:
-        search_roots.append('/kaggle/input')
+    if os.path.isdir('/kaggle/input'):
+        for kd in [
+            root_dir,
+            '/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE',
+            '/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet',
+            '/kaggle/input/datasets/olgaparfenova/daisee',
+            '/kaggle/input/daisee/DAiSEE',
+            '/kaggle/input/daisee/DAiSEE_data',
+            '/kaggle/input/DAiSEE_data',
+            '/kaggle/input/DAiSEE',
+        ]:
+            if os.path.isdir(kd) and kd not in search_roots:
+                search_roots.append(kd)
+                search_roots.append(os.path.join(kd, 'DataSet'))
 
     splits = [split_name]
     if split_name.lower() in ['validation', 'val']:
@@ -586,6 +598,8 @@ class VideoDataset(data.Dataset):
         # 
         if self.dataset_name == 'DAiSEE':
             # Pre-resolve DAiSEE paths to actual existing videos/frames on disk
+            if len(self.sample_list) > 50:
+                print(f"[{self.dataset_name} {self.mode}] Đang xác thực đường dẫn {len(self.sample_list)} video từ root: '{self.root_dir}'...", flush=True)
             cached_rule = None
             resolved_samples = []
             for item in self.sample_list:
@@ -599,6 +613,8 @@ class VideoDataset(data.Dataset):
                         cached_rule = new_rule
                     resolved_samples.append([real_p] + item[1:])
             self.video_list = [VideoRecord(item) for item in resolved_samples]
+            if len(self.video_list) > 50:
+                print(f"[{self.dataset_name} {self.mode}] Hoàn tất nạp {len(self.video_list)} samples.", flush=True)
         elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S', 'CAER_Video', 'CAER-Video']:
             # Pre-resolve CAER paths to handle nested directories, casing, and extensions
             cached_rule = None
