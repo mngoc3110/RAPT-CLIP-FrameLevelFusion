@@ -3,7 +3,10 @@
 /CAER/
 /CAER-S/
 /CKPlus_Dataset/
-/DAiSEE/
+/DAiSEE/*
+!/DAiSEE/*.txt
+!/DAiSEE/*.json
+!/DAiSEE/*.py
 /Student_FER_Dataset/
 
 # Annotations (generated)

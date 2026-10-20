@@ -69,12 +69,114 @@ def resolve_checkpoint(path):
         if os.path.exists(fb):
             print(f"[Warning] '{path}' not found. Falling back to '{fb}'.")
             return fb
+    # Check in /kaggle/input if running on Kaggle
+    if os.path.isdir('/kaggle/input'):
+        import glob
+        matches = glob.glob(f"/kaggle/input/**/{os.path.basename(path)}", recursive=True)
+        if matches:
+            print(f"[Auto-Detect] Found checkpoint at: {matches[0]}")
+            return matches[0]
     raise FileNotFoundError(f"Checkpoint not found at '{path}' and no fallback available.")
+
+
+def auto_detect_daisee_paths(root_dir, test_annotation, bbox_face):
+    """
+    Intelligently discovers DAiSEE root directory, annotation file, and face boxes
+    across Kaggle (/kaggle/input), Colab (/content), and local environments.
+    """
+    import glob
+
+    # 1. Resolve root_dir
+    possible_roots = [
+        root_dir,
+        "DAiSEE",
+        "DAiSEE/DataSet",
+        "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE",
+        "/kaggle/input/datasets/olgaparfenova/daisee/DAiSEE/DataSet",
+        "/kaggle/input/datasets/olgaparfenova/daisee",
+        "/kaggle/input/datasets/mngochocsupham/daisee/DAiSEE_data",
+        "/kaggle/input/datasets/mngochocsupham/daisee",
+        "/kaggle/input/daisee/DAiSEE_data",
+        "/kaggle/input/daisee/DAiSEE",
+        "/kaggle/input/daisee",
+        "/kaggle/input/DAiSEE_data",
+        "/kaggle/input/DAiSEE",
+        "/content/DAiSEE",
+        "/content/drive/MyDrive/DAiSEE"
+    ]
+    resolved_root = root_dir
+    for r in possible_roots:
+        if r and os.path.exists(r) and (
+            os.path.isdir(os.path.join(r, "DataSet")) or
+            os.path.isdir(os.path.join(r, "Labels")) or
+            os.path.exists(os.path.join(r, "daisee_test.txt")) or
+            os.path.exists(os.path.join(r, "Validation.txt"))
+        ):
+            resolved_root = r
+            break
+            
+    if (not os.path.exists(resolved_root) or resolved_root == "DAiSEE") and os.path.isdir("/kaggle/input"):
+        matches = glob.glob("/kaggle/input/**/daisee_test.txt", recursive=True) + \
+                  glob.glob("/kaggle/input/**/TestLabels.csv", recursive=True) + \
+                  glob.glob("/kaggle/input/**/Validation.txt", recursive=True)
+        if matches:
+            parent = os.path.dirname(matches[0])
+            if os.path.basename(parent) in ["DataSet", "Labels"]:
+                resolved_root = os.path.dirname(parent)
+            else:
+                resolved_root = parent
+
+    # 2. Resolve test_annotation
+    resolved_test = test_annotation
+    if not os.path.exists(resolved_test):
+        candidate_tests = [
+            os.path.join(resolved_root, "daisee_test.txt"),
+            os.path.join(resolved_root, "DataSet", "Test.txt"),
+            os.path.join(resolved_root, "Test.txt"),
+            os.path.join(resolved_root, "Labels", "TestLabels.csv"),
+            os.path.join("DAiSEE", "daisee_test.txt"),
+            "daisee_test.txt",
+        ]
+        for t in candidate_tests:
+            if os.path.exists(t):
+                resolved_test = t
+                break
+                
+        if not os.path.exists(resolved_test) and os.path.isdir("/kaggle/input"):
+            matches = glob.glob("/kaggle/input/**/daisee_test.txt", recursive=True) + \
+                      glob.glob("/kaggle/input/**/TestLabels.csv", recursive=True) + \
+                      glob.glob("/kaggle/input/**/Test.txt", recursive=True)
+            if matches:
+                resolved_test = matches[0]
+
+    # 3. Resolve bbox_face
+    resolved_bbox = bbox_face
+    if not os.path.exists(resolved_bbox) or os.path.getsize(resolved_bbox) < 100:
+        candidate_bboxes = [
+            os.path.join(resolved_root, "daisee_face_bbox.json"),
+            os.path.join(resolved_root, "face_bbox.json"),
+            "/kaggle/working/daisee_face_bbox.json",
+            "DAiSEE/daisee_face_bbox.json",
+            "daisee_face_bbox.json",
+        ]
+        resolved_bbox = "none"
+        for b in candidate_bboxes:
+            if os.path.exists(b) and os.path.getsize(b) > 100:
+                resolved_bbox = b
+                break
+
+    return resolved_root, resolved_test, resolved_bbox
 
 
 def main():
     args = parse_args()
     device = select_device(args.device)
+    
+    # Auto-resolve dataset & annotation paths
+    args.root_dir, args.test_annotation, args.bounding_box_face = auto_detect_daisee_paths(
+        args.root_dir, args.test_annotation, args.bounding_box_face
+    )
+
     print(f"\n===========================================================")
     print(f"🚀 RAPT-CLIP DAiSEE EVALUATION")
     print(f"===========================================================")
@@ -84,9 +186,16 @@ def main():
     print(f"• Checkpoint Path:    {ckpt_path}")
     print(f"• Dataset Root:       {args.root_dir}")
     print(f"• Test Annotation:    {args.test_annotation}")
+    print(f"• Face Bounding Box:  {args.bounding_box_face}")
     print(f"• Batch Size:         {args.batch_size}")
     print(f"• Num Segments:       {args.num_segments}")
     print(f"===========================================================\n")
+
+    if not os.path.exists(args.test_annotation):
+        print(f"❌ [LỖI] Không tìm thấy file test annotation tại: '{args.test_annotation}'")
+        print("👉 Vui lòng truyền đường dẫn chính xác bằng:")
+        print("   python evaluate_daisee.py --checkpoint ... --root-dir <THƯ_MỤC_DAiSEE> --test-annotation <FILE_TEST.txt>")
+        sys.exit(1)
 
     # Model configuration namespace
     model_args = argparse.Namespace(
@@ -156,6 +265,14 @@ def main():
         mask_context_face=model_args.mask_context_face,
         daisee_merge_low=model_args.daisee_merge_low
     )
+
+    if len(test_data) == 0:
+        print("\n❌ [LỖI] DataLoader không tìm thấy video test nào (0 samples loaded)!")
+        print(f"   • Root dir đã kiểm tra: {model_args.root_dir}")
+        print(f"   • File annotation:     {model_args.test_annotation}")
+        print("👉 Vui lòng chỉ định đúng đường dẫn DAiSEE trên máy hoặc Kaggle bằng cách thêm tham số:")
+        print("   --root-dir /path/to/DAiSEE --test-annotation /path/to/daisee_test.txt")
+        sys.exit(1)
 
     from torch.utils.data import DataLoader
     test_loader = DataLoader(
