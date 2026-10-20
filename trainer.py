@@ -387,6 +387,14 @@ class Trainer:
                         'WAR': f"{war_meter.avg:.2f}%",
                         'UAR': f"{running_metric:.2f}%"
                     })
+
+                # In log tiến độ rõ ràng kèm % cho Kaggle / Jupyter cell
+                if (i + 1) % self.print_freq == 0 or (i + 1) == len(loader) or i == 0:
+                    pct = (i + 1) / len(loader) * 100.0
+                    if is_emotic:
+                        print(f"   ⏳ [{mode_str} Ep {epoch_str}] Batch {i + 1:3d}/{len(loader)} ({pct:5.1f}%) | Loss: {losses.avg:.4f} | mAP: {running_metric:.2f}%", flush=True)
+                    else:
+                        print(f"   ⏳ [{mode_str} Ep {epoch_str}] Batch {i + 1:3d}/{len(loader)} ({pct:5.1f}%) | Loss: {losses.avg:.4f} | WAR: {war_meter.avg:.2f}% | UAR: {running_metric:.2f}%", flush=True)
         
         # Calculate epoch-level metrics
         if is_emotic:

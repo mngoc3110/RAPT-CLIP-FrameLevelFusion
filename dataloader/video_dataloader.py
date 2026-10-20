@@ -126,11 +126,10 @@ def resolve_daisee_path(raw_path, root_dir, cached_rule=None):
     user_id = parts[-2] if len(parts) >= 2 else ''
     split_name = parts[-3] if len(parts) >= 3 else ''
 
-    # Fast path: check cached rule first
+    # Fast path: check cached rule first (O(1) without repeated disk stat)
     if cached_rule is not None and clip_id:
         cand = cached_rule(split_name, user_id, clip_id)
-        if os.path.exists(cand) or os.path.isdir(cand):
-            return cand, cached_rule
+        return cand, cached_rule
 
     clean_root = root_dir.rstrip('/')
     while clean_root.endswith('/DAiSEE_data') or clean_root.endswith('/DAiSEE'):
@@ -561,11 +560,9 @@ class VideoDataset(data.Dataset):
                 # Case: [path, label]
                 p_path = parts[0]
                 if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                        p_path = p_path[len('DAiSEE_data/'):]
+                    p_path = p_path[len('DAiSEE_data/'):]
                 elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
-                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                        p_path = p_path[len('CAER/'):]
+                    p_path = p_path[len('CAER/'):]
                 self.sample_list.append([p_path, 1, parts[1]])
             elif len(parts) == 6 and ',' in parts[1]:
                 self.sample_list.append([parts[0], 1, parts[1], parts[2], parts[3], parts[4], parts[5]])
@@ -574,22 +571,18 @@ class VideoDataset(data.Dataset):
                 num_frames = parts[-2]
                 label = parts[-1]
                 if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                        p_path = p_path[len('DAiSEE_data/'):]
+                    p_path = p_path[len('DAiSEE_data/'):]
                 elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
-                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                        p_path = p_path[len('CAER/'):]
+                    p_path = p_path[len('CAER/'):]
                 self.sample_list.append([p_path, num_frames, label])
             else:
                 p_path = parts[0]
                 num_frames = parts[1]
                 label = parts[2]
                 if self.dataset_name == 'DAiSEE' and p_path.startswith('DAiSEE_data/'):
-                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                        p_path = p_path[len('DAiSEE_data/'):]
+                    p_path = p_path[len('DAiSEE_data/'):]
                 elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S'] and p_path.startswith('CAER/'):
-                    if not os.path.exists(os.path.join(self.root_dir, p_path)):
-                        p_path = p_path[len('CAER/'):]
+                    p_path = p_path[len('CAER/'):]
                 self.sample_list.append([p_path, num_frames, label])
 
     def _parse_list(self):
@@ -598,11 +591,12 @@ class VideoDataset(data.Dataset):
         # 
         if self.dataset_name == 'DAiSEE':
             # Pre-resolve DAiSEE paths to actual existing videos/frames on disk
-            if len(self.sample_list) > 50:
-                print(f"[{self.dataset_name} {self.mode}] Đang xác thực đường dẫn {len(self.sample_list)} video từ root: '{self.root_dir}'...", flush=True)
+            total_items = len(self.sample_list)
+            if total_items > 50:
+                print(f"[{self.dataset_name} {self.mode}] 📂 Bắt đầu nạp & kiểm tra {total_items} video từ root: '{self.root_dir}'...", flush=True)
             cached_rule = None
             resolved_samples = []
-            for item in self.sample_list:
+            for idx, item in enumerate(self.sample_list):
                 rel_p = item[0]
                 full_cand = os.path.join(self.root_dir, rel_p)
                 if os.path.exists(full_cand) or os.path.isdir(full_cand):
@@ -612,9 +606,15 @@ class VideoDataset(data.Dataset):
                     if new_rule is not None:
                         cached_rule = new_rule
                     resolved_samples.append([real_p] + item[1:])
+                
+                # In % tiến độ mỗi 500 mẫu
+                if (idx + 1) % 500 == 0 or (idx + 1) == total_items:
+                    pct = (idx + 1) / total_items * 100.0
+                    print(f"   ⏳ [{self.mode.upper()}] Tiến độ: {idx + 1:4d}/{total_items} video ({pct:5.1f}%)...", flush=True)
+
             self.video_list = [VideoRecord(item) for item in resolved_samples]
             if len(self.video_list) > 50:
-                print(f"[{self.dataset_name} {self.mode}] Hoàn tất nạp {len(self.video_list)} samples.", flush=True)
+                print(f"[{self.dataset_name} {self.mode}] ✓ Đã nạp thành công {len(self.video_list)} samples.", flush=True)
         elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S', 'CAER_Video', 'CAER-Video']:
             # Pre-resolve CAER paths to handle nested directories, casing, and extensions
             cached_rule = None
