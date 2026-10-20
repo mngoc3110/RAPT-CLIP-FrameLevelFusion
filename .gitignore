@@ -31,6 +31,7 @@ Context_Aware_Multimodal_Emotion_Recognition/
 # Cached features & large data
 *.pt
 *.npz
+cached_features/
 RAER/cached_features/
 RAER/images/
 RAER/clips/
