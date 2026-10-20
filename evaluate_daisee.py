@@ -6,6 +6,14 @@ Optimized for Apple Silicon (M1/M2/M3/M4, MPS) and CUDA/CPU.
 
 import os
 import sys
+
+# Ensure immediate real-time log printing in Kaggle/Colab notebooks
+os.environ["PYTHONUNBUFFERED"] = "1"
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
 import argparse
 import torch
 import numpy as np
@@ -290,9 +298,11 @@ def main():
     all_targets = []
     all_logits = []
 
-    print(f"\n=> Running inference on Test set with {device}...")
+    total_batches = len(test_loader)
+    print(f"\n=> Running inference on Test set ({len(test_data)} videos, {total_batches} batches) with {device}...", flush=True)
+    
     with torch.no_grad():
-        for batch in tqdm(test_loader, desc="Evaluating Test Set"):
+        for batch_idx, batch in enumerate(test_loader):
             if len(batch) == 4:
                 images_face, images_body, images_context, target = batch
             else:
@@ -311,6 +321,11 @@ def main():
             all_logits.append(output.cpu())
             all_preds.append(output.argmax(dim=1).cpu())
             all_targets.append(target.cpu())
+
+            if (batch_idx + 1) % 5 == 0 or (batch_idx + 1) == total_batches:
+                processed = min((batch_idx + 1) * model_args.batch_size, len(test_data))
+                pct = (batch_idx + 1) / total_batches * 100.0
+                print(f"   ⏳ [{pct:5.1f}%] Batch {batch_idx + 1:2d}/{total_batches} | Đã xử lý {processed:4d}/{len(test_data)} videos...", flush=True)
 
     all_preds = torch.cat(all_preds, dim=0).numpy()
     all_targets = torch.cat(all_targets, dim=0).numpy()

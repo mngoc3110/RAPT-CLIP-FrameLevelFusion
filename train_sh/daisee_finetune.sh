@@ -97,8 +97,15 @@ for f in "$DATA_DIR/daisee_face_bbox.json" "$DATA_DIR/face_bbox.json" "/kaggle/w
   fi
 done
 
-if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "tools/generate_daisee_face_boxes.py" ]; then
-  echo "=> Notice: daisee_face_bbox.json chưa có. Sinh nhanh tọa độ mặt bằng YuNet..."
+GEN_BBOX="${GEN_BBOX:-0}"
+for arg in "$@"; do
+  if [ "$arg" = "--gen-bbox" ]; then
+    GEN_BBOX="1"
+  fi
+done
+
+if [ "$FACE_BBOX_PATH" = "none" ] && [ "$GEN_BBOX" = "1" ] && [ -f "tools/generate_daisee_face_boxes.py" ]; then
+  echo "=> [YuNet] Đang sinh Face Bounding Box bằng YuNet detector..."
   OUT_BBOX="DAiSEE/daisee_face_bbox.json"
   [ -d "/kaggle/working" ] && OUT_BBOX="/kaggle/working/daisee_face_bbox.json"
   python -u tools/generate_daisee_face_boxes.py \
@@ -110,6 +117,9 @@ if [ "$FACE_BBOX_PATH" = "none" ] && [ -f "tools/generate_daisee_face_boxes.py" 
   if [ -f "$OUT_BBOX" ] && [ $(wc -c < "$OUT_BBOX" 2>/dev/null || echo 0) -gt 500 ]; then
     FACE_BBOX_PATH="$OUT_BBOX"
   fi
+elif [ "$FACE_BBOX_PATH" = "none" ]; then
+  echo "=> [Thông báo] Sử dụng chuẩn Center-Crop Fallback (đồng bộ 100% với checkpoint gốc, bắt đầu train ngay lập tức)."
+  echo "   (Nếu muốn sinh lại Face Bounding Box chi tiết bằng YuNet, truyền thêm cờ --gen-bbox)"
 fi
 
 echo "=> [3/4] Face Bounding Box: ${FACE_BBOX_PATH}"
@@ -131,7 +141,7 @@ python -u main.py \
   --epochs "$EPOCHS" \
   --batch-size 8 \
   --grad-accum-steps 2 \
-  --print-freq 25 \
+  --print-freq 10 \
   --seed 42 \
   --workers 2 \
   --early-stopping-patience 0 \

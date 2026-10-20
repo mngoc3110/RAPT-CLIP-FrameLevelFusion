@@ -283,11 +283,15 @@ def main():
             face_boxes[resolved_path] = fallback_dict
 
         processed_count += 1
-        if processed_count % args.save_freq == 0:
+        if processed_count % args.save_freq == 0 or processed_count == len(video_entries):
             os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
             with open(args.output, 'w') as f:
                 json.dump(face_boxes, f, indent=2)
-            pbar.set_postfix({'saved': len(face_boxes)})
+            elapsed = time.time() - t0
+            rate = processed_count / max(1e-5, elapsed)
+            eta_min = (len(video_entries) - processed_count) / max(1e-5, rate) / 60.0
+            pct = processed_count / len(video_entries) * 100.0
+            print(f"   ⏳ [YuNet] {processed_count:4d}/{len(video_entries)} ({pct:5.1f}%) | Tốc độ: {rate:4.1f} vid/s | ETA: {eta_min:4.1f} phút | Đã lưu: {len(face_boxes)}", flush=True)
 
     # Final save
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
