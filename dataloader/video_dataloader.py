@@ -307,7 +307,7 @@ def resolve_caer_path(raw_path, root_dir, cached_rule=None):
 
     splits = [split_name, split_name.lower(), split_name.capitalize()]
     emotions = [emotion, emotion.lower(), emotion.capitalize()]
-    exts = ['.avi', '.mp4', '.mkv', '', '.AVI', '.MP4']
+    exts = ['.png', '.jpg', '.jpeg', '.avi', '.mp4', '.mkv', '', '.PNG', '.JPG', '.JPEG', '.AVI', '.MP4']
 
     for r in cand_roots:
         if not os.path.exists(r):
@@ -321,16 +321,21 @@ def resolve_caer_path(raw_path, root_dir, cached_rule=None):
                             return lambda sp, emo, bn: os.path.join(r_f, s_f if sp.lower() == s_f.lower() else sp, e_f if emo.lower() == e_f.lower() else emo, bn + ext_f)
                         return cand, make_rule()
 
-    # Search with os.walk if not found in standard paths
-    if base_name and os.path.exists(root_dir):
-        for w_root, dirs, files in os.walk(root_dir):
-            for f in files:
-                if os.path.splitext(f)[0] == base_name:
-                    return os.path.join(w_root, f), None
-            if base_name in dirs:
-                return os.path.join(w_root, base_name), None
-
     return os.path.join(root_dir, raw_path), None
+
+
+_BOX_CACHE = {}
+
+def get_cached_boxes(filepath):
+    """Nạp file JSON bounding box 1 lần duy nhất trong RAM, chia sẻ cho train/val/test."""
+    if not filepath or not os.path.exists(filepath):
+        return {}
+    if filepath in _BOX_CACHE:
+        return _BOX_CACHE[filepath]
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    _BOX_CACHE[filepath] = data
+    return data
 
 
 class VideoDataset(data.Dataset):
@@ -362,11 +367,10 @@ class VideoDataset(data.Dataset):
 
     def _read_boxs(self):
         if self.bounding_box_face and os.path.exists(self.bounding_box_face):
-            with open(self.bounding_box_face, 'r') as f:
-                self.boxs = json.load(f)
-            # Match verification on sample_list
+            self.boxs = get_cached_boxes(self.bounding_box_face)
+            # Match verification on small subset
             match_cnt = 0
-            check_subset = self.sample_list[:500] if len(self.sample_list) > 500 else self.sample_list
+            check_subset = self.sample_list[:200] if len(self.sample_list) > 200 else self.sample_list
             for item in check_subset:
                 rel = item[0].replace('./', '').replace('\\', '/')
                 clean_rel = rel[len('CAER/'):] if rel.startswith('CAER/') else rel
@@ -374,18 +378,17 @@ class VideoDataset(data.Dataset):
                 if no_ext in self.boxs or clean_rel in self.boxs or f"CAER/{no_ext}" in self.boxs or f"CAER/{clean_rel}" in self.boxs:
                     match_cnt += 1
             rate = (match_cnt / len(check_subset) * 100) if check_subset else 0
-            print(f"[{self.dataset_name} {self.mode}] Loaded {len(self.boxs)} Face boxes from '{os.path.basename(self.bounding_box_face)}' | Match rate: {rate:.1f}%")
+            print(f"[{self.dataset_name} {self.mode}] Loaded {len(self.boxs):,} Face boxes from '{os.path.basename(self.bounding_box_face)}' | Match rate: {rate:.1f}%", flush=True)
         else:
             self.boxs = {}
-            print(f"[{self.dataset_name} {self.mode}] Warning: Face bounding box file not found or None ({self.bounding_box_face}).")
+            print(f"[{self.dataset_name} {self.mode}] Warning: Face bounding box file not found or None ({self.bounding_box_face}).", flush=True)
 
     def _read_body_boxes(self):
         if self.bounding_box_body and os.path.exists(self.bounding_box_body):
-            with open(self.bounding_box_body, 'r') as f:
-                self.body_boxes = json.load(f)
-            # Match verification on sample_list
+            self.body_boxes = get_cached_boxes(self.bounding_box_body)
+            # Match verification on small subset
             match_cnt = 0
-            check_subset = self.sample_list[:500] if len(self.sample_list) > 500 else self.sample_list
+            check_subset = self.sample_list[:200] if len(self.sample_list) > 200 else self.sample_list
             for item in check_subset:
                 rel = item[0].replace('./', '').replace('\\', '/')
                 clean_rel = rel[len('CAER/'):] if rel.startswith('CAER/') else rel
@@ -393,10 +396,10 @@ class VideoDataset(data.Dataset):
                 if no_ext in self.body_boxes or clean_rel in self.body_boxes or f"CAER/{no_ext}" in self.body_boxes or f"CAER/{clean_rel}" in self.body_boxes:
                     match_cnt += 1
             rate = (match_cnt / len(check_subset) * 100) if check_subset else 0
-            print(f"[{self.dataset_name} {self.mode}] Loaded {len(self.body_boxes)} Body boxes from '{os.path.basename(self.bounding_box_body)}' | Match rate: {rate:.1f}%")
+            print(f"[{self.dataset_name} {self.mode}] Loaded {len(self.body_boxes):,} Body boxes from '{os.path.basename(self.bounding_box_body)}' | Match rate: {rate:.1f}%", flush=True)
         else:
             self.body_boxes = {}
-            print(f"[{self.dataset_name} {self.mode}] Warning: Body bounding box file not found or None ({self.bounding_box_body}).")
+            print(f"[{self.dataset_name} {self.mode}] Warning: Body bounding box file not found or None ({self.bounding_box_body}).", flush=True)
 
 
     def _cv2pil(self,im_cv):
@@ -615,8 +618,29 @@ class VideoDataset(data.Dataset):
             self.video_list = [VideoRecord(item) for item in resolved_samples]
             if len(self.video_list) > 50:
                 print(f"[{self.dataset_name} {self.mode}] ✓ Đã nạp thành công {len(self.video_list)} samples.", flush=True)
-        elif self.dataset_name in ['CAER', 'CAER-S', 'CAER_S', 'CAER_Video', 'CAER-Video']:
-            # Pre-resolve CAER paths to handle nested directories, casing, and extensions
+        elif self.dataset_name in ['CAER-S', 'CAER_S']:
+            # CAER-S static image dataset: list_file is already validated by prepare_caers_dataset.py
+            sample0 = self.sample_list[0][0] if self.sample_list else ""
+            sample0_full = os.path.join(self.root_dir, sample0)
+            if sample0 and (os.path.exists(sample0_full) or os.path.isabs(sample0)):
+                self.video_list = [VideoRecord([os.path.join(self.root_dir, item[0])] + item[1:]) for item in self.sample_list]
+            else:
+                # Fallback only if root_dir doesn't match sample0
+                cached_rule = None
+                resolved_samples = []
+                for item in self.sample_list:
+                    rel_p = item[0]
+                    full_cand = os.path.join(self.root_dir, rel_p)
+                    if os.path.exists(full_cand) or os.path.isdir(full_cand):
+                        resolved_samples.append([full_cand] + item[1:])
+                    else:
+                        real_p, new_rule = resolve_caer_path(rel_p, self.root_dir, cached_rule)
+                        if new_rule is not None:
+                            cached_rule = new_rule
+                        resolved_samples.append([real_p] + item[1:])
+                self.video_list = [VideoRecord(item) for item in resolved_samples]
+        elif self.dataset_name in ['CAER', 'CAER_Video', 'CAER-Video']:
+            # Pre-resolve CAER video paths to handle nested directories, casing, and extensions
             cached_rule = None
             resolved_samples = []
             for item in self.sample_list:
