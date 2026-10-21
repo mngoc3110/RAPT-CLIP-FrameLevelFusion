@@ -638,25 +638,15 @@ def build_pdf():
 <table class="data-table" style="font-size: 7pt; margin: 2px 0 4px 0;">
     <thead>
         <tr style="background-color: #0d47a1; color: white;">
-            <th style="width: 22%;">Cấu hình Ablation</th>
-            <th style="width: 32%;">Mô tả Biến thể Thiết kế &amp; Hàm Mục tiêu</th>
+            <th style="width: 25%;">Cấu hình Ablation</th>
+            <th style="width: 37%;">Mô tả Biến thể Thiết kế &amp; Hàm Mục tiêu</th>
             <th style="width: 10%; text-align: center;">WAR (%)</th>
             <th style="width: 10%; text-align: center;">UAR (%)</th>
             <th style="width: 10%; text-align: center;">&Delta; UAR</th>
             <th style="width: 8%; text-align: center;">Best Ep</th>
-            <th style="width: 8%; text-align: center;">Thời gian</th>
         </tr>
     </thead>
     <tbody>
-        <tr style="background-color: #e8f5e9; font-weight: bold;">
-            <td><strong>Full_RAPT_CLIP</strong></td>
-            <td>CMAF + AttnPool + LDAM (s=30) + EAA Adapter + WeightedSampler + ModDrop 0.3</td>
-            <td style="text-align: center;">70.27%</td>
-            <td style="text-align: center; color: #1b5e20;">70.81%</td>
-            <td style="text-align: center;"><span class="badge-sota">Baseline</span></td>
-            <td style="text-align: center;">14</td>
-            <td style="text-align: center;">35.9s</td>
-        </tr>
         <tr>
             <td><strong>No_LDAM</strong></td>
             <td>Thay thế LDAM bằng chuẩn Cross-Entropy Loss</td>
@@ -664,7 +654,6 @@ def build_pdf():
             <td style="text-align: center;">69.83%</td>
             <td style="text-align: center; color: #b71c1c;">-0.97%</td>
             <td style="text-align: center;">16</td>
-            <td style="text-align: center;">32.2s</td>
         </tr>
         <tr>
             <td><strong>No_Adapter</strong></td>
@@ -673,7 +662,6 @@ def build_pdf():
             <td style="text-align: center;">69.69%</td>
             <td style="text-align: center; color: #b71c1c;">-1.12%</td>
             <td style="text-align: center;">17</td>
-            <td style="text-align: center;">30.5s</td>
         </tr>
         <tr>
             <td><strong>No_Attn_Pooling</strong></td>
@@ -682,7 +670,6 @@ def build_pdf():
             <td style="text-align: center;">72.25%</td>
             <td style="text-align: center; color: #1b5e20;">+1.44%</td>
             <td style="text-align: center;">20</td>
-            <td style="text-align: center;">29.4s</td>
         </tr>
         <tr style="background-color: #ffebee;">
             <td><strong>No_Weighted_Sampler</strong></td>
@@ -691,7 +678,6 @@ def build_pdf():
             <td style="text-align: center; color: #b71c1c; font-weight: bold;">62.38%</td>
             <td style="text-align: center; color: #b71c1c; font-weight: bold;">-8.43%</td>
             <td style="text-align: center;">10</td>
-            <td style="text-align: center;">31.8s</td>
         </tr>
         <tr>
             <td><strong>Fusion_GFI</strong></td>
@@ -700,7 +686,6 @@ def build_pdf():
             <td style="text-align: center; color: #b71c1c;">67.42%</td>
             <td style="text-align: center; color: #b71c1c;">-3.39%</td>
             <td style="text-align: center;">14</td>
-            <td style="text-align: center;">24.2s</td>
         </tr>
         <tr>
             <td><strong>Fusion_Concat</strong></td>
@@ -709,7 +694,6 @@ def build_pdf():
             <td style="text-align: center;">72.13%</td>
             <td style="text-align: center; color: #1b5e20;">+1.33%</td>
             <td style="text-align: center;">12</td>
-            <td style="text-align: center;">23.5s</td>
         </tr>
         <tr>
             <td><strong>No_Modality_Dropout</strong></td>
@@ -718,7 +702,6 @@ def build_pdf():
             <td style="text-align: center;">70.09%</td>
             <td style="text-align: center; color: #b71c1c;">-0.72%</td>
             <td style="text-align: center;">11</td>
-            <td style="text-align: center;">31.4s</td>
         </tr>
         <tr>
             <td><strong>No_Temporal_Layers</strong></td>
@@ -727,7 +710,6 @@ def build_pdf():
             <td style="text-align: center;">70.48%</td>
             <td style="text-align: center; color: #b71c1c;">-0.33%</td>
             <td style="text-align: center;">15</td>
-            <td style="text-align: center;">18.9s</td>
         </tr>
     </tbody>
 </table>
@@ -745,14 +727,6 @@ def build_pdf():
         </tr>
     </thead>
     <tbody>
-        <tr style="background-color: #e8f5e9; font-weight: bold;">
-            <td><strong>Full_RAPT_CLIP</strong></td>
-            <td style="text-align: center;">64.93%</td>
-            <td style="text-align: center;">78.12%</td>
-            <td style="text-align: center; color: #1b5e20;">42.86%</td>
-            <td style="text-align: center;">87.18%</td>
-            <td style="text-align: center;">80.95%</td>
-        </tr>
         <tr>
             <td><strong>No_LDAM</strong></td>
             <td style="text-align: center;">76.81%</td>
