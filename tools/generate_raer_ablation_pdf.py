@@ -5,10 +5,13 @@ tools/generate_raer_ablation_pdf.py
 ───────────────────────────────────
 Biên soạn và xuất file PDF Báo Cáo Khoa Học về Nghiên Cứu Cắt Bỏ Thành Phần (Ablation Studies)
 cho mô hình RAPT-CLIP:
-- Chỉ giữ lại thông tin thực nghiệm đã chạy (số liệu, bảng thông số, metrics),
-  các ma trận nhầm lẫn (Confusion Matrices), các sơ đồ kiến trúc / biểu đồ,
-  và các hình ảnh trực quan hóa Grad-CAM.
-- Đã loại bỏ toàn bộ các nhận xét định tính, diễn giải lý thuyết và tóm tắt văn bản dư thừa.
+- Bố cục tối ưu 5 trang in chuẩn A4, kích thước chữ (8pt - 8.5pt) và hình ảnh ma trận nhầm lẫn
+  được căn chỉnh to rõ, sắc nét, đảm bảo in ra đọc được dễ dàng:
+  • Trang 1: Toàn bộ bảng số liệu thực nghiệm RAER (Bảng 1: 16 Checkpoints & Bảng 3A + 3B: Feature Probing)
+  • Trang 2: 8 Ma trận nhầm lẫn cốt lõi RAER (Cặp 1 &rarr; Cặp 4, hiển thị 2 cột to rõ)
+  • Trang 3: 8 Ma trận nhầm lẫn còn lại (Cặp 5, 6 & Bộ 3 mô thức dung hợp) + Bảng so sánh 3 mô thức
+  • Trang 4: Không gian biểu diễn t-SNE, Grad-CAM RAER & Toàn bộ đánh giá đa miền EMOTIC
+  • Trang 5: Toàn bộ kết quả huấn luyện & đánh giá bộ dữ liệu CAER-S
 """
 
 import os
@@ -47,7 +50,6 @@ def build_pdf():
         cms_b64[img_id] = get_base64_image(img_path)
 
     # Architectural overview images
-    model_detailed = get_base64_image(os.path.join(root_dir, "image", "model_detailed.png"))
     tsne_fine = get_base64_image(os.path.join(root_dir, "image", "tsne_finetuned.png"))
     gradcam_img = get_base64_image(os.path.join(root_dir, "image", "gradcam_sample.png"))
 
@@ -73,16 +75,16 @@ def build_pdf():
 <style>
     @page {{
         size: A4;
-        margin: 8mm 12mm 8mm 12mm;
+        margin: 7mm 10mm 7mm 10mm;
         @bottom-right {{
             content: "Trang " counter(page) " / " counter(pages);
-            font-size: 7.5pt;
+            font-size: 7.2pt;
             font-family: Arial, Helvetica, sans-serif;
             color: #555;
         }}
         @bottom-left {{
             content: "RAPT-CLIP: Báo Cáo Thực Nghiệm Cắt Bỏ Thành Phần (Ablation Studies)";
-            font-size: 7.5pt;
+            font-size: 7.2pt;
             font-family: Arial, Helvetica, sans-serif;
             color: #777;
         }}
@@ -91,66 +93,54 @@ def build_pdf():
     body {{
         font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
         color: #1a1a1a;
-        line-height: 1.35;
-        font-size: 8.5pt;
+        line-height: 1.3;
+        font-size: 8.2pt;
     }}
 
     .header-box {{
-        border-bottom: 2.2px solid #0d47a1;
-        padding-bottom: 4px;
-        margin-bottom: 6px;
+        border-bottom: 2px solid #0d47a1;
+        padding-bottom: 3px;
+        margin-bottom: 5px;
     }}
 
     h1.doc-title {{
-        font-size: 13pt;
+        font-size: 12pt;
         font-weight: bold;
         color: #0d47a1;
-        margin: 0 0 3px 0;
+        margin: 0 0 2px 0;
         text-transform: uppercase;
         letter-spacing: 0.2px;
     }}
 
     .doc-subtitle {{
-        font-size: 8.8pt;
+        font-size: 8.2pt;
         color: #333;
         font-weight: bold;
-        margin: 0 0 4px 0;
-    }}
-
-    .meta-bar {{
-        font-size: 7.6pt;
-        color: #444;
-        background-color: #f0f4f8;
-        padding: 3px 8px;
-        border-radius: 3px;
-        display: flex;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 6px;
+        margin: 0;
     }}
 
     h2.section-title {{
-        font-size: 9.8pt;
+        font-size: 9pt;
         font-weight: bold;
         color: #0d47a1;
-        border-left: 4px solid #0d47a1;
-        padding-left: 6px;
-        margin: 7px 0 4px 0;
+        border-left: 3.5px solid #0d47a1;
+        padding-left: 5px;
+        margin: 6px 0 3px 0;
         text-transform: uppercase;
     }}
 
     h3.subsection-title {{
-        font-size: 8.8pt;
+        font-size: 8.2pt;
         font-weight: bold;
         color: #1565c0;
-        margin: 5px 0 3px 0;
+        margin: 4px 0 2px 0;
     }}
 
     table.data-table {{
         width: 100%;
         border-collapse: collapse;
-        margin: 3px 0 4px 0;
-        font-size: 7.4pt;
+        margin: 2px 0 4px 0;
+        font-size: 7.2pt;
         page-break-inside: avoid;
     }}
 
@@ -158,14 +148,14 @@ def build_pdf():
         background-color: #0d47a1;
         color: #ffffff;
         font-weight: bold;
-        padding: 2.2px 3px;
+        padding: 2px 3px;
         border: 1px solid #0a3880;
         text-align: center;
     }}
 
     table.data-table td {{
         border: 1px solid #d0d7de;
-        padding: 1.8px 3px;
+        padding: 1.6px 3px;
         vertical-align: middle;
     }}
 
@@ -173,8 +163,8 @@ def build_pdf():
         background-color: #e3f2fd;
         font-weight: bold;
         color: #0d47a1;
-        font-size: 7.5pt;
-        padding: 2px 4px;
+        font-size: 7.3pt;
+        padding: 1.8px 3px;
     }}
 
     table.data-table tr:nth-child(even):not(.group-header) {{
@@ -187,9 +177,9 @@ def build_pdf():
         color: #1b5e20;
         border: 1px solid #a5d6a7;
         padding: 0.5px 3px;
-        border-radius: 3px;
+        border-radius: 2.5px;
         font-weight: bold;
-        font-size: 6.8pt;
+        font-size: 6.5pt;
     }}
 
     .badge-drop {{
@@ -198,21 +188,34 @@ def build_pdf():
         color: #b71c1c;
         border: 1px solid #ef9a9a;
         padding: 0.5px 3px;
-        border-radius: 3px;
+        border-radius: 2.5px;
         font-weight: bold;
-        font-size: 6.8pt;
+        font-size: 6.5pt;
+    }}
+
+    table.side-by-side {{
+        width: 100%;
+        border-collapse: collapse;
+        margin: 2px 0;
+        page-break-inside: avoid;
+    }}
+
+    table.side-by-side td {{
+        vertical-align: top;
+        padding: 0 3px;
+        border: none;
     }}
 
     table.cm-pair-table {{
         width: 100%;
         border-collapse: collapse;
-        margin: 2px 0 5px 0;
+        margin: 1px 0 3px 0;
         page-break-inside: avoid;
     }}
 
     table.cm-pair-table td {{
         width: 50%;
-        padding: 2px 4px;
+        padding: 1px 3px;
         vertical-align: top;
         text-align: center;
         border: none;
@@ -220,22 +223,22 @@ def build_pdf():
 
     table.cm-pair-table img {{
         width: 98%;
-        max-height: 180px;
+        max-height: 135px;
         object-fit: contain;
         border: 1px solid #ccc;
-        border-radius: 3px;
+        border-radius: 2.5px;
     }}
 
     table.cm-triple-table {{
         width: 100%;
         border-collapse: collapse;
-        margin: 2px 0 4px 0;
+        margin: 1px 0 3px 0;
         page-break-inside: avoid;
     }}
 
     table.cm-triple-table td {{
         width: 33.33%;
-        padding: 1px 3px;
+        padding: 1px 2px;
         vertical-align: top;
         text-align: center;
         border: none;
@@ -243,22 +246,22 @@ def build_pdf():
 
     table.cm-triple-table img {{
         width: 98%;
-        max-height: 120px;
+        max-height: 125px;
         object-fit: contain;
         border: 1px solid #ccc;
-        border-radius: 3px;
+        border-radius: 2.5px;
     }}
 
     table.two-col-figures {{
         width: 100%;
         border-collapse: collapse;
-        margin: 3px 0 5px 0;
+        margin: 2px 0 3px 0;
         page-break-inside: avoid;
     }}
 
     table.two-col-figures td {{
         width: 50%;
-        padding: 2px 4px;
+        padding: 1px 3px;
         vertical-align: top;
         text-align: center;
         border: none;
@@ -266,22 +269,22 @@ def build_pdf():
 
     table.two-col-figures img {{
         width: 98%;
-        max-height: 165px;
+        max-height: 140px;
         object-fit: contain;
         border: 1px solid #ccc;
-        border-radius: 3px;
+        border-radius: 2.5px;
     }}
 
     table.three-col-figures {{
         width: 100%;
         border-collapse: collapse;
-        margin: 2px 0 4px 0;
+        margin: 2px 0;
         page-break-inside: avoid;
     }}
 
     table.three-col-figures td {{
         width: 33.33%;
-        padding: 1px 3px;
+        padding: 1px 2px;
         vertical-align: top;
         text-align: center;
         border: none;
@@ -289,17 +292,18 @@ def build_pdf():
 
     table.three-col-figures img {{
         width: 98%;
-        max-height: 135px;
+        max-height: 118px;
         object-fit: contain;
         border: 1px solid #ccc;
-        border-radius: 3px;
+        border-radius: 2.5px;
     }}
 
     .figure-caption {{
-        font-size: 7.3pt;
+        font-size: 7.1pt;
         font-weight: bold;
         color: #222;
         margin-top: 2px;
+        line-height: 1.25;
     }}
 
     .page-break {{
@@ -308,20 +312,22 @@ def build_pdf():
 
     code {{
         font-family: Consolas, "Courier New", monospace;
-        font-size: 7.3pt;
+        font-size: 7pt;
         background-color: #f4f5f7;
-        padding: 1px 3px;
-        border-radius: 3px;
+        padding: 0.5px 2px;
+        border-radius: 2px;
         color: #c2185b;
     }}
 </style>
 </head>
 <body>
 
-<!-- TRANG 1: HEADER, SƠ ĐỒ KIẾN TRÚC & BẢNG KẾT QUẢ THỰC NGHIỆM RAER -->
+<!-- ========================================================================= -->
+<!-- TRANG 1: TOÀN BỘ CÁC BẢNG SỐ LIỆU THỰC NGHIỆM RAER (BẢNG 1 + BẢNG 3A/3B) -->
+<!-- ========================================================================= -->
 <div class="header-box">
     <h1 class="doc-title">Báo Cáo Nghiên Cứu Cắt Bỏ Thành Phần (Ablation Studies)</h1>
-    <div class="doc-subtitle">Bộ Dữ Liệu Cảm Xúc Video Học Đường RAER &bull; Kiến Trúc RAPT-CLIP Tri-Stream</div>
+    <div class="doc-subtitle">Bộ Dữ Liệu Cảm Xúc Video Học Đường RAER &bull; Kiến Trúc RAPT-CLIP Tri-Stream (528 Test Clips, 5 Emotion Classes)</div>
 </div>
 
 <h2 class="section-title">1. Bảng Tổng Hợp Kết Quả Thực Nghiệm Đo Trực Tiếp Từ Checkpoints (16 Thí Nghiệm)</h2>
@@ -330,10 +336,10 @@ def build_pdf():
     <thead>
         <tr>
             <th style="width: 4%;">STT</th>
-            <th style="width: 32%;">Biến thể Thí nghiệm (Ablation Variant)</th>
-            <th style="width: 29%;">Cơ chế Can thiệp / Bỏ module</th>
-            <th style="width: 10%;">WAR (%)</th>
-            <th style="width: 10%;">UAR (%)</th>
+            <th style="width: 33%;">Biến thể Thí nghiệm (Ablation Variant)</th>
+            <th style="width: 30%;">Cơ chế Can thiệp / Bỏ module</th>
+            <th style="width: 9%;">WAR (%)</th>
+            <th style="width: 9%;">UAR (%)</th>
             <th style="width: 15%;">&Delta; so với SOTA</th>
         </tr>
     </thead>
@@ -384,7 +390,7 @@ def build_pdf():
         <tr>
             <td style="text-align: center;">6</td>
             <td><strong>Cắt Prompt Tuning (Fixed Descriptors)</strong></td>
-            <td>Huấn luyện với Text Prompt cố định không có CoOp (RAER-prompt-details)</td>
+            <td>Huấn luyện với Text Prompt cố định không có CoOp</td>
             <td style="text-align: center; font-weight: bold;">80.49%</td>
             <td style="text-align: center; color: #c62828; font-weight: bold;">68.62%</td>
             <td style="text-align: center; color: #c62828; font-weight: bold;">&Delta;UAR: -9.04%</td>
@@ -484,11 +490,62 @@ def build_pdf():
     </tbody>
 </table>
 
-<!-- TRANG 2: TRỰC QUAN HÓA MA TRẬN NHẦM LẪN (HÌNH 1 & HÌNH 2) -->
-<div class="page-break"></div>
-<h2 class="section-title">2. Trực Quan Hóa Ma Trận Nhầm Lẫn (Confusion Matrices) Thực Tế Trên RAER</h2>
+<h2 class="section-title" style="margin-top: 6px;">2. Thực Nghiệm Huấn Luyện Cắt Bỏ Thành Phần (Feature-Level Probing trên RAER)</h2>
 
-<h3 class="subsection-title">2.1 Cắt Khối Dung Hợp CMAF vs Full Model SOTA</h3>
+<table class="data-table" style="margin: 2px 0;">
+    <thead>
+        <tr style="background-color: #0d47a1; color: white;">
+            <th style="width: 24%;">Cấu hình Ablation</th>
+            <th style="width: 38%;">Mô tả Biến thể Thiết kế &amp; Hàm Mục tiêu</th>
+            <th style="width: 10%; text-align: center;">WAR (%)</th>
+            <th style="width: 10%; text-align: center;">UAR (%)</th>
+            <th style="width: 10%; text-align: center;">&Delta; UAR</th>
+            <th style="width: 8%; text-align: center;">Best Ep</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td><strong>No_LDAM</strong></td><td>Thay thế LDAM bằng chuẩn Cross-Entropy Loss</td><td style="text-align: center;">77.46%</td><td style="text-align: center;">69.83%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-7.83%</td><td style="text-align: center;">16</td></tr>
+        <tr><td><strong>No_Adapter</strong></td><td>Loại bỏ Face Adapter EAA (Dùng trực tiếp frozen CLIP face tokens)</td><td style="text-align: center;">78.41%</td><td style="text-align: center;">69.69%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-7.97%</td><td style="text-align: center;">17</td></tr>
+        <tr><td><strong>No_Attn_Pooling</strong></td><td>Thay thế Self-Attention Pooling bằng Mean Pooling</td><td style="text-align: center;">76.89%</td><td style="text-align: center;">72.25%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-5.41%</td><td style="text-align: center;">20</td></tr>
+        <tr style="background-color: #ffebee;"><td><strong>No_Weighted_Sampler</strong></td><td>Lấy mẫu ngẫu nhiên đồng đều (Uniform Sampler) thay cho Weighted Sampler</td><td style="text-align: center;">78.22%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">62.38%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-15.28%</td><td style="text-align: center;">10</td></tr>
+        <tr><td><strong>Fusion_GFI</strong></td><td>Thay CMAF bằng Gated Feature Integration (Cổng nhân tuyến tính Sigmoid)</td><td style="text-align: center;">67.23%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-10.24%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-10.24%</td><td style="text-align: center;">14</td></tr>
+        <tr><td><strong>Fusion_Concat</strong></td><td>Thay CMAF bằng Ghép kênh trực tiếp (Direct Concat + Linear Projection)</td><td style="text-align: center;">67.80%</td><td style="text-align: center;">72.13%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-5.53%</td><td style="text-align: center;">12</td></tr>
+        <tr><td><strong>No_Modality_Dropout</strong></td><td>Đặt Modality Dropout = 0.0 (Không triệt tiêu ngẫu nhiên luồng khi train)</td><td style="text-align: center;">73.48%</td><td style="text-align: center;">70.09%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-7.57%</td><td style="text-align: center;">11</td></tr>
+        <tr><td><strong>No_Temporal_Layers</strong></td><td>Loại bỏ các lớp Transformer trên trục thời gian (Mean pooling thô qua 16 đoạn)</td><td style="text-align: center;">73.11%</td><td style="text-align: center;">70.48%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">-7.18%</td><td style="text-align: center;">15</td></tr>
+    </tbody>
+</table>
+
+<h3 class="subsection-title" style="margin-top: 4px;">Chi Tiết Recall 5 Lớp Cảm Xúc RAER</h3>
+<table class="data-table" style="margin: 2px 0;">
+    <thead>
+        <tr style="background-color: #1565c0; color: white;">
+            <th style="width: 25%;">Cấu hình Ablation</th>
+            <th style="width: 15%; text-align: center;">Neutrality (115)</th>
+            <th style="width: 15%; text-align: center;">Enjoyment (32)</th>
+            <th style="width: 15%; text-align: center;">Confusion (7)</th>
+            <th style="width: 15%; text-align: center;">Fatigue (39)</th>
+            <th style="width: 15%; text-align: center;">Distraction (105)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td><strong>No_LDAM</strong></td><td style="text-align: center;">76.81%</td><td style="text-align: center;">75.00%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">28.57%</td><td style="text-align: center;">89.74%</td><td style="text-align: center;">79.05%</td></tr>
+        <tr><td><strong>No_Adapter</strong></td><td style="text-align: center;">79.13%</td><td style="text-align: center; color: #b71c1c;">62.50%</td><td style="text-align: center;">42.86%</td><td style="text-align: center;">82.05%</td><td style="text-align: center;">81.90%</td></tr>
+        <tr><td><strong>No_Attn_Pooling</strong></td><td style="text-align: center;">75.65%</td><td style="text-align: center;">78.12%</td><td style="text-align: center;">42.86%</td><td style="text-align: center;">84.62%</td><td style="text-align: center;">80.00%</td></tr>
+        <tr style="background-color: #ffebee;"><td><strong>No_Weighted_Sampler</strong></td><td style="text-align: center;">82.90%</td><td style="text-align: center;">81.25%</td><td style="text-align: center; color: #b71c1c; font-weight: bold;">0.00%</td><td style="text-align: center;">82.05%</td><td style="text-align: center;">65.71%</td></tr>
+        <tr><td><strong>Fusion_GFI</strong></td><td style="text-align: center;">62.61%</td><td style="text-align: center;">75.00%</td><td style="text-align: center;">42.86%</td><td style="text-align: center;">79.49%</td><td style="text-align: center;">77.14%</td></tr>
+        <tr><td><strong>Fusion_Concat</strong></td><td style="text-align: center;">61.74%</td><td style="text-align: center;">78.12%</td><td style="text-align: center; color: #1b5e20;">57.14%</td><td style="text-align: center;">84.62%</td><td style="text-align: center;">79.05%</td></tr>
+        <tr><td><strong>No_Modality_Dropout</strong></td><td style="text-align: center;">72.17%</td><td style="text-align: center;">78.12%</td><td style="text-align: center;">42.86%</td><td style="text-align: center;">82.05%</td><td style="text-align: center;">75.24%</td></tr>
+        <tr><td><strong>No_Temporal_Layers</strong></td><td style="text-align: center;">70.72%</td><td style="text-align: center;">81.25%</td><td style="text-align: center;">42.86%</td><td style="text-align: center;">79.49%</td><td style="text-align: center;">78.10%</td></tr>
+    </tbody>
+</table>
+
+<!-- ========================================================================= -->
+<!-- TRANG 2: TRỰC QUAN HÓA MA TRẬN NHẦM LẪN (HÌNH 1 -> HÌNH 4, KHỔ TO RÕ 2 CỘT) -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2 class="section-title">3. Trực Quan Hóa Ma Trận Nhầm Lẫn (Confusion Matrices) Trên RAER (Phần 1)</h2>
+
+<h3 class="subsection-title">3.1 Cắt Khối Dung Hợp CMAF vs Full Model SOTA</h3>
 <table class="cm-pair-table">
     <tr>
         <td>
@@ -502,7 +559,7 @@ def build_pdf():
     </tr>
 </table>
 
-<h3 class="subsection-title" style="margin-top: 6px;">2.2 Cắt Khối EAA Face Adapter vs Cắt CoOp Prompt Tuning</h3>
+<h3 class="subsection-title">3.2 Cắt Khối EAA Face Adapter vs Cắt CoOp Prompt Tuning</h3>
 <table class="cm-pair-table">
     <tr>
         <td>
@@ -516,9 +573,7 @@ def build_pdf():
     </tr>
 </table>
 
-<!-- TRANG 3: TRỰC QUAN HÓA MA TRẬN NHẦM LẪN (HÌNH 3 & HÌNH 4) -->
-<div class="page-break"></div>
-<h3 class="subsection-title">2.3 Khảo Sát Mô Hình Hóa Thời Gian: Cắt Temporal Transformer vs Cắt Attention Pooling</h3>
+<h3 class="subsection-title">3.3 Khảo Sát Mô Hình Hóa Thời Gian: Cắt Temporal Transformer vs Cắt Attention Pooling</h3>
 <table class="cm-pair-table">
     <tr>
         <td>
@@ -527,12 +582,12 @@ def build_pdf():
         </td>
         <td>
             <img src="{cms_b64.get('05_no_attn_pool', '')}" alt="No Attn Pool">
-            <div class="figure-caption">Hình 3b: Cắt Attn-Pool, dùng MeanPool (WAR: 78.79% | UAR: 68.47% &bull; &Delta;UAR: -9.19%)</div>
+            <div class="figure-caption">Hình 3b: Cắt Attn-Pool (Mean) (WAR: 78.79% | UAR: 68.47% &bull; &Delta;UAR: -9.19%)</div>
         </td>
     </tr>
 </table>
 
-<h3 class="subsection-title" style="margin-top: 6px;">2.4 Đóng Góp Các Luồng Khuôn Mặt (Face) & Thân Thể (Body)</h3>
+<h3 class="subsection-title">3.4 Đóng Góp Các Luồng Khuôn Mặt (Face) & Thân Thể (Body)</h3>
 <table class="cm-pair-table">
     <tr>
         <td>
@@ -546,9 +601,13 @@ def build_pdf():
     </tr>
 </table>
 
-<!-- TRANG 4: TRỰC QUAN HÓA MA TRẬN NHẦM LẪN (HÌNH 5 & HÌNH 6) -->
+<!-- ========================================================================= -->
+<!-- TRANG 3: MA TRẬN NHẦM LẪN (HÌNH 5 -> HÌNH 7) & SO SÁNH 3 MÔ THỨC DUNG HỢP -->
+<!-- ========================================================================= -->
 <div class="page-break"></div>
-<h3 class="subsection-title">2.5 Khảo Sát Đơn Luồng (Single-Stream Modalities)</h3>
+<h2 class="section-title">3. Trực Quan Hóa Ma Trận Nhầm Lẫn (Confusion Matrices) Trên RAER (Phần 2)</h2>
+
+<h3 class="subsection-title">3.5 Khảo Sát Đơn Luồng (Single-Stream Modalities)</h3>
 <table class="cm-pair-table">
     <tr>
         <td>
@@ -562,7 +621,7 @@ def build_pdf():
     </tr>
 </table>
 
-<h3 class="subsection-title" style="margin-top: 6px;">2.6 Tính Bền Vững Với Xáo Trộn Thời Gian & Nhiễu Thị Giác</h3>
+<h3 class="subsection-title">3.6 Tính Bền Vững Với Xáo Trộn Thời Gian & Nhiễu Thị Giác</h3>
 <table class="cm-pair-table">
     <tr>
         <td>
@@ -576,34 +635,32 @@ def build_pdf():
     </tr>
 </table>
 
-<!-- TRANG 5: ĐỐI SO SÁNH 3 MÔ THỨC DUNG HỢP KHÔNG - THỜI GIAN -->
-<div class="page-break"></div>
-<h3 class="subsection-title">2.7 Đối So Sánh 3 Mô Thức Dung Hợp Không - Thời Gian (Spatio-Temporal Fusion Paradigms)</h3>
+<h3 class="subsection-title">3.7 Đối So Sánh 3 Mô Thức Dung Hợp Không - Thời Gian (Spatio-Temporal Fusion Paradigms)</h3>
 <table class="cm-triple-table">
     <tr>
         <td>
             <img src="{cms_b64.get('01_full_tristream_sota', '')}" alt="Frame-Level Fusion SOTA">
-            <div class="figure-caption">Hình 7a: Frame-Level Fusion (SOTA Đề Xuất)<br>WAR: 77.08% | UAR: 77.66%</div>
+            <div class="figure-caption">Hình 7a: Frame-Level (SOTA)<br>WAR: 77.08% | UAR: 77.66%</div>
         </td>
         <td>
             <img src="{cms_b64.get('16_parallel_temporal_fusion', '')}" alt="Parallel 3 Branches">
-            <div class="figure-caption">Hình 7b: Parallel Temporal (3 Nhánh Song Song)<br>WAR: 72.73% | UAR: 74.10% (Best: 75.16%)</div>
+            <div class="figure-caption">Hình 7b: Parallel Temporal (3 nhánh)<br>WAR: 72.73% | UAR: 74.10%</div>
         </td>
         <td>
             <img src="{cms_b64.get('15_video_level_fusion', '')}" alt="Video-Level Fusion">
-            <div class="figure-caption">Hình 7c: Video-Level Fusion (Temporal Trước CMAF)<br>WAR: 63.07% | UAR: 72.33%</div>
+            <div class="figure-caption">Hình 7c: Video-Level Fusion<br>WAR: 63.07% | UAR: 72.33%</div>
         </td>
     </tr>
 </table>
 
-<table class="data-table" style="font-size: 7.3pt; margin-top: 5px;">
+<table class="data-table" style="margin-top: 4px;">
     <thead>
         <tr style="background-color: #0d47a1; color: white;">
-            <th style="width: 25%;">Mô thức Dung hợp Không - Thời gian</th>
-            <th style="width: 35%;">Cơ chế Tương tác Liên luồng</th>
-            <th style="width: 13%; text-align: center;">Tham số Temporal</th>
+            <th style="width: 26%;">Mô thức Dung hợp Không - Thời gian</th>
+            <th style="width: 36%;">Cơ chế Tương tác Liên luồng</th>
+            <th style="width: 14%; text-align: center;">Tham số Temporal</th>
             <th style="width: 14%; text-align: center;">WAR / UAR (%)</th>
-            <th style="width: 13%; text-align: center;">Xếp hạng</th>
+            <th style="width: 10%; text-align: center;">Xếp hạng</th>
         </tr>
     </thead>
     <tbody>
@@ -631,492 +688,240 @@ def build_pdf():
     </tbody>
 </table>
 
-<!-- TRANG 6: FAST SCREENING FEATURE-LEVEL ABLATIONS TRÊN RAER -->
-<div class="page-break"></div>
-<h2 class="section-title">3. Thực Nghiệm Huấn Luyện Cắt Bỏ Thành Phần (Fast Screening Feature-Level Ablations trên RAER)</h2>
-
-<table class="data-table" style="font-size: 7pt; margin: 2px 0 4px 0;">
-    <thead>
-        <tr style="background-color: #0d47a1; color: white;">
-            <th style="width: 25%;">Cấu hình Ablation</th>
-            <th style="width: 37%;">Mô tả Biến thể Thiết kế &amp; Hàm Mục tiêu</th>
-            <th style="width: 10%; text-align: center;">WAR (%)</th>
-            <th style="width: 10%; text-align: center;">UAR (%)</th>
-            <th style="width: 10%; text-align: center;">&Delta; UAR</th>
-            <th style="width: 8%; text-align: center;">Best Ep</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><strong>No_LDAM</strong></td>
-            <td>Thay thế LDAM bằng chuẩn Cross-Entropy Loss</td>
-            <td style="text-align: center;">77.46%</td>
-            <td style="text-align: center;">69.83%</td>
-            <td style="text-align: center; color: #b71c1c;">-0.97%</td>
-            <td style="text-align: center;">16</td>
-        </tr>
-        <tr>
-            <td><strong>No_Adapter</strong></td>
-            <td>Loại bỏ Face Adapter EAA (Dùng trực tiếp frozen CLIP face tokens)</td>
-            <td style="text-align: center;">78.41%</td>
-            <td style="text-align: center;">69.69%</td>
-            <td style="text-align: center; color: #b71c1c;">-1.12%</td>
-            <td style="text-align: center;">17</td>
-        </tr>
-        <tr>
-            <td><strong>No_Attn_Pooling</strong></td>
-            <td>Thay thế Self-Attention Pooling bằng Mean Pooling</td>
-            <td style="text-align: center;">76.89%</td>
-            <td style="text-align: center;">72.25%</td>
-            <td style="text-align: center; color: #1b5e20;">+1.44%</td>
-            <td style="text-align: center;">20</td>
-        </tr>
-        <tr style="background-color: #ffebee;">
-            <td><strong>No_Weighted_Sampler</strong></td>
-            <td>Lấy mẫu ngẫu nhiên đồng đều (Uniform Sampler) thay cho Weighted Sampler</td>
-            <td style="text-align: center;">78.22%</td>
-            <td style="text-align: center; color: #b71c1c; font-weight: bold;">62.38%</td>
-            <td style="text-align: center; color: #b71c1c; font-weight: bold;">-8.43%</td>
-            <td style="text-align: center;">10</td>
-        </tr>
-        <tr>
-            <td><strong>Fusion_GFI</strong></td>
-            <td>Thay CMAF bằng Gated Feature Integration (Cổng nhân tuyến tính Sigmoid)</td>
-            <td style="text-align: center;">67.23%</td>
-            <td style="text-align: center; color: #b71c1c;">67.42%</td>
-            <td style="text-align: center; color: #b71c1c;">-3.39%</td>
-            <td style="text-align: center;">14</td>
-        </tr>
-        <tr>
-            <td><strong>Fusion_Concat</strong></td>
-            <td>Thay CMAF bằng Ghép kênh trực tiếp (Direct Concat + Linear Projection)</td>
-            <td style="text-align: center;">67.80%</td>
-            <td style="text-align: center;">72.13%</td>
-            <td style="text-align: center; color: #1b5e20;">+1.33%</td>
-            <td style="text-align: center;">12</td>
-        </tr>
-        <tr>
-            <td><strong>No_Modality_Dropout</strong></td>
-            <td>Đặt Modality Dropout = 0.0 (Không triệt tiêu ngẫu nhiên luồng khi train)</td>
-            <td style="text-align: center;">73.48%</td>
-            <td style="text-align: center;">70.09%</td>
-            <td style="text-align: center; color: #b71c1c;">-0.72%</td>
-            <td style="text-align: center;">11</td>
-        </tr>
-        <tr>
-            <td><strong>No_Temporal_Layers</strong></td>
-            <td>Loại bỏ các lớp Transformer trên trục thời gian (Mean pooling thô qua 16 đoạn)</td>
-            <td style="text-align: center;">73.11%</td>
-            <td style="text-align: center;">70.48%</td>
-            <td style="text-align: center; color: #b71c1c;">-0.33%</td>
-            <td style="text-align: center;">15</td>
-        </tr>
-    </tbody>
-</table>
-
-<h3 class="subsection-title" style="margin-top: 5px;">Chi Tiết Recall 5 Lớp Cảm Xúc RAER</h3>
-<table class="data-table" style="font-size: 7pt; margin: 2px 0;">
-    <thead>
-        <tr style="background-color: #1565c0; color: white;">
-            <th style="width: 25%;">Cấu hình Ablation</th>
-            <th style="width: 15%; text-align: center;">Neutrality (115 mẫu)</th>
-            <th style="width: 15%; text-align: center;">Enjoyment (32 mẫu)</th>
-            <th style="width: 15%; text-align: center;">Confusion (7 mẫu)</th>
-            <th style="width: 15%; text-align: center;">Fatigue (39 mẫu)</th>
-            <th style="width: 15%; text-align: center;">Distraction (105 mẫu)</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><strong>No_LDAM</strong></td>
-            <td style="text-align: center;">76.81%</td>
-            <td style="text-align: center;">75.00%</td>
-            <td style="text-align: center; color: #b71c1c; font-weight: bold;">28.57%</td>
-            <td style="text-align: center;">89.74%</td>
-            <td style="text-align: center;">79.05%</td>
-        </tr>
-        <tr>
-            <td><strong>No_Adapter</strong></td>
-            <td style="text-align: center;">79.13%</td>
-            <td style="text-align: center; color: #b71c1c;">62.50%</td>
-            <td style="text-align: center;">42.86%</td>
-            <td style="text-align: center;">82.05%</td>
-            <td style="text-align: center;">81.90%</td>
-        </tr>
-        <tr>
-            <td><strong>No_Attn_Pooling</strong></td>
-            <td style="text-align: center;">75.65%</td>
-            <td style="text-align: center;">78.12%</td>
-            <td style="text-align: center;">42.86%</td>
-            <td style="text-align: center;">84.62%</td>
-            <td style="text-align: center;">80.00%</td>
-        </tr>
-        <tr style="background-color: #ffebee; font-weight: bold;">
-            <td><strong>No_Weighted_Sampler</strong></td>
-            <td style="text-align: center;">82.90%</td>
-            <td style="text-align: center;">81.25%</td>
-            <td style="text-align: center; color: #b71c1c; font-size: 7.2pt;">0.00%</td>
-            <td style="text-align: center;">82.05%</td>
-            <td style="text-align: center;">65.71%</td>
-        </tr>
-        <tr>
-            <td><strong>Fusion_GFI</strong></td>
-            <td style="text-align: center;">62.61%</td>
-            <td style="text-align: center;">75.00%</td>
-            <td style="text-align: center;">42.86%</td>
-            <td style="text-align: center;">79.49%</td>
-            <td style="text-align: center;">77.14%</td>
-        </tr>
-        <tr>
-            <td><strong>Fusion_Concat</strong></td>
-            <td style="text-align: center;">61.74%</td>
-            <td style="text-align: center;">78.12%</td>
-            <td style="text-align: center; color: #1b5e20;">57.14%</td>
-            <td style="text-align: center;">84.62%</td>
-            <td style="text-align: center;">79.05%</td>
-        </tr>
-        <tr>
-            <td><strong>No_Modality_Dropout</strong></td>
-            <td style="text-align: center;">72.17%</td>
-            <td style="text-align: center;">78.12%</td>
-            <td style="text-align: center;">42.86%</td>
-            <td style="text-align: center;">82.05%</td>
-            <td style="text-align: center;">75.24%</td>
-        </tr>
-        <tr>
-            <td><strong>No_Temporal_Layers</strong></td>
-            <td style="text-align: center;">70.72%</td>
-            <td style="text-align: center;">81.25%</td>
-            <td style="text-align: center;">42.86%</td>
-            <td style="text-align: center;">79.49%</td>
-            <td style="text-align: center;">78.10%</td>
-        </tr>
-    </tbody>
-</table>
-
-<!-- TRANG 7: TRỰC QUAN HÓA ĐẶC TRƯNG T-SNE VÀ GRAD-CAM TRÊN RAER -->
+<!-- ========================================================================= -->
+<!-- TRANG 4: T-SNE, GRAD-CAM RAER & BỘ DỮ LIỆU TỰ NHIÊN ĐA NHÃN EMOTIC -->
+<!-- ========================================================================= -->
 <div class="page-break"></div>
 <h2 class="section-title">4. Trực Quan Hóa Đặc Trưng t-SNE & Grad-CAM Trên RAER</h2>
 
-<table class="two-col-figures" style="margin-top: 6px;">
+<table class="two-col-figures">
     <tr>
         <td>
-            <img src="{tsne_fine}" alt="t-SNE Representation" style="max-height: 250px;">
+            <img src="{tsne_fine}" alt="t-SNE Representation">
             <div class="figure-caption">Hình 8a: Không gian biểu diễn phân bố đặc trưng t-SNE của RAPT-CLIP Frame-Level Fusion</div>
         </td>
         <td>
-            <img src="{gradcam_img}" alt="Grad-CAM 4-Stream" style="max-height: 250px;">
+            <img src="{gradcam_img}" alt="Grad-CAM 4-Stream">
             <div class="figure-caption">Hình 8b: Bản đồ Grad-CAM đa luồng (Face, Body, Context, Full Frame) trên RAER</div>
         </td>
     </tr>
 </table>
 
-<!-- TRANG 8: ĐÁNH GIÁ MỞ RỘNG TRÊN BỘ DỮ LIỆU ĐA NHÃN EMOTIC -->
-<div class="page-break"></div>
-<h2 class="section-title">5. Đánh Giá Khả Năng Mở Rộng Đa Miền: Bộ Dữ Liệu Tự Nhiên Đa Nhãn EMOTIC</h2>
+<h2 class="section-title" style="margin-top: 5px;">5. Đánh Giá Khả Năng Mở Rộng Đa Miền: Bộ Dữ Liệu Tự Nhiên Đa Nhãn EMOTIC (5,292 Test Images)</h2>
 
-<table class="data-table" style="margin-bottom: 4px;">
-    <thead>
-        <tr>
-            <th style="width: 32%;">Phương pháp công bố</th>
-            <th style="width: 30%;">Backbone &amp; Cơ chế Dung hợp</th>
-            <th style="width: 18%; text-align: center;">Test Macro mAP (%)</th>
-            <th style="width: 20%; text-align: center;">So với RAPT-CLIP</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><strong>Kosti et al. (CVPR 2017)</strong></td>
-            <td>ResNet-50 (Two-stream: Body + Image)</td>
-            <td style="text-align: center;">27.38%</td>
-            <td style="text-align: center; color: #2e7d32; font-weight: bold;">+7.38%</td>
-        </tr>
-        <tr>
-            <td><strong>EmotiCon (CVPR 2020)</strong></td>
-            <td>ResNet-50 + Depth &amp; Context Graph</td>
-            <td style="text-align: center;">33.10%</td>
-            <td style="text-align: center; color: #2e7d32; font-weight: bold;">+1.66%</td>
-        </tr>
-        <tr style="background-color: #e8f5e9; font-weight: bold;">
-            <td><strong>RAPT-CLIP (Đề Xuất - model_best)</strong></td>
-            <td><strong>ViT-B/16 + CMAF Tri-stream (Face + Body + Context)</strong></td>
-            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;">34.76%</td>
-            <td style="text-align: center; color: #1b5e20;">SOTA Benchmark</td>
-        </tr>
-    </tbody>
+<table class="side-by-side">
+    <tr>
+        <td style="width: 48%;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 42%;">Phương pháp</th>
+                        <th style="width: 32%; text-align: center;">mAP (%)</th>
+                        <th style="width: 26%; text-align: center;">So với RAPT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Kosti et al. (CVPR'17)</td><td style="text-align: center;">27.38%</td><td style="text-align: center; color: #2e7d32; font-weight: bold;">+7.38%</td></tr>
+                    <tr><td>EmotiCon (CVPR'20)</td><td style="text-align: center;">33.10%</td><td style="text-align: center; color: #2e7d32; font-weight: bold;">+1.66%</td></tr>
+                    <tr style="background-color: #e8f5e9; font-weight: bold;">
+                        <td><strong>RAPT-CLIP (Ours)</strong></td>
+                        <td style="text-align: center; color: #1b5e20;"><strong>34.76%</strong></td>
+                        <td style="text-align: center;"><span class="badge-sota">SOTA</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </td>
+        <td style="width: 52%;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Tham số</th>
+                        <th style="width: 60%;">Cấu hình thực nghiệm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Backbone</td><td>CLIP ViT-B/16 (224 &times; 224, unfrozen)</td></tr>
+                    <tr><td>Epochs / Batch</td><td>25 Epochs (Đỉnh Ep 6) | Batch Size: 16</td></tr>
+                    <tr><td>Loss / Scheduler</td><td>Dynamic ASL (&gamma;<sub>-</sub>=4.0, clip=0.05) | MultiStepLR</td></tr>
+                    <tr><td>Fusion / Prompts</td><td>CMAF Tri-Stream (1536-d) | 8 learnable tokens</td></tr>
+                </tbody>
+            </table>
+        </td>
+    </tr>
 </table>
 
-<table class="data-table" style="margin-bottom: 4px;">
-    <thead>
-        <tr>
-            <th style="width: 25%;">Nhóm tham số</th>
-            <th style="width: 33%;">Tên biến / Siêu tham số</th>
-            <th style="width: 42%;">Giá trị cấu hình thực nghiệm</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr class="group-header"><td colspan="3">a. Thiết lập huấn luyện chung &amp; Tối ưu hóa</td></tr>
-        <tr>
-            <td><strong>Visual Backbone</strong></td>
-            <td><code>clip_path</code>, <code>image_size</code></td>
-            <td>CLIP ViT-B/16 (224 &times; 224), <code>freeze_image_encoder=False</code></td>
-        </tr>
-        <tr>
-            <td><strong>Epochs &amp; Batch Size</strong></td>
-            <td><code>epochs</code>, <code>batch_size</code>, <code>workers</code></td>
-            <td><strong>25 Epochs</strong> (Đạt đỉnh: <strong>Epoch 6</strong>) | Batch Size: <strong>16</strong> (Workers: 4)</td>
-        </tr>
-        <tr>
-            <td><strong>Thuật toán tối ưu</strong></td>
-            <td><code>optimizer</code>, <code>weight_decay</code>, <code>grad_clip</code></td>
-            <td><strong>AdamW</strong> | Weight Decay: 0.005 | Momentum: 0.9 | Grad Clip: 1.0</td>
-        </tr>
-        <tr>
-            <td><strong>Tốc độ học (LRs)</strong></td>
-            <td><code>lr</code>, <code>lr_image</code>, <code>lr_prompt</code>, <code>lr_adapter</code></td>
-            <td>Base: <code>1e-4</code> | ViT: <code>1e-5</code> | Prompt: <code>5e-5</code> | CMAF Adapter: <code>1e-4</code></td>
-        </tr>
-        <tr>
-            <td><strong>Lịch điều phối LR</strong></td>
-            <td><code>scheduler</code>, <code>milestones</code>, <code>gamma</code></td>
-            <td>MultiStepLR (Milestones: [10, 15], &gamma; = 0.1, Warmup Epochs: 3)</td>
-        </tr>
-        <tr class="group-header"><td colspan="3">b. Hàm mất mát &amp; Cơ chế suy luận</td></tr>
-        <tr>
-            <td><strong>Hàm mất mát chính</strong></td>
-            <td><code>loss_type</code> (Dynamic ASL)</td>
-            <td>Dynamic Asymmetric Loss (&gamma;<sub>-</sub> = 4.0, &gamma;<sub>+</sub> = 0.0, <code>clip = 0.05</code>)</td>
-        </tr>
-        <tr>
-            <td><strong>Hàm mất mát phụ</strong></td>
-            <td><code>lambda_mi</code>, <code>lambda_dc</code></td>
-            <td>&lambda;<sub>MI</sub> = 0.1 (Warmup: 7, Ramp: 5), &lambda;<sub>DC</sub> = 0.1 (Warmup: 7, Ramp: 5)</td>
-        </tr>
-        <tr>
-            <td><strong>Dung hợp đặc trưng</strong></td>
-            <td><code>fusion_type</code>, <code>fusion_stage</code></td>
-            <td><strong>CMAF Frame-Level Fusion</strong> (<code>stage=frame</code>, <code>modality_dropout=0.3</code>)</td>
-        </tr>
-        <tr>
-            <td><strong>Prompt Ensemble</strong></td>
-            <td><code>contexts_number</code>, <code>temperature</code></td>
-            <td>8 learnable context tokens/lớp (<code>class_specific=True</code>) | &tau; = 1.0</td>
-        </tr>
-    </tbody>
-</table>
-
-<table class="two-col-figures" style="margin-top: 3px;">
+<table class="two-col-figures" style="margin-top: 2px;">
     <tr>
         <td style="width: 50%;">
-            <img src="{emotic_ranking_img}" alt="EMOTIC Test AP Ranking">
+            <img src="{emotic_ranking_img}" alt="EMOTIC Test AP Ranking" style="max-height: 120px;">
             <div class="figure-caption">Hình 9a: Bảng xếp hạng Average Precision (AP) trên 26 lớp cảm xúc tập Test EMOTIC</div>
         </td>
         <td style="width: 50%;">
-            <img src="{emotic_val_test_img}" alt="EMOTIC Val vs Test Comparison">
-            <div class="figure-caption">Hình 9b: So sánh tương quan Average Precision giữa tập Validation (46.98%) và Test (34.76%)</div>
+            <img src="{emotic_val_test_img}" alt="EMOTIC Val vs Test Comparison" style="max-height: 120px;">
+            <div class="figure-caption">Hình 9b: So sánh tương quan Average Precision giữa Validation (46.98%) và Test (34.76%)</div>
         </td>
     </tr>
 </table>
 
-<!-- TRANG 9: GRAD-CAM TRÊN TẬP DỮ LIỆU TỰ NHIÊN EMOTIC -->
-<div class="page-break"></div>
-<h3 class="subsection-title">5.2 Trực Quan Hóa Grad-CAM Trên Tập Dữ Liệu Tự Nhiên EMOTIC</h3>
-
-<table class="three-col-figures" style="margin-top: 6px;">
+<h3 class="subsection-title" style="margin-top: 3px;">Trực Quan Hóa Grad-CAM Trên Tập Dữ Liệu Tự Nhiên EMOTIC</h3>
+<table class="three-col-figures">
     <tr>
         <td>
-            <img src="{emotic_grad_1}" alt="Grad-CAM EMOTIC 1" style="max-height: 200px;">
-            <div class="figure-caption">Hình 10a: Mẫu 1 (Tương tác Mặt &amp; Cảnh)</div>
+            <img src="{emotic_grad_1}" alt="Grad-CAM EMOTIC 1">
+            <div class="figure-caption">Hình 10a: Mẫu 1 (Mặt &amp; Cảnh)</div>
         </td>
         <td>
-            <img src="{emotic_grad_2}" alt="Grad-CAM EMOTIC 2" style="max-height: 200px;">
-            <div class="figure-caption">Hình 10b: Mẫu 2 (Cử chỉ Hành vi Cơ thể)</div>
+            <img src="{emotic_grad_2}" alt="Grad-CAM EMOTIC 2">
+            <div class="figure-caption">Hình 10b: Mẫu 2 (Hành vi Cơ thể)</div>
         </td>
         <td>
-            <img src="{emotic_grad_3}" alt="Grad-CAM EMOTIC 3" style="max-height: 200px;">
-            <div class="figure-caption">Hình 10c: Mẫu 3 (Cảm xúc Phức hợp Ngoại cảnh)</div>
+            <img src="{emotic_grad_3}" alt="Grad-CAM EMOTIC 3">
+            <div class="figure-caption">Hình 10c: Mẫu 3 (Cảm xúc Phức hợp)</div>
         </td>
     </tr>
 </table>
 
-<!-- TRANG 10: HUẤN LUYỆN VÀ ĐÁNH GIÁ TRÊN BỘ DỮ LIỆU CAER-S -->
+<!-- ========================================================================= -->
+<!-- TRANG 5: HUẤN LUYỆN VÀ ĐÁNH GIÁ TRÊN BỘ DỮ LIỆU CAER-S -->
+<!-- ========================================================================= -->
 <div class="page-break"></div>
-<h2 class="section-title">6. Huấn Luyện và Đánh Giá Trên Bộ Dữ Liệu CAER-S (Static Images)</h2>
+<h2 class="section-title">6. Huấn Luyện và Đánh Giá Trên Bộ Dữ Liệu CAER-S (Static Images - 70,000 Ảnh)</h2>
 
-<table class="data-table" style="margin-bottom: 4px;">
-    <thead>
-        <tr>
-            <th style="width: 25%;">Phương pháp</th>
-            <th style="width: 25%;">Nguồn / Năm</th>
-            <th style="width: 13%; text-align: center;">WAR (%)</th>
-            <th style="width: 13%; text-align: center;">UAR (%)</th>
-            <th style="width: 24%;">Đặc trưng kiến trúc chính</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr><td>CAER-Net-S</td><td>Lee et al., ICCV 2019</td><td style="text-align: center;">73.51%</td><td style="text-align: center;">73.51%</td><td>2-Stream CNN (Face + Context)</td></tr>
-        <tr><td>EmotiCon</td><td>Mittal et al., AAAI 2020</td><td style="text-align: center;">77.00%</td><td style="text-align: center;">77.00%</td><td>Đa nhánh: Mặt, Dáng, Cảnh, Độ sâu</td></tr>
-        <tr><td>GRERN</td><td>2021</td><td style="text-align: center;">81.31%</td><td style="text-align: center;">81.31%</td><td>Đồ thị quan hệ ngữ cảnh</td></tr>
-        <tr><td>EfficientFace</td><td>2021</td><td style="text-align: center;">85.87%</td><td style="text-align: center;">85.87%</td><td>Mạng khuôn mặt nhẹ hiệu năng cao</td></tr>
-        <tr><td>MA-Net</td><td>2021</td><td style="text-align: center;">88.42%</td><td style="text-align: center;">88.42%</td><td>Chú ý đa góc nhìn mặt &amp; bối cảnh</td></tr>
-        <tr><td>GLAMOR-Net</td><td>2023</td><td style="text-align: center;">89.88%</td><td style="text-align: center;">89.88%</td><td>Tương tác toàn cục và cục bộ</td></tr>
-        <tr><td>AGCD-Net</td><td>2023</td><td style="text-align: center;">90.65%</td><td style="text-align: center;">90.65%</td><td>Phân tách đồ thị thích ứng</td></tr>
-        <tr><td>SAFER</td><td>2024</td><td style="text-align: center;">91.40%</td><td style="text-align: center;">91.40%</td><td>Tinh chỉnh ngữ cảnh nâng cao</td></tr>
-        <tr style="background-color: #e8f5e9; font-weight: bold;">
-            <td><strong>RAPT-CLIP (Ours)</strong></td>
-            <td><strong>Công trình này (Epoch 19)</strong></td>
-            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;">90.40%</td>
-            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;">90.40%</td>
-            <td><strong>Triple-Stream CMAF + LDAM (s=1.0)</strong></td>
-        </tr>
-    </tbody>
+<table class="side-by-side">
+    <tr>
+        <td style="width: 50%;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Phương pháp</th>
+                        <th style="width: 25%; text-align: center;">Năm</th>
+                        <th style="width: 35%; text-align: center;">WAR / UAR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>CAER-Net-S</td><td style="text-align: center;">2019</td><td style="text-align: center;">73.51%</td></tr>
+                    <tr><td>EmotiCon</td><td style="text-align: center;">2020</td><td style="text-align: center;">77.00%</td></tr>
+                    <tr><td>GRERN</td><td style="text-align: center;">2021</td><td style="text-align: center;">81.31%</td></tr>
+                    <tr><td>EfficientFace</td><td style="text-align: center;">2021</td><td style="text-align: center;">85.87%</td></tr>
+                    <tr><td>MA-Net</td><td style="text-align: center;">2021</td><td style="text-align: center;">88.42%</td></tr>
+                    <tr><td>GLAMOR-Net</td><td style="text-align: center;">2023</td><td style="text-align: center;">89.88%</td></tr>
+                    <tr><td>AGCD-Net</td><td style="text-align: center;">2023</td><td style="text-align: center;">90.65%</td></tr>
+                    <tr><td>SAFER</td><td style="text-align: center;">2024</td><td style="text-align: center;">91.40%</td></tr>
+                    <tr style="background-color: #e8f5e9; font-weight: bold;">
+                        <td><strong>RAPT-CLIP (Ours)</strong></td>
+                        <td style="text-align: center;"><strong>Ep 19</strong></td>
+                        <td style="text-align: center; color: #1b5e20;"><strong>90.40%</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </td>
+        <td style="width: 50%;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Tham số</th>
+                        <th style="width: 60%;">Cấu hình thực nghiệm (caer_s_cmaf.sh)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Backbone</td><td>CLIP ViT-B/16 (224 &times; 224, unfrozen)</td></tr>
+                    <tr><td>Epochs / Batch</td><td>20 Epochs (Đỉnh Ep 19) | Batch Size: 16</td></tr>
+                    <tr><td>Hàm mất mát</td><td>LDAM Loss (s = 1.0, m<sub>max</sub> = 0.5)</td></tr>
+                    <tr><td>Bộ lấy mẫu</td><td>WeightedRandomSampler (Cân bằng batch)</td></tr>
+                    <tr><td>Tốc độ học</td><td>Base: 2e-5 | ViT: 1e-6 | Prompt: 3e-4</td></tr>
+                    <tr><td>Luồng dữ liệu</td><td>Triple-Stream: Face + Body + Masked Context</td></tr>
+                    <tr><td>Dung hợp</td><td>Tridirectional Frame-Level CMAF (1536-d)</td></tr>
+                    <tr><td>Temporal</td><td>Temporal Transformer (1 layer, Attn-Pool)</td></tr>
+                    <tr><td>TTA</td><td>Horizontal Flip trên cả 3 luồng</td></tr>
+                </tbody>
+            </table>
+        </td>
+    </tr>
 </table>
 
-<table class="data-table" style="margin-bottom: 4px;">
-    <thead>
-        <tr>
-            <th style="width: 25%;">Nhóm tham số</th>
-            <th style="width: 33%;">Tên biến / Siêu tham số</th>
-            <th style="width: 42%;">Giá trị cấu hình thực nghiệm (Script: <code>caer_s_cmaf.sh</code>)</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr class="group-header"><td colspan="3">a. Thiết lập huấn luyện &amp; Tối ưu hóa</td></tr>
-        <tr>
-            <td><strong>Visual Backbone</strong></td>
-            <td><code>clip_path</code>, <code>image_size</code></td>
-            <td>CLIP ViT-B/16 (224 &times; 224), <code>freeze_image_encoder=False</code></td>
-        </tr>
-        <tr>
-            <td><strong>Epochs &amp; Batch Size</strong></td>
-            <td><code>epochs</code>, <code>batch_size</code></td>
-            <td><strong>20 Epochs</strong> (Đạt đỉnh: <strong>Epoch 19</strong>) | Batch Size: <strong>16</strong> (Workers: 4)</td>
-        </tr>
-        <tr>
-            <td><strong>Thuật toán tối ưu</strong></td>
-            <td><code>optimizer</code>, <code>weight_decay</code>, <code>grad_clip</code></td>
-            <td><strong>AdamW</strong> | Weight Decay: 0.005 | Momentum: 0.9 | Grad Clip: 1.0</td>
-        </tr>
-        <tr>
-            <td><strong>Tốc độ học (LRs)</strong></td>
-            <td><code>lr</code>, <code>lr_image</code>, <code>lr_prompt</code>, <code>lr_adapter</code></td>
-            <td>Base: <code>2e-5</code> | ViT: <code>1e-6</code> | Prompt: <code>3e-4</code> | Adapter: <code>1e-4</code></td>
-        </tr>
-        <tr>
-            <td><strong>Lịch điều phối LR</strong></td>
-            <td><code>scheduler</code>, <code>milestones</code>, <code>gamma</code></td>
-            <td><strong>MultiStepLR</strong> (Milestones: [10, 15], &gamma; = 0.1)</td>
-        </tr>
-        <tr class="group-header"><td colspan="3">b. Hàm mất mát &amp; Luồng dữ liệu</td></tr>
-        <tr>
-            <td><strong>Hàm mất mát chính</strong></td>
-            <td><code>loss_type</code>, <code>ldam_s</code>, <code>max_m</code></td>
-            <td><strong>LDAM Loss</strong> (<code>loss_type=ldam</code>, s = 1.0, m<sub>max</sub> = 0.5)</td>
-        </tr>
-        <tr>
-            <td><strong>Bộ lấy mẫu</strong></td>
-            <td><code>use_weighted_sampler</code></td>
-            <td><strong>WeightedRandomSampler</strong> (Cân bằng phân phối lấy mẫu mini-batch)</td>
-        </tr>
-        <tr>
-            <td><strong>Hàm mất mát phụ</strong></td>
-            <td><code>lambda_mi</code>, <code>lambda_dc</code></td>
-            <td>&lambda;<sub>MI</sub> = 0.1 (Warmup: 3, Ramp: 6), &lambda;<sub>DC</sub> = 0.1 (Warmup: 3, Ramp: 6)</td>
-        </tr>
-        <tr>
-            <td><strong>Luồng dữ liệu</strong></td>
-            <td><code>crop_body</code>, <code>mask_context_face</code></td>
-            <td><strong>Triple-Stream:</strong> Face Crop + Body Crop (Torso) + Context (Xóa mặt)</td>
-        </tr>
-        <tr>
-            <td><strong>Dung hợp đặc trưng</strong></td>
-            <td><code>fusion_type</code>, <code>temporal_layers</code></td>
-            <td><strong>Tridirectional Frame-Level CMAF</strong> (1536-d) | Temporal Attn: 1 layer</td>
-        </tr>
-    </tbody>
+<table class="side-by-side" style="margin-top: 3px;">
+    <tr>
+        <td style="width: 44%;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 12%;">ID</th>
+                        <th style="width: 38%;">Cảm xúc</th>
+                        <th style="width: 25%; text-align: center;">Đúng</th>
+                        <th style="width: 25%; text-align: center;">Recall</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>0</td><td>Anger</td><td style="text-align: center;">923/1k</td><td style="text-align: center; font-weight: bold;">92.30%</td></tr>
+                    <tr><td>1</td><td>Disgust</td><td style="text-align: center;">981/1k</td><td style="text-align: center; font-weight: bold;">98.10%</td></tr>
+                    <tr><td>2</td><td>Fear</td><td style="text-align: center;">997/1k</td><td style="text-align: center; font-weight: bold; color: #1b5e20;">99.70%</td></tr>
+                    <tr><td>3</td><td>Happy</td><td style="text-align: center;">834/1k</td><td style="text-align: center; font-weight: bold;">83.40%</td></tr>
+                    <tr><td>4</td><td>Neutral</td><td style="text-align: center;">737/1k</td><td style="text-align: center; font-weight: bold; color: #b71c1c;">73.70%</td></tr>
+                    <tr><td>5</td><td>Sad</td><td style="text-align: center;">934/1k</td><td style="text-align: center; font-weight: bold;">93.40%</td></tr>
+                    <tr><td>6</td><td>Surprise</td><td style="text-align: center;">922/1k</td><td style="text-align: center; font-weight: bold;">92.20%</td></tr>
+                    <tr style="background-color: #e8f5e9; font-weight: bold;">
+                        <td colspan="2"><strong>WAR / UAR</strong></td>
+                        <td style="text-align: center; color: #1b5e20;"><strong>6,328</strong></td>
+                        <td style="text-align: center; color: #1b5e20;"><strong>90.40%</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </td>
+        <td style="width: 56%;">
+            <table class="data-table" style="text-align: center;">
+                <thead>
+                    <tr>
+                        <th style="width: 16%;">True &bsol; Pred</th>
+                        <th style="width: 12%;">Ang</th>
+                        <th style="width: 12%;">Dis</th>
+                        <th style="width: 12%;">Fea</th>
+                        <th style="width: 12%;">Hap</th>
+                        <th style="width: 12%;">Neu</th>
+                        <th style="width: 12%;">Sad</th>
+                        <th style="width: 12%;">Sur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Anger</strong></td><td style="background-color: #bbdefb; font-weight: bold;">923</td><td>10</td><td>1</td><td>7</td><td>28</td><td>17</td><td>14</td></tr>
+                    <tr><td><strong>Disgust</strong></td><td>4</td><td style="background-color: #bbdefb; font-weight: bold;">981</td><td>2</td><td>4</td><td>1</td><td>7</td><td>1</td></tr>
+                    <tr><td><strong>Fear</strong></td><td>0</td><td>1</td><td style="background-color: #bbdefb; font-weight: bold;">997</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+                    <tr><td><strong>Happy</strong></td><td>25</td><td>4</td><td>8</td><td style="background-color: #bbdefb; font-weight: bold;">834</td><td>70</td><td>17</td><td>42</td></tr>
+                    <tr><td><strong>Neutral</strong></td><td>53</td><td>29</td><td>10</td><td>56</td><td style="background-color: #bbdefb; font-weight: bold;">737</td><td>47</td><td>68</td></tr>
+                    <tr><td><strong>Sad</strong></td><td>16</td><td>1</td><td>5</td><td>11</td><td>19</td><td style="background-color: #bbdefb; font-weight: bold;">934</td><td>14</td></tr>
+                    <tr><td><strong>Surprise</strong></td><td>19</td><td>3</td><td>3</td><td>16</td><td>22</td><td>15</td><td style="background-color: #bbdefb; font-weight: bold;">922</td></tr>
+                </tbody>
+            </table>
+        </td>
+    </tr>
 </table>
 
-<h3 class="subsection-title" style="margin-top: 5px;">6.2 Độ Hồi Tưởng (Recall) Từng Lớp &amp; Ma Trận Nhầm Lẫn 7&times;7 CAER-S</h3>
-
-<table class="data-table" style="margin-bottom: 4px;">
-    <thead>
-        <tr>
-            <th style="width: 10%;">ID</th>
-            <th style="width: 30%;">Nhãn cảm xúc</th>
-            <th style="width: 30%; text-align: center;">Số mẫu đúng / 1,000</th>
-            <th style="width: 30%; text-align: center;">Recall (%)</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr><td>0</td><td><strong>Anger</strong></td><td style="text-align: center;">923 / 1,000</td><td style="text-align: center; font-weight: bold;">92.30%</td></tr>
-        <tr><td>1</td><td><strong>Disgust</strong></td><td style="text-align: center;">981 / 1,000</td><td style="text-align: center; font-weight: bold;">98.10%</td></tr>
-        <tr><td>2</td><td><strong>Fear</strong></td><td style="text-align: center;">997 / 1,000</td><td style="text-align: center; font-weight: bold; color: #1b5e20;">99.70%</td></tr>
-        <tr><td>3</td><td><strong>Happy</strong></td><td style="text-align: center;">834 / 1,000</td><td style="text-align: center; font-weight: bold;">83.40%</td></tr>
-        <tr><td>4</td><td><strong>Neutral</strong></td><td style="text-align: center;">737 / 1,000</td><td style="text-align: center; font-weight: bold; color: #b71c1c;">73.70%</td></tr>
-        <tr><td>5</td><td><strong>Sad</strong></td><td style="text-align: center;">934 / 1,000</td><td style="text-align: center; font-weight: bold;">93.40%</td></tr>
-        <tr><td>6</td><td><strong>Surprise</strong></td><td style="text-align: center;">922 / 1,000</td><td style="text-align: center; font-weight: bold;">92.20%</td></tr>
-        <tr style="background-color: #e8f5e9; font-weight: bold;">
-            <td colspan="2"><strong>Trung bình toàn bộ (WAR / UAR)</strong></td>
-            <td style="text-align: center; color: #1b5e20;"><strong>6,328 / 7,000</strong></td>
-            <td style="text-align: center; color: #1b5e20; font-size: 8.8pt;"><strong>90.40%</strong></td>
-        </tr>
-    </tbody>
-</table>
-
-<table class="data-table" style="margin-bottom: 5px; text-align: center;">
-    <thead>
-        <tr>
-            <th style="width: 16%;">True &bsol; Pred</th>
-            <th style="width: 12%;">Anger</th>
-            <th style="width: 12%;">Disgust</th>
-            <th style="width: 12%;">Fear</th>
-            <th style="width: 12%;">Happy</th>
-            <th style="width: 12%;">Neutral</th>
-            <th style="width: 12%;">Sad</th>
-            <th style="width: 12%;">Surprise</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr><td><strong>Anger</strong></td><td style="background-color: #bbdefb; font-weight: bold;">923</td><td>10</td><td>1</td><td>7</td><td>28</td><td>17</td><td>14</td></tr>
-        <tr><td><strong>Disgust</strong></td><td>4</td><td style="background-color: #bbdefb; font-weight: bold;">981</td><td>2</td><td>4</td><td>1</td><td>7</td><td>1</td></tr>
-        <tr><td><strong>Fear</strong></td><td>0</td><td>1</td><td style="background-color: #bbdefb; font-weight: bold;">997</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
-        <tr><td><strong>Happy</strong></td><td>25</td><td>4</td><td>8</td><td style="background-color: #bbdefb; font-weight: bold;">834</td><td>70</td><td>17</td><td>42</td></tr>
-        <tr><td><strong>Neutral</strong></td><td>53</td><td>29</td><td>10</td><td>56</td><td style="background-color: #bbdefb; font-weight: bold;">737</td><td>47</td><td>68</td></tr>
-        <tr><td><strong>Sad</strong></td><td>16</td><td>1</td><td>5</td><td>11</td><td>19</td><td style="background-color: #bbdefb; font-weight: bold;">934</td><td>14</td></tr>
-        <tr><td><strong>Surprise</strong></td><td>19</td><td>3</td><td>3</td><td>16</td><td>22</td><td>15</td><td style="background-color: #bbdefb; font-weight: bold;">922</td></tr>
-    </tbody>
-</table>
-
-<!-- TRANG 11: BIỂU ĐỒ VÀ GRAD-CAM CAER-S -->
-<div class="page-break"></div>
-<h3 class="subsection-title">6.3 Biểu Đồ & Ma Trận Nhầm Lẫn Nhiệt CAER-S</h3>
-<table class="two-col-figures" style="margin-top: 4px;">
+<table class="two-col-figures" style="margin-top: 2px;">
     <tr>
         <td style="width: 48%;">
-            <img src="{caers_recall_img}" alt="CAER-S Per-Class Recall Barchart" style="max-height: 180px;">
+            <img src="{caers_recall_img}" alt="CAER-S Recall Barchart" style="max-height: 115px;">
             <div class="figure-caption">Hình 11a: Biểu đồ thanh Per-Class Recall trên 7 lớp cảm xúc CAER-S</div>
         </td>
         <td style="width: 52%;">
-            <img src="{caers_cm_img}" alt="CAER-S Confusion Matrix Heatmap" style="max-height: 180px;">
-            <div class="figure-caption">Hình 11b: Bản đồ nhiệt Ma trận nhầm lẫn thực nghiệm trên 7,000 mẫu kiểm định CAER-S</div>
+            <img src="{caers_cm_img}" alt="CAER-S Confusion Matrix" style="max-height: 115px;">
+            <div class="figure-caption">Hình 11b: Bản đồ nhiệt Ma trận nhầm lẫn thực nghiệm trên 7,000 mẫu CAER-S</div>
         </td>
     </tr>
 </table>
 
-<h3 class="subsection-title" style="margin-top: 8px;">6.4 Trực Quan Hóa Grad-CAM Đa Luồng Trên Tập Dữ Liệu CAER-S (Model: Caers-finetune.pth)</h3>
-<table class="three-col-figures" style="margin-top: 4px;">
+<h3 class="subsection-title" style="margin-top: 3px;">Trực Quan Hóa Grad-CAM Đa Luồng Trên CAER-S (Model: Caers-finetune.pth)</h3>
+<table class="three-col-figures">
     <tr>
         <td>
-            <img src="{caers_grad_1}" alt="CAER-S Grad-CAM Anger" style="max-height: 160px;">
-            <div class="figure-caption">Hình 12a: Mẫu cảm xúc <strong>Anger</strong> (Độ tin cậy: 95.2%)</div>
+            <img src="{caers_grad_1}" alt="CAER-S Grad-CAM Anger" style="max-height: 105px;">
+            <div class="figure-caption">Hình 12a: Mẫu <strong>Anger</strong> (95.2%)</div>
         </td>
         <td>
-            <img src="{caers_grad_2}" alt="CAER-S Grad-CAM Happy" style="max-height: 160px;">
-            <div class="figure-caption">Hình 12b: Mẫu cảm xúc <strong>Happy</strong> (Độ tin cậy: 95.1%)</div>
+            <img src="{caers_grad_2}" alt="CAER-S Grad-CAM Happy" style="max-height: 105px;">
+            <div class="figure-caption">Hình 12b: Mẫu <strong>Happy</strong> (95.1%)</div>
         </td>
         <td>
-            <img src="{caers_grad_3}" alt="CAER-S Grad-CAM Fear" style="max-height: 160px;">
-            <div class="figure-caption">Hình 12c: Mẫu cảm xúc <strong>Fear</strong> (Độ tin cậy: 93.6%)</div>
+            <img src="{caers_grad_3}" alt="CAER-S Grad-CAM Fear" style="max-height: 105px;">
+            <div class="figure-caption">Hình 12c: Mẫu <strong>Fear</strong> (93.6%)</div>
         </td>
     </tr>
 </table>
