@@ -77,7 +77,7 @@ def evaluate_stream(loader, model, device, class_names, use_tta=False):
 
 def main():
     parser = argparse.ArgumentParser(description="CAER-S TTA Benchmark Evaluator")
-    parser.add_argument('--checkpoint', type=str, default='/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth', help='Path to checkpoint (model_best.pth or model.pth)')
+    parser.add_argument('--checkpoint', type=str, default='/kaggle/input/models/bearmn/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth', help='Path to checkpoint (model_best.pth or model.pth)')
     parser.add_argument('--data-dir', type=str, default='/kaggle/input/datasets/lcngtr/caer-s', help='CAER-S root dir')
     parser.add_argument('--annotation-dir', type=str, default='/kaggle/working/caers_data', help='Annotations dir')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
@@ -141,8 +141,22 @@ def main():
     model = build_model(m_args, input_text)
     model = model.to(device)
 
-    print(f"=> Loading weights from: {args.checkpoint}")
-    load_slim_checkpoint(model, args.checkpoint, device=device)
+    ckpt_path = args.checkpoint
+    if not os.path.isfile(ckpt_path):
+        candidates = [
+            '/kaggle/input/models/bearmn/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth',
+            '/kaggle/input/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth',
+            '/kaggle/input/caer-finetune-end/Caers-finetune.pth',
+            '/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth',
+            '/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model.pth',
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                ckpt_path = c
+                break
+
+    print(f"=> Loading weights from: {ckpt_path}")
+    load_slim_checkpoint(model, ckpt_path, device=device)
 
     print("=> Building dataloader...")
     _, _, test_loader = build_dataloaders(m_args)

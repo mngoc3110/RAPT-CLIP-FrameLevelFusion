@@ -116,6 +116,9 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
 
   # 2. Quét tìm tự động mọi checkpoint trên /kaggle/input (ưu tiên đường dẫn chỉ định)
   KNOWN_CKPTS=(
+    "/kaggle/input/models/bearmn/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth"
+    "/kaggle/input/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth"
+    "/kaggle/input/caer-finetune-end/Caers-finetune.pth"
     "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth"
     "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model.pth"
     "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth"
@@ -131,7 +134,7 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
 
   if [ -z "$LATEST_CKPT" ] && [ -d "/kaggle/input" ]; then
     # Tìm file có chứa caer hoặc model hoặc best
-    LATEST_CKPT=$(find /kaggle/input -type f \( -name "*caer*.pth" -o -name "*model*.pth" -o -name "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|checkpoint" | head -n 1)
+    LATEST_CKPT=$(find /kaggle/input -type f \( -iname "*caer*.pth" -o -iname "*model*.pth" -o -iname "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|checkpoint" | head -n 1)
   fi
 
   if [ -n "$LATEST_CKPT" ] && [ -f "$LATEST_CKPT" ]; then

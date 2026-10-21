@@ -99,6 +99,9 @@ fi
 if [ -z "$FINETUNE_CKPT" ]; then
   # Ưu tiên trực tiếp đường dẫn checkpoint người dùng cung cấp
   KNOWN_CKPTS=(
+    "/kaggle/input/models/bearmn/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth"
+    "/kaggle/input/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth"
+    "/kaggle/input/caer-finetune-end/Caers-finetune.pth"
     "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model_best.pth"
     "/kaggle/input/models/bearmn/caerv2-finetune/tensorflow2/default/1/model.pth"
     "/kaggle/input/models/traincollab/caerv2-funing/tensorflow2/default/1/model_best.pth"
@@ -132,7 +135,7 @@ fi
 
 if [ -z "$FINETUNE_CKPT" ] && [ -d "/kaggle/input" ]; then
   # Quét tìm trên các dataset checkpoint người dùng import vào Kaggle
-  FINETUNE_CKPT=$(find /kaggle/input -type f \( -name "*caer*.pth" -o -name "*model*.pth" -o -name "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|best" | head -n 1)
+  FINETUNE_CKPT=$(find /kaggle/input -type f \( -iname "*caer*.pth" -o -iname "*model*.pth" -o -iname "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|best" | head -n 1)
 fi
 
 echo "=> [3/4] Cấu hình Fine-tuning:"
