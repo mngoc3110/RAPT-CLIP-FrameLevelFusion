@@ -141,6 +141,9 @@ if [ -z "$FINETUNE_CKPT" ] && [ -d "/kaggle/input" ]; then
   FINETUNE_CKPT=$(find /kaggle/input -type f \( -iname "*caer*.pth" -o -iname "*model*.pth" -o -iname "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|best" | head -n 1)
 fi
 
+BATCH_SIZE="${BATCH_SIZE:-32}"
+WORKERS="${WORKERS:-4}"
+
 echo "=> [3/4] Cấu hình Fine-tuning:"
 if [ -n "$FINETUNE_CKPT" ] && [ -f "$FINETUNE_CKPT" ]; then
   echo "   - Checkpoint nguồn (Warm-Start): ${FINETUNE_CKPT}"
@@ -150,6 +153,8 @@ else
   FINETUNE_ARG=()
 fi
 echo "   - Số epochs fine-tune:  ${TOTAL_EPOCHS}"
+echo "   - Batch size:           ${BATCH_SIZE} (Giảm 50% số steps/epoch -> Tăng tốc 2x)"
+echo "   - Dataloader workers:   ${WORKERS}"
 echo "   - TTA (Test-Time Aug):  BẬT (Horizontal Flip on all 3 streams)"
 echo "   - Hàm Loss:             Cross-Entropy (Label Smoothing = 0.1)"
 echo "   - Tốc độ học (LR):      Image Encoder = 5e-6 | Main = 3e-5 | Prompt = 2e-4"
@@ -162,11 +167,11 @@ python -u main.py \
   --dataset CAER-S \
   --gpu 0 \
   --epochs ${TOTAL_EPOCHS} \
-  --batch-size 16 \
+  --batch-size ${BATCH_SIZE} \
   --grad-accum-steps 1 \
   --print-freq 50 \
   --seed 42 \
-  --workers 4 \
+  --workers ${WORKERS} \
   --root-dir "${DATA_DIR}" \
   --train-annotation "${TRAIN_TXT}" \
   --val-annotation "${VAL_TXT}" \

@@ -152,6 +152,9 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
   fi
 fi
 
+BATCH_SIZE="${BATCH_SIZE:-32}"
+WORKERS="${WORKERS:-4}"
+
 # 4. Khởi chạy huấn luyện RAPT-CLIP CAER-S Tối Ưu (SOTA Pipeline)
 python -u main.py \
   --mode train \
@@ -159,11 +162,11 @@ python -u main.py \
   --dataset CAER-S \
   --gpu 0 \
   --epochs ${TOTAL_EPOCHS} \
-  --batch-size 16 \
+  --batch-size ${BATCH_SIZE} \
   --grad-accum-steps 1 \
   --print-freq 50 \
   --seed 42 \
-  --workers 4 \
+  --workers ${WORKERS} \
   --root-dir "${DATA_DIR}" \
   --train-annotation "${TRAIN_TXT}" \
   --val-annotation "${VAL_TXT}" \

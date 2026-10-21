@@ -101,37 +101,93 @@ def find_csv_files(data_dir, split_name):
 
     return sorted(list(set(files)))
 
-def find_image_path(data_dir, split_name, class_name, filename):
+import time
+
+_DIR_CACHE = {}
+
+def get_class_dir(data_dir, split_name, class_name, sample_filename=None):
+    """
+    Xác định thư mục tương đối chứa ảnh của (split, class) một lần duy nhất (O(1) cached).
+    Giảm số lần gọi stat/os.path.exists trên Kaggle từ 1.5 triệu lần xuống < 20 lần!
+    """
+    cache_key = (split_name.lower(), class_name.lower())
+    if cache_key in _DIR_CACHE:
+        return _DIR_CACHE[cache_key]
+
     cls_candidates = [class_name]
-    if class_name.lower() in ['angry', 'anger']:
+    low_c = class_name.lower()
+    if low_c in ['angry', 'anger']:
         cls_candidates.extend(['Angry', 'Anger', 'angry', 'anger'])
-    elif class_name.lower() in ['happy', 'happiness']:
-        cls_candidates.extend(['Happy', 'Happiness', 'happy'])
-    elif class_name.lower() in ['sad', 'sadness']:
-        cls_candidates.extend(['Sad', 'Sadness', 'sad'])
-    elif class_name.lower() in ['neutral', 'neutrality']:
-        cls_candidates.extend(['Neutral', 'Neutrality', 'neutral'])
+    elif low_c in ['happy', 'happiness']:
+        cls_candidates.extend(['Happy', 'Happiness', 'happy', 'happiness'])
+    elif low_c in ['sad', 'sadness']:
+        cls_candidates.extend(['Sad', 'Sadness', 'sad', 'sadness'])
+    elif low_c in ['neutral', 'neutrality']:
+        cls_candidates.extend(['Neutral', 'Neutrality', 'neutral', 'neutrality'])
+    elif low_c in ['surprise', 'surprised']:
+        cls_candidates.extend(['Surprise', 'surprise', 'surprised'])
+    elif low_c in ['disgust', 'disgusted']:
+        cls_candidates.extend(['Disgust', 'disgust'])
+    elif low_c in ['fear', 'fearful']:
+        cls_candidates.extend(['Fear', 'fear'])
+
+    cls_candidates = list(dict.fromkeys(cls_candidates))
 
     split_candidates = [split_name]
-    if split_name.lower() in ['val', 'valid', 'validation']:
+    low_s = split_name.lower()
+    if low_s in ['val', 'valid', 'validation']:
         split_candidates = ['valid', 'val', 'validation']
-    elif split_name.lower() in ['train', 'training']:
+    elif low_s in ['train', 'training']:
         split_candidates = ['train', 'training']
-    elif split_name.lower() in ['test', 'testing']:
+    elif low_s in ['test', 'testing']:
         split_candidates = ['test', 'testing']
+    split_candidates = list(dict.fromkeys(split_candidates))
 
     for s in split_candidates:
         for c in cls_candidates:
             candidates = [
-                os.path.join(s, s, c, filename),
-                os.path.join(s, c, filename),
-                os.path.join('CAER-S', s, s, c, filename),
-                os.path.join('CAER-S', s, c, filename),
+                os.path.join(s, s, c),
+                os.path.join(s, c),
+                os.path.join('CAER-S', s, s, c),
+                os.path.join('CAER-S', s, c),
             ]
             for rel in candidates:
                 full = os.path.join(data_dir, rel)
-                if os.path.exists(full):
-                    return rel
+                if os.path.isdir(full):
+                    # Nếu có file mẫu, kiểm tra file mẫu có tồn tại không
+                    if sample_filename:
+                        if os.path.exists(os.path.join(full, sample_filename)):
+                            _DIR_CACHE[cache_key] = rel
+                            return rel
+                    else:
+                        _DIR_CACHE[cache_key] = rel
+                        return rel
+
+    # Fallback nếu cấu trúc phẳng không có thư mục con:
+    if sample_filename:
+        for s in split_candidates:
+            for c in cls_candidates:
+                candidates = [
+                    os.path.join(s, s, c, sample_filename),
+                    os.path.join(s, c, sample_filename),
+                    os.path.join('CAER-S', s, s, c, sample_filename),
+                    os.path.join('CAER-S', s, c, sample_filename),
+                    os.path.join(s, s, sample_filename),
+                    os.path.join(s, sample_filename),
+                ]
+                for rel_file in candidates:
+                    if os.path.exists(os.path.join(data_dir, rel_file)):
+                        rel_dir = os.path.dirname(rel_file)
+                        _DIR_CACHE[cache_key] = rel_dir
+                        return rel_dir
+
+    _DIR_CACHE[cache_key] = None
+    return None
+
+def find_image_path(data_dir, split_name, class_name, filename):
+    rel_dir = get_class_dir(data_dir, split_name, class_name, sample_filename=filename)
+    if rel_dir:
+        return os.path.join(rel_dir, filename)
     return None
 
 def main():
@@ -164,8 +220,13 @@ def main():
         print(f"\n=> Đang xử lý tập: {split_key.upper()} ({len(csv_files)} file CSV tìm thấy)")
         split_records = []
 
-        for csv_p in sorted(csv_files):
+        for idx, csv_p in enumerate(sorted(csv_files), 1):
+            t_file_start = time.time()
+            csv_name = os.path.basename(csv_p)
+            print(f"   [{idx}/{len(csv_files)}] Đang đọc {csv_name}...", end="", flush=True)
+
             converted_rows = []
+            rows_added = 0
             with open(csv_p, mode='r', encoding='utf-8', errors='ignore') as f:
                 reader = csv.DictReader(f)
                 fieldnames = reader.fieldnames or []
@@ -188,7 +249,7 @@ def main():
                     if label_id is None:
                         continue
 
-                    # Tìm đường dẫn thực tế trên Kaggle
+                    # Tìm đường dẫn thực tế trên Kaggle (O(1) cached)
                     rel_img_path = find_image_path(data_dir, split_key, raw_cls, filename)
                     if not rel_img_path:
                         # Fallback tìm kiếm trực tiếp trong split
@@ -206,9 +267,9 @@ def main():
 
                     # Dòng lưu vào train.txt / validation.txt / test.txt
                     split_records.append(f"{rel_img_path} {label_id}")
+                    rows_added += 1
 
                     # Bounding box
-                    parsed_box = None
                     if bbox_col and row.get(bbox_col):
                         val = row[bbox_col]
                         try:
@@ -250,11 +311,14 @@ def main():
                     writer.writeheader()
                     writer.writerows(converted_rows)
 
+            t_elapsed = time.time() - t_file_start
+            print(f" -> {rows_added:,} mẫu ({t_elapsed:.2f}s)")
+
         out_txt_path = os.path.join(output_dir, out_txt_name)
         with open(out_txt_path, 'w') as f:
             for rec in split_records:
                 f.write(f"{rec}\n")
-        print(f"   ✓ Đã tạo {out_txt_name}: {len(split_records)} mẫu -> {out_txt_path}")
+        print(f"   ✓ Đã tạo {out_txt_name}: {len(split_records):,} mẫu -> {out_txt_path}")
 
     # Đảm bảo validation.txt luôn tồn tại (CAER-S thường chỉ có train và test)
     val_txt_path = os.path.join(output_dir, "validation.txt")
@@ -265,14 +329,18 @@ def main():
         shutil.copy(test_txt_path, val_txt_path)
         print(f"   ✓ Đã tạo validation.txt (sao chép từ {test_txt_path})")
 
-    # Ghi face.json và body.json
+    # Ghi face.json và body.json (Không dùng indent=2 để ghi cực nhanh và tiết kiệm dung lượng)
     face_json_path = os.path.join(output_dir, "face.json")
+    print(f"\n=> Đang lưu {face_json_path}...", end="", flush=True)
     with open(face_json_path, 'w') as f:
-        json.dump(all_face_boxes, f, indent=2)
+        json.dump(all_face_boxes, f)
+    print(f" xong! ({len(all_face_boxes):,} keys)")
 
     body_json_path = os.path.join(output_dir, "body.json")
+    print(f"=> Đang lưu {body_json_path}...", end="", flush=True)
     with open(body_json_path, 'w') as f:
-        json.dump(all_body_boxes, f, indent=2)
+        json.dump(all_body_boxes, f)
+    print(f" xong! ({len(all_body_boxes):,} keys)")
 
     print("\n" + "=" * 70)
     print("=> XÁC NHẬN CHUYỂN ĐỔI ĐƯỜNG DẪN THÀNH CÔNG:")
@@ -281,8 +349,8 @@ def main():
         print(f"   [Colab gốc]: {colab_p}")
         print(f"   [Kaggle mới]: {kaggle_p}")
         print(f"   [Tệp tồn tại trên đĩa]: {'✓ CÓ (TRUE)' if os.path.exists(kaggle_p) else '✗ KHÔNG'}")
-    print(f"=> Tổng Face BBoxes lưu: {len(all_face_boxes)}")
-    print(f"=> Tổng Body BBoxes lưu: {len(all_body_boxes)}")
+    print(f"=> Tổng Face BBoxes lưu: {len(all_face_boxes):,}")
+    print(f"=> Tổng Body BBoxes lưu: {len(all_body_boxes):,}")
     print(f"=> Các CSV đã convert:   {converted_csv_dir}/")
     print("=" * 70)
 
