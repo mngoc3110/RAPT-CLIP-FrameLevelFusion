@@ -116,6 +116,9 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
 
   # 2. Quét tìm tự động mọi checkpoint trên /kaggle/input (ưu tiên đường dẫn chỉ định)
   KNOWN_CKPTS=(
+    "/kaggle/input/models/mngochocsupham/caer-finetune/tensorflow2/default/1/Caers-finetune.pth"
+    "/kaggle/input/caer-finetune/tensorflow2/default/1/Caers-finetune.pth"
+    "/kaggle/input/caer-finetune/Caers-finetune.pth"
     "/kaggle/input/models/bearmn/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth"
     "/kaggle/input/caer-finetune-end/tensorflow2/default/1/Caers-finetune.pth"
     "/kaggle/input/caer-finetune-end/Caers-finetune.pth"
