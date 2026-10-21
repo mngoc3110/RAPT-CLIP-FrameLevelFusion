@@ -152,7 +152,7 @@ if [ ${#RESUME_ARG[@]} -eq 0 ]; then
   fi
 fi
 
-BATCH_SIZE="${BATCH_SIZE:-32}"
+BATCH_SIZE="${BATCH_SIZE:-16}"
 WORKERS="${WORKERS:-4}"
 
 # 4. Khởi chạy huấn luyện RAPT-CLIP CAER-S Tối Ưu (SOTA Pipeline)

@@ -141,7 +141,7 @@ if [ -z "$FINETUNE_CKPT" ] && [ -d "/kaggle/input" ]; then
   FINETUNE_CKPT=$(find /kaggle/input -type f \( -iname "*caer*.pth" -o -iname "*model*.pth" -o -iname "*best*.pth" \) 2>/dev/null | grep -iE "caer|model|best" | head -n 1)
 fi
 
-BATCH_SIZE="${BATCH_SIZE:-32}"
+BATCH_SIZE="${BATCH_SIZE:-16}"
 WORKERS="${WORKERS:-4}"
 
 echo "=> [3/4] Cấu hình Fine-tuning:"
@@ -153,7 +153,7 @@ else
   FINETUNE_ARG=()
 fi
 echo "   - Số epochs fine-tune:  ${TOTAL_EPOCHS}"
-echo "   - Batch size:           ${BATCH_SIZE} (Giảm 50% số steps/epoch -> Tăng tốc 2x)"
+echo "   - Batch size:           ${BATCH_SIZE}"
 echo "   - Dataloader workers:   ${WORKERS}"
 echo "   - TTA (Test-Time Aug):  BẬT (Horizontal Flip on all 3 streams)"
 echo "   - Hàm Loss:             Cross-Entropy (Label Smoothing = 0.1)"
