@@ -322,17 +322,6 @@ def build_pdf():
 <div class="header-box">
     <h1 class="doc-title">Báo Cáo Nghiên Cứu Cắt Bỏ Thành Phần (Ablation Studies)</h1>
     <div class="doc-subtitle">Bộ Dữ Liệu Cảm Xúc Video Học Đường RAER &bull; Kiến Trúc RAPT-CLIP Tri-Stream</div>
-    <div class="meta-bar">
-        <span><strong>Tập kiểm thử:</strong> RAER (528 Video Clips, 5 Emotion Classes)</span>
-        <span><strong>Checkpoints:</strong> model_best.pth từ từng biến thể thực tế</span>
-        <span><strong>Thiết bị:</strong> Apple Silicon GPU (MPS)</span>
-        <span><strong>Thời gian:</strong> 17/10/2026</span>
-    </div>
-</div>
-
-<div style="text-align: center; margin: 3px 0 5px 0;">
-    <img src="{model_detailed}" style="width: 100%; max-height: 170px; object-fit: contain; border: 1px solid #ccc; border-radius: 3px;" alt="Sơ đồ kiến trúc RAPT-CLIP Frame-Level Fusion">
-    <div class="figure-caption">Sơ đồ kiến trúc tổng thể RAPT-CLIP Frame-Level Fusion (Face + Body + Context &rarr; CMAF &rarr; Unified Temporal)</div>
 </div>
 
 <h2 class="section-title">1. Bảng Tổng Hợp Kết Quả Thực Nghiệm Đo Trực Tiếp Từ Checkpoints (16 Thí Nghiệm)</h2>
@@ -646,13 +635,6 @@ def build_pdf():
 <div class="page-break"></div>
 <h2 class="section-title">3. Thực Nghiệm Huấn Luyện Cắt Bỏ Thành Phần (Fast Screening Feature-Level Ablations trên RAER)</h2>
 
-<div class="meta-bar" style="margin-bottom: 4px; font-size: 7.2pt; padding: 2.5px 6px;">
-    <span><strong>Tập dữ liệu:</strong> RAER (2,121 train / 528 test videos)</span>
-    <span><strong>Giao thức:</strong> Frozen Backbone Feature Probing Protocol</span>
-    <span><strong>Thiết bị:</strong> Apple Silicon MPS</span>
-    <span><strong>Quy mô:</strong> 20 Epochs &times; 9 Cấu hình</span>
-</div>
-
 <table class="data-table" style="font-size: 7pt; margin: 2px 0 4px 0;">
     <thead>
         <tr style="background-color: #0d47a1; color: white;">
@@ -859,13 +841,6 @@ def build_pdf():
 <div class="page-break"></div>
 <h2 class="section-title">5. Đánh Giá Khả Năng Mở Rộng Đa Miền: Bộ Dữ Liệu Tự Nhiên Đa Nhãn EMOTIC</h2>
 
-<div class="meta-bar" style="margin-bottom: 5px;">
-    <span><strong>Tập dữ liệu:</strong> EMOTIC (Context-Aware Multi-Label Emotion)</span>
-    <span><strong>Kiểm thử Test:</strong> 5,292 ảnh tự nhiên</span>
-    <span><strong>Hàm mất mát:</strong> Dynamic ASL (&gamma;<sub>-</sub>=4.0, &gamma;<sub>+</sub>=0.0, clip=0.05)</span>
-    <span><strong>Macro mAP Test:</strong> <strong style="color: #2e7d32;">34.76%</strong> (Val: 46.98%)</span>
-</div>
-
 <table class="data-table" style="margin-bottom: 4px;">
     <thead>
         <tr>
@@ -993,13 +968,6 @@ def build_pdf():
 <!-- TRANG 10: HUẤN LUYỆN VÀ ĐÁNH GIÁ TRÊN BỘ DỮ LIỆU CAER-S -->
 <div class="page-break"></div>
 <h2 class="section-title">6. Huấn Luyện và Đánh Giá Trên Bộ Dữ Liệu CAER-S (Static Images)</h2>
-
-<div class="meta-bar" style="margin-bottom: 5px;">
-    <span><strong>Tập dữ liệu:</strong> CAER-S (Context-Aware Static)</span>
-    <span><strong>Quy mô:</strong> 70,000 ảnh (49,007 train, 7,000 val)</span>
-    <span><strong>Hàm mất mát:</strong> LDAM Loss (s=1.0, m<sub>max</sub>=0.5)</span>
-    <span><strong>Đạt đỉnh:</strong> <strong style="color: #0d47a1;">Epoch 19</strong> (WAR: 90.40% | UAR: 90.40%)</span>
-</div>
 
 <table class="data-table" style="margin-bottom: 4px;">
     <thead>
