@@ -120,7 +120,6 @@ python main.py \
   --dc-ramp 10 \
   --use-weighted-sampler \
   --label-smoothing 0.05 \
-  --use-ldl False \
   --text-type class_descriptor \
   --temporal-layers 1 \
   --contexts-number 8 \
@@ -140,3 +139,4 @@ python main.py \
 echo "=============================================================================="
 echo "✅ Huấn luyện hoàn tất! Kết quả và checkpoint lưu tại: outputs/${EXP_NAME}"
 echo "=============================================================================="
+
