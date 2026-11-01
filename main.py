@@ -20,6 +20,21 @@ except Exception:
 import matplotlib
 import numpy as np
 import torch
+
+# NumPy 2.x compatibility fix for loading checkpoints pickled with older NumPy/PyTorch
+try:
+    import numpy.core.multiarray as _cma
+    _orig_scalar = _cma.scalar
+    def _safe_scalar(dtype, *args, **kwargs):
+        if not isinstance(dtype, np.dtype):
+            dtype = np.dtype(dtype)
+        return _orig_scalar(dtype, *args, **kwargs)
+    _cma.scalar = _safe_scalar
+    if hasattr(np, '_core') and hasattr(np._core, 'multiarray'):
+        np._core.multiarray.scalar = _safe_scalar
+except Exception:
+    pass
+
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
