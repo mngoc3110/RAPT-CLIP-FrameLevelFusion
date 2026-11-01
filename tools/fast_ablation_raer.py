@@ -178,9 +178,9 @@ class FastRAERHead(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 # Text Prompts Pre-computation
 # ─────────────────────────────────────────────────────────────────────────────
-def get_raer_text_embeddings(device):
+def get_raer_text_embeddings(device, clip_path='ViT-B/16'):
     """Encodes RAER prompt ensemble (5 classes x 8 prompts) into (5, 8, 512)."""
-    clip_model, _ = clip.load('ViT-B/16', device=device, jit=False)
+    clip_model, _ = clip.load(clip_path, device=device, jit=False)
     clip_model = clip_model.float().eval()
 
     all_prompts = []
@@ -474,6 +474,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Fast RAER Ablation Engine")
     parser.add_argument('--features-dir', type=str, default='cached_features/raer',
                         help='Directory containing cached raer_train_features.pt')
+    parser.add_argument('--clip-path', type=str, default='ViT-B/16',
+                        help='CLIP model for text encoder')
     parser.add_argument('--config', type=str, default='Full_RAPT_CLIP',
                         choices=list(ABLATION_SUITE.keys()),
                         help='Specific ablation config to run')
@@ -546,7 +548,7 @@ def main():
     )
 
     print("=> Pre-computing prompt ensemble text features...")
-    text_embeddings = get_raer_text_embeddings(device)
+    text_embeddings = get_raer_text_embeddings(device, clip_path=args.clip_path)
 
     # Determine list of experiments
     if args.sweep:

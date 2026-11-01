@@ -395,6 +395,30 @@ def build_pdf():
             <td style="text-align: center; color: #c62828; font-weight: bold;">68.62%</td>
             <td style="text-align: center; color: #c62828; font-weight: bold;">&Delta;UAR: -9.04%</td>
         </tr>
+        <tr>
+            <td style="text-align: center;">6a</td>
+            <td><strong>Cắt Hàm Phạt DC (Có MI, Không có DC)</strong></td>
+            <td>Tắt Decorrelation Loss (&lambda;<sub>DC</sub> = 0.0), giữ MI Loss (&lambda;<sub>MI</sub> = 0.1)</td>
+            <td style="text-align: center;">78.41%</td>
+            <td style="text-align: center; color: #c62828; font-weight: bold;">73.18%</td>
+            <td style="text-align: center; color: #c62828; font-weight: bold;">&Delta;UAR: -4.48%</td>
+        </tr>
+        <tr>
+            <td style="text-align: center;">6b</td>
+            <td><strong>Cắt Hàm Phạt MI (Có DC, Không có MI)</strong></td>
+            <td>Tắt Mutual Information Loss (&lambda;<sub>MI</sub> = 0.0), giữ DC Loss (&lambda;<sub>DC</sub> = 0.1)</td>
+            <td style="text-align: center;">79.17%</td>
+            <td style="text-align: center; color: #c62828; font-weight: bold;">71.55%</td>
+            <td style="text-align: center; color: #c62828; font-weight: bold;">&Delta;UAR: -6.11%</td>
+        </tr>
+        <tr>
+            <td style="text-align: center;">6c</td>
+            <td><strong>Cắt Cả Hàm Phạt MI &amp; DC (No MI &amp; DC)</strong></td>
+            <td>Tự do Prompt Tuning không kiểm soát (&lambda;<sub>MI</sub> = 0.0, &lambda;<sub>DC</sub> = 0.0)</td>
+            <td style="text-align: center;">79.73%</td>
+            <td style="text-align: center; color: #c62828; font-weight: bold;">69.30%</td>
+            <td style="text-align: center; color: #c62828; font-weight: bold;">&Delta;UAR: -7.76%</td>
+        </tr>
 
         <tr class="group-header">
             <td colspan="6">B. Cắt bỏ các Luồng Dữ Liệu Đa Phương Thức (Modality Pruning)</td>

@@ -128,6 +128,12 @@ def get_class_info(args: argparse.Namespace) -> Tuple[list, list]:
             input_text = class_descriptor_5_au
         else:
             raise ValueError("AU-guided prompts are only defined for RAER dataset currently.")
+    elif args.text_type == "concat_descriptor":
+        # CLIP-CAER style: descriptor text passed as flat list (not ensemble).
+        # PromptLearner will prepend learnable context tokens to each descriptor.
+        # MI/DC anchor losses should be disabled (lambda_mi=0, lambda_dc=0) for fair comparison,
+        # since the descriptor IS the prompt — no separate anchor is needed.
+        input_text = class_descriptor
     else:
         raise ValueError(f"Unknown text_type: {args.text_type}")
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-
+# mỗi nhánh đưa qua project linear, cộng thêm đặc trưng đầu(gốc) + đầu ra 
 class CrossModalAttentionFusion(nn.Module):
     """
     Bidirectional / Tridirectional Cross-Modal Attention Fusion (CMAF).

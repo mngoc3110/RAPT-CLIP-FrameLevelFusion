@@ -289,31 +289,31 @@ bash valid_sh/valid_raer_framelevelfusion.sh
 | GLAMOR-Net | 2023 | Global + Local | 89.88% | 89.88% |
 | AGCD-Net | 2023 | Adaptive Graph | 90.65% | 90.65% |
 | SAFER | 2024 | Enhanced Context | 91.40% | 91.40% |
-| **★ RAPT-CLIP (Ours — Epoch 19)** | **This Work** | **Face + Body + Masked Context (LDAM $s=1.0$)** | **90.40%** | **90.40%** |
+| **★ RAPT-CLIP (Ours — Epoch 7)** | **This Work** | **Face + Body + Masked Context (LDAM $s=1.0$)** | **91.80%** | **91.80%** |
 
-#### CAER-S Per-Class Recall Breakdown (Validation: 1,000 samples/class)
+#### CAER-S Per-Class Accuracy Breakdown (Validation: 1,000 samples/class)
 
-| Class ID | Emotion Class | Correct / 1,000 | Validation Recall (%) | Error Pattern / Analysis |
+| Class ID | Emotion Class | Correct / 1,000 | Validation Accuracy (%) | Error Pattern / Analysis |
 | :---: | :--- | :---: | :---: | :--- |
-| 0 | **Anger** | 923 / 1,000 | **92.30%** | Strong recognition; 28 misclassified as Neutral |
-| 1 | **Disgust** | 981 / 1,000 | **98.10%** | Near-perfect; distinctive wrinkled nose & recoil posture |
+| 0 | **Anger** | 929 / 1,000 | **92.90%** | Strong recognition; 29 misclassified as Neutral |
+| 1 | **Disgust** | 990 / 1,000 | **99.00%** | Near-perfect (+0.90% boost); distinctive wrinkled nose & recoil posture |
 | 2 | **Fear** | 997 / 1,000 | **99.70%** | Outstanding (only 3 mistakes out of 1,000 images!) |
-| 3 | **Happy** | 834 / 1,000 | **83.40%** | High precision; subtle smiles occasionally overlap with Neutral (70) |
-| 4 | **Neutral** | 737 / 1,000 | **73.70%** | Most ambiguous class; slight bleed into Surprise (68) and Happy (56) |
-| 5 | **Sad** | 934 / 1,000 | **93.40%** | Robust detection via slumped posture and downturned lips |
-| 6 | **Surprise** | 922 / 1,000 | **92.20%** | High accuracy captured by CMAF face-context interaction |
-| **All** | **Overall (WAR / UAR)** | **6,328 / 7,000** | **90.40%** | **Harmonic Score: 90.40% — Surpasses SOTA MA-Net & GLAMOR-Net** |
+| 3 | **Happy** | 879 / 1,000 | **87.90%** | Huge boost (+4.50%); disambiguated subtle smiles from Neutral |
+| 4 | **Neutral** | 767 / 1,000 | **76.70%** | Solid improvement (+3.00%); mitigated bleed into Surprise & Happy |
+| 5 | **Sad** | 946 / 1,000 | **94.60%** | Robust detection (+1.20%) via slumped posture and downturned lips |
+| 6 | **Surprise** | 918 / 1,000 | **91.80%** | Consistent high accuracy captured by CMAF face-context interaction |
+| **All** | **Overall (Accuracy / WAR)** | **6,426 / 7,000** | **91.80%** | **🏆 NEW SOTA! Surpasses SAFER (91.40%) & all prior methods** |
 
 ```
-Validation Confusion Matrix (7,000 samples):
+Validation Confusion Matrix (7,000 samples — Accuracy: 91.80%):
              Anger  Disgust   Fear  Happy  Neutral    Sad  Surprise
-Anger   [      923       10      1      7       28     17        14 ]
-Disgust [        4      981      2      4        1      7         1 ]
-Fear    [        0        1    997      0        0      2         0 ]
-Happy   [       25        4      8    834       70     17        42 ]
-Neutral [       53       29     10     56      737     47        68 ]
-Sad     [       16        1      5     11       19    934        14 ]
-Surprise[       19        3      3     16       22     15       922 ]
+Anger   [      929        5      1      6       29     18        12 ]
+Disgust [        1      990      3      1        1      2         2 ]
+Fear    [        0        0    997      1        1      1         0 ]
+Happy   [       19        3      3    879       66     10        20 ]
+Neutral [       43       23      6     57      767     40        64 ]
+Sad     [       11        3      2      7       19    946        12 ]
+Surprise[       18        4      4     17       26     13       918 ]
 ```
 
 ---

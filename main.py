@@ -104,8 +104,8 @@ optim_group.add_argument('--gamma', type=float, default=0.1, help='Factor for le
 loss_group = parser.add_argument_group('Loss & Imbalance Handling', 'Parameters for loss functions and imbalance handling')
 loss_group.add_argument('--loss-type', type=str, default='ce', choices=['ce', 'ldl', 'ldam', 'asl', 'discrete', 'dynamic_asl', 'focal'], help='Type of primary classification loss.')
 loss_group.add_argument('--focal-gamma', type=float, default=2.0, help='Focusing parameter gamma for Focal Loss.')
-loss_group.add_argument('--lambda_mi', type=float, default=0.1, help='Weight for the Mutual Information loss.')
-loss_group.add_argument('--lambda_dc', type=float, default=0.1, help='Weight for the Decorrelation loss.')
+loss_group.add_argument('--lambda_mi', '--lambda-mi', type=float, default=0.1, help='Weight for the Mutual Information loss.')
+loss_group.add_argument('--lambda_dc', '--lambda-dc', type=float, default=0.1, help='Weight for the Decorrelation loss.')
 
 loss_group.add_argument('--mi-warmup', type=int, default=5, help='Warmup epochs for MI loss.')
 loss_group.add_argument('--mi-ramp', type=int, default=10, help='Ramp-up epochs for MI loss.')
@@ -131,7 +131,7 @@ train_group.add_argument('--early-stopping-patience', type=int, default=3, help=
 
 # --- Model & Input ---
 model_group = parser.add_argument_group('Model & Input', 'Parameters for model architecture and data handling')
-model_group.add_argument('--text-type', default='prompt_ensemble', choices=['class_names', 'class_names_with_context', 'class_descriptor', 'prompt_ensemble', 'au_guided_prompts'], help='Type of text prompts to use.')
+model_group.add_argument('--text-type', default='prompt_ensemble', choices=['class_names', 'class_names_with_context', 'class_descriptor', 'prompt_ensemble', 'au_guided_prompts', 'concat_descriptor'], help='Type of text prompts to use. concat_descriptor: [learnable_ctx] + descriptor text (CLIP-CAER style, disables MI/DC anchor).')
 model_group.add_argument('--temporal-layers', type=int, default=1, help='Number of layers in the temporal modeling part.')
 model_group.add_argument('--no-temporal', action='store_true', help='Bypass temporal modeling (automatically bypassed for image datasets like EMOTIC).')
 model_group.add_argument('--use-temporal', action='store_true', help='Force temporal modeling even for image datasets (required for legacy EMOTIC checkpoints).')
@@ -140,7 +140,7 @@ model_group.add_argument('--contexts-number', type=int, default=8, help='Number 
 model_group.add_argument('--ctx-init', type=str, default='', help='Text prompt used to semantically initialize context vectors in PromptLearner (e.g. "a video of a student in a classroom").')
 model_group.add_argument('--class-token-position', type=str, default="end", help='Position of the class token in the prompt.')
 model_group.add_argument('--class-specific-contexts', type=str, default='True', choices=['True', 'False'], help='Whether to use class-specific context prompts.')
-model_group.add_argument('--load_and_tune_prompt_learner', type=str, default='True', choices=['True', 'False'], help='Whether to load and fine-tune the prompt learner.')
+model_group.add_argument('--load_and_tune_prompt_learner', '--load-and-tune-prompt-learner', type=str, default='True', choices=['True', 'False'], help='Whether to load and fine-tune the prompt learner.')
 model_group.add_argument('--num-segments', type=int, default=16, help='Number of segments to sample from each video.')
 model_group.add_argument('--duration', type=int, default=1, help='Duration of each segment.')
 model_group.add_argument('--image-size', type=int, default=224, help='Size to resize input images to.')
