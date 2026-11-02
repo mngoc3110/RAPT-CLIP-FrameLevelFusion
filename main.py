@@ -50,6 +50,34 @@ def patch_numpy_scalar():
         if orig_core is not None and orig_core_scalar is not None:
             orig_core.scalar = orig_core_scalar
 
+import zipfile
+
+def sanitize_checkpoint(path: str) -> str:
+    """Removes __MACOSX and ._* AppleDouble junk from PyTorch zip archives."""
+    if not path or not os.path.isfile(path) or not zipfile.is_zipfile(path):
+        return path
+    try:
+        with zipfile.ZipFile(path, 'r') as zf:
+            bad_files = [n for n in zf.namelist() if '__MACOSX' in n or os.path.basename(n).startswith('._')]
+            if not bad_files:
+                return path
+        print(f"=> Found {len(bad_files)} macOS artifact files (__MACOSX) in '{path}'. Sanitizing on the fly...")
+        work_dir = '/kaggle/working' if os.path.isdir('/kaggle/working') else '/tmp'
+        clean_path = os.path.join(work_dir, os.path.basename(path).replace('.pth', '_clean.pth'))
+        if clean_path == path:
+            clean_path = os.path.join(work_dir, 'clean_' + os.path.basename(path))
+            
+        with zipfile.ZipFile(path, 'r') as zf_in, zipfile.ZipFile(clean_path, 'w', compression=zipfile.ZIP_STORED) as zf_out:
+            for item in zf_in.infolist():
+                if '__MACOSX' in item.filename or os.path.basename(item.filename).startswith('._'):
+                    continue
+                zf_out.writestr(item, zf_in.read(item.filename))
+        print(f"=> Sanitized checkpoint ready at: '{clean_path}' ({os.path.getsize(clean_path)/(1024**2):.1f} MB)")
+        return clean_path
+    except Exception as e:
+        print(f"=> Warning during sanitize_checkpoint: {e}")
+        return path
+
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
@@ -431,9 +459,10 @@ def run_training(args: argparse.Namespace) -> None:
 
     # Fine-tuning warm start from checkpoint (loads weights, starts at epoch 0 with fresh optimizer & scheduler)
     if getattr(args, 'finetune_from', '') and os.path.isfile(args.finetune_from):
-        print(f"\n=> [Fine-tune Warm Start] Loading pretrained weights from '{args.finetune_from}'...")
+        finetune_path = sanitize_checkpoint(args.finetune_from)
+        print(f"\n=> [Fine-tune Warm Start] Loading pretrained weights from '{finetune_path}'...")
         with patch_numpy_scalar():
-            ckpt = torch.load(args.finetune_from, map_location=args.device, weights_only=False)
+            ckpt = torch.load(finetune_path, map_location=args.device, weights_only=False)
         sd = ckpt['state_dict'] if 'state_dict' in ckpt else ckpt
         msg = model.load_state_dict(sd, strict=False)
         prev_best = ckpt.get('best_acc', 0.0)
@@ -446,9 +475,10 @@ def run_training(args: argparse.Namespace) -> None:
     # Resume from checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
-            print(f"=> Loading checkpoint '{args.resume}'")
+            resume_path = sanitize_checkpoint(args.resume)
+            print(f"=> Loading checkpoint '{resume_path}'")
             with patch_numpy_scalar():
-                checkpoint = torch.load(args.resume, map_location=args.device, weights_only=False)
+                checkpoint = torch.load(resume_path, map_location=args.device, weights_only=False)
             start_epoch = checkpoint['epoch']
             best_val_uar = checkpoint.get('best_acc', 0.0)
             

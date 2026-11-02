@@ -77,7 +77,7 @@ if [ -n "$RESUME_TARGET" ] && [ -e "$RESUME_TARGET" ]; then
     echo "=============================================================================="
     echo "🔄 Phát hiện checkpoint Resume: $RESUME_TARGET"
     if [ -d "$RESUME_TARGET" ]; then
-        echo "📦 Checkpoint ở dạng thư mục giải nén. Tự động đóng gói lại chuẩn PyTorch..."
+        echo "📦 Checkpoint ở dạng thư mục giải nén. Tự động đóng gói lại chuẩn PyTorch (loại bỏ rác macOS)..."
         python3 -c "
 import os, zipfile
 src = '$RESUME_TARGET'
@@ -87,6 +87,8 @@ out = '/kaggle/working/origin_text_repack.pth'
 with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_STORED) as zipf:
     for root, dirs, files in os.walk(src):
         for f in files:
+            if '__MACOSX' in root or f.startswith('._'):
+                continue
             full_p = os.path.join(root, f)
             rel_p = os.path.relpath(full_p, src)
             zipf.write(full_p, arcname=os.path.join('archive', rel_p))
@@ -94,8 +96,30 @@ print(f'✅ Đã đóng gói thành công: {out} ({os.path.getsize(out)/(1024**2
 "
         RESUME_PTH="/kaggle/working/origin_text_repack.pth"
     else
-        echo "📂 Checkpoint là file hợp lệ."
-        RESUME_PTH="$RESUME_TARGET"
+        echo "📂 Checkpoint là file. Tự động kiểm tra và làm sạch rác macOS (__MACOSX)..."
+        python3 -c "
+import os, zipfile
+src = '$RESUME_TARGET'
+out = '/kaggle/working/origin_text_clean.pth'
+if zipfile.is_zipfile(src):
+    with zipfile.ZipFile(src, 'r') as zf_in:
+        bad = [n for n in zf_in.namelist() if '__MACOSX' in n or os.path.basename(n).startswith('._')]
+        if bad:
+            print(f'🧹 Phát hiện {len(bad)} file rác macOS (__MACOSX). Đang làm sạch siêu tốc...')
+            with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_STORED) as zf_out:
+                for item in zf_in.infolist():
+                    if '__MACOSX' in item.filename or os.path.basename(item.filename).startswith('._'):
+                        continue
+                    zf_out.writestr(item, zf_in.read(item.filename))
+            print(f'✅ Đã làm sạch checkpoint: {out} ({os.path.getsize(out)/(1024**2):.1f} MB)')
+            exit(0)
+print('✅ Checkpoint sạch, không có file rác.')
+"
+        if [ -f "/kaggle/working/origin_text_clean.pth" ]; then
+            RESUME_PTH="/kaggle/working/origin_text_clean.pth"
+        else
+            RESUME_PTH="$RESUME_TARGET"
+        fi
     fi
     echo "=============================================================================="
 fi
