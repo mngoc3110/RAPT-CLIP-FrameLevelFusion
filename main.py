@@ -20,20 +20,35 @@ except Exception:
 import matplotlib
 import numpy as np
 import torch
+import contextlib
 
-# NumPy 2.x compatibility fix for loading checkpoints pickled with older NumPy/PyTorch
-try:
-    import numpy.core.multiarray as _cma
-    _orig_scalar = _cma.scalar
-    def _safe_scalar(dtype, *args, **kwargs):
-        if not isinstance(dtype, np.dtype):
-            dtype = np.dtype(dtype)
-        return _orig_scalar(dtype, *args, **kwargs)
-    _cma.scalar = _safe_scalar
-    if hasattr(np, '_core') and hasattr(np._core, 'multiarray'):
-        np._core.multiarray.scalar = _safe_scalar
-except Exception:
-    pass
+@contextlib.contextmanager
+def patch_numpy_scalar():
+    """Temporarily patch numpy.core.multiarray.scalar for unpickling legacy checkpoints in NumPy 2.x."""
+    orig_cma = None
+    orig_core = None
+    orig_core_scalar = None
+    try:
+        import numpy.core.multiarray as _cma
+        orig_cma = getattr(_cma, 'scalar', None)
+        orig_core = getattr(getattr(np, '_core', None), 'multiarray', None)
+        orig_core_scalar = getattr(orig_core, 'scalar', None) if orig_core else None
+        
+        def _safe_scalar(dtype, *args, **kwargs):
+            if not isinstance(dtype, np.dtype):
+                dtype = np.dtype(dtype)
+            return orig_cma(dtype, *args, **kwargs)
+            
+        if orig_cma is not None:
+            _cma.scalar = _safe_scalar
+        if orig_core is not None:
+            orig_core.scalar = _safe_scalar
+        yield
+    finally:
+        if orig_cma is not None:
+            _cma.scalar = orig_cma
+        if orig_core is not None and orig_core_scalar is not None:
+            orig_core.scalar = orig_core_scalar
 
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
@@ -417,7 +432,8 @@ def run_training(args: argparse.Namespace) -> None:
     # Fine-tuning warm start from checkpoint (loads weights, starts at epoch 0 with fresh optimizer & scheduler)
     if getattr(args, 'finetune_from', '') and os.path.isfile(args.finetune_from):
         print(f"\n=> [Fine-tune Warm Start] Loading pretrained weights from '{args.finetune_from}'...")
-        ckpt = torch.load(args.finetune_from, map_location=args.device, weights_only=False)
+        with patch_numpy_scalar():
+            ckpt = torch.load(args.finetune_from, map_location=args.device, weights_only=False)
         sd = ckpt['state_dict'] if 'state_dict' in ckpt else ckpt
         msg = model.load_state_dict(sd, strict=False)
         prev_best = ckpt.get('best_acc', 0.0)
@@ -431,7 +447,8 @@ def run_training(args: argparse.Namespace) -> None:
     if args.resume:
         if os.path.isfile(args.resume):
             print(f"=> Loading checkpoint '{args.resume}'")
-            checkpoint = torch.load(args.resume, map_location=args.device, weights_only=False)
+            with patch_numpy_scalar():
+                checkpoint = torch.load(args.resume, map_location=args.device, weights_only=False)
             start_epoch = checkpoint['epoch']
             best_val_uar = checkpoint.get('best_acc', 0.0)
             
@@ -570,9 +587,9 @@ def run_training(args: argparse.Namespace) -> None:
 
         # 1. Save full checkpoint (with optimizer) → model.pth, used for --resume
         save_checkpoint({
-            'epoch': epoch + 1,
+            'epoch': int(epoch + 1),
             'state_dict': trainer.model.state_dict(),
-            'best_acc': best_metric_val,
+            'best_acc': float(best_metric_val),
             'optimizer': trainer.optimizer.state_dict(),
             'scheduler': trainer.scheduler.state_dict(),
             'recorder': recorder
@@ -587,7 +604,7 @@ def run_training(args: argparse.Namespace) -> None:
             save_slim_checkpoint(
                 model=trainer.model,
                 path=best_checkpoint_path,
-                meta={'epoch': epoch + 1, 'best_acc': best_metric_val}
+                meta={'epoch': int(epoch + 1), 'best_acc': float(best_metric_val)}
             )
             
             if hasattr(trainer, 'ema') and trainer.ema is not None:
