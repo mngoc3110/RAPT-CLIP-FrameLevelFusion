@@ -51,29 +51,86 @@ def patch_numpy_scalar():
             orig_core.scalar = orig_core_scalar
 
 import zipfile
+import io
+import pickle
 
 def sanitize_checkpoint(path: str) -> str:
-    """Removes __MACOSX and ._* AppleDouble junk from PyTorch zip archives."""
+    """Sanitizes PyTorch zip archives:
+    1. Removes __MACOSX and ._* AppleDouble junk.
+    2. Auto-heals oversized or corrupted tensor records (e.g. data/10 size mismatch).
+    """
     if not path or not os.path.isfile(path) or not zipfile.is_zipfile(path):
         return path
     try:
         with zipfile.ZipFile(path, 'r') as zf:
-            bad_files = [n for n in zf.namelist() if '__MACOSX' in n or os.path.basename(n).startswith('._')]
-            if not bad_files:
+            pkl_names = [n for n in zf.namelist() if n.endswith('data.pkl')]
+            if not pkl_names:
                 return path
-        print(f"=> Found {len(bad_files)} macOS artifact files (__MACOSX) in '{path}'. Sanitizing on the fly...")
-        work_dir = '/kaggle/working' if os.path.isdir('/kaggle/working') else '/tmp'
-        clean_path = os.path.join(work_dir, os.path.basename(path).replace('.pth', '_clean.pth'))
-        if clean_path == path:
-            clean_path = os.path.join(work_dir, 'clean_' + os.path.basename(path))
+            pkl_name = pkl_names[0]
+            pkl_data = zf.read(pkl_name)
             
-        with zipfile.ZipFile(path, 'r') as zf_in, zipfile.ZipFile(clean_path, 'w', compression=zipfile.ZIP_STORED) as zf_out:
-            for item in zf_in.infolist():
-                if '__MACOSX' in item.filename or os.path.basename(item.filename).startswith('._'):
-                    continue
-                zf_out.writestr(item, zf_in.read(item.filename))
-        print(f"=> Sanitized checkpoint ready at: '{clean_path}' ({os.path.getsize(clean_path)/(1024**2):.1f} MB)")
-        return clean_path
+            # Scan data.pkl to extract expected byte sizes of all tensor records
+            expected_sizes = {}
+            class StorageScanner(pickle.Unpickler):
+                def persistent_load(self, pid):
+                    if isinstance(pid, tuple) and pid[0] == 'storage':
+                        st_type, key, numel = pid[1], str(pid[2]), pid[4]
+                        elem_sz = 4
+                        if hasattr(st_type, 'dtype'):
+                            elem_sz = st_type.dtype.itemsize
+                        elif 'Double' in str(st_type) or 'Long' in str(st_type):
+                            elem_sz = 8
+                        elif 'Half' in str(st_type) or 'Short' in str(st_type):
+                            elem_sz = 2
+                        elif 'Byte' in str(st_type) or 'Char' in str(st_type) or 'Bool' in str(st_type):
+                            elem_sz = 1
+                        expected_sizes[key] = numel * elem_sz
+                        dt = getattr(st_type, 'dtype', torch.float32)
+                        return torch.zeros(max(1, numel), dtype=dt).storage()
+                    return None
+            try:
+                StorageScanner(io.BytesIO(pkl_data)).load()
+            except Exception:
+                pass
+            
+            bad_files = [n for n in zf.namelist() if '__MACOSX' in n or os.path.basename(n).startswith('._')]
+            size_mismatches = 0
+            for item in zf.infolist():
+                parts = item.filename.split('/')
+                if len(parts) >= 2 and parts[-2] == 'data' and parts[-1] in expected_sizes:
+                    if item.file_size != expected_sizes[parts[-1]]:
+                        size_mismatches += 1
+                        
+            if not bad_files and size_mismatches == 0:
+                return path
+                
+            print(f"=> Checkpoint Auto-Healer: {len(bad_files)} macOS artifact files, {size_mismatches} mismatched tensor sizes.")
+            work_dir = '/kaggle/working' if os.path.isdir('/kaggle/working') else '/tmp'
+            clean_path = os.path.join(work_dir, os.path.basename(path).replace('.pth', '_clean.pth'))
+            if clean_path == path:
+                clean_path = os.path.join(work_dir, 'clean_' + os.path.basename(path))
+                
+            fixed_count = 0
+            with zipfile.ZipFile(clean_path, 'w', compression=zipfile.ZIP_STORED) as zf_out:
+                for item in zf.infolist():
+                    if '__MACOSX' in item.filename or os.path.basename(item.filename).startswith('._'):
+                        continue
+                    data = zf.read(item.filename)
+                    parts = item.filename.split('/')
+                    if len(parts) >= 2 and parts[-2] == 'data' and parts[-1] in expected_sizes:
+                        key = parts[-1]
+                        exp_sz = expected_sizes[key]
+                        if len(data) != exp_sz:
+                            print(f'   🛠️ Auto-healed {item.filename}: {len(data)} -> {exp_sz} bytes')
+                            if len(data) > exp_sz:
+                                data = data[:exp_sz]
+                            else:
+                                data = data + b'\x00' * (exp_sz - len(data))
+                            fixed_count += 1
+                    zf_out.writestr(item.filename, data)
+                    
+            print(f"=> Repaired checkpoint ready at: '{clean_path}' ({os.path.getsize(clean_path)/(1024**2):.1f} MB, {fixed_count} tensors healed)")
+            return clean_path
     except Exception as e:
         print(f"=> Warning during sanitize_checkpoint: {e}")
         return path
@@ -479,11 +536,12 @@ def run_training(args: argparse.Namespace) -> None:
             print(f"=> Loading checkpoint '{resume_path}'")
             with patch_numpy_scalar():
                 checkpoint = torch.load(resume_path, map_location=args.device, weights_only=False)
-            start_epoch = checkpoint['epoch']
+            start_epoch = checkpoint.get('epoch', 0)
             best_val_uar = checkpoint.get('best_acc', 0.0)
             
             # Use strict=False to allow loading older checkpoints into the new model (e.g., when adding MoCo)
-            msg = model.load_state_dict(checkpoint['state_dict'], strict=False)
+            sd = checkpoint['state_dict'] if 'state_dict' in checkpoint else checkpoint
+            msg = model.load_state_dict(sd, strict=False)
             print(f"=> Load result: {msg}")
             
             if 'optimizer' in checkpoint and not args.use_moco: # Skip optimizer resume if architecture changed significantly
