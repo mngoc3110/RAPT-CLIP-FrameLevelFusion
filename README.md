@@ -318,15 +318,146 @@ Surprise[       18        4      4     17       26     13       918 ]
 
 ---
 
-## 📈 Learning Curves & Confusion Matrix
+## 📈 Experimental Visualizations & Confusion Matrices
+
+### 1. Primary Benchmark Confusion Matrices (RAER, CAER-S, EMOTIC, DAiSEE)
 
 <p align="center">
-  <img src="image/training_curves.png" width="49%" alt="Training Curves" />
-  <img src="image/confusion_matrix.png" width="49%" alt="Confusion Matrix" />
+  <img src="image/confusion_matrices/raer_confusion_matrix_sota.png" width="48%" alt="RAER Proposed SOTA Confusion Matrix" />
+  <img src="image/confusion_matrices/caer_s_confusion_matrix_percent_accuracy.png" width="48%" alt="CAER-S SOTA 91.80% Confusion Matrix" />
 </p>
 <p align="center">
-  <em>Figure 1: Training & Validation progression across 20 Epochs (left) and 5-class Confusion Matrix at peak Epoch 12/13 (right).</em>
+  <em>Figure 1: Peak performance confusion matrices: (Left) RAER classroom video emotion benchmark (77.08% WAR, 77.66% UAR); (Right) CAER-S context-aware emotion benchmark achieving new state-of-the-art 91.80% accuracy.</em>
 </p>
+
+<p align="center">
+  <img src="image/confusion_matrices/emotic_confusion_matrix_dominant.png" width="48%" alt="EMOTIC Dominant Emotion Matrix" />
+  <img src="image/confusion_matrices/daisee_confusion_matrix.png" width="48%" alt="DAiSEE Engagement Confusion Matrix" />
+</p>
+<p align="center">
+  <em>Figure 2: In-the-wild and engagement evaluations: (Left) EMOTIC dominant affect matrix across 26 continuous affective categories; (Right) DAiSEE student engagement level recognition.</em>
+</p>
+
+---
+
+### 2. Comparative & Ablation Confusion Matrices on RAER
+
+<p align="center">
+  <img src="image/confusion_matrices/raer_vs_clipcaer_confusion_matrices.png" width="95%" alt="CLIP-CAER vs RAPT-CLIP Comparative Matrices" />
+</p>
+<p align="center">
+  <em>Figure 3: Head-to-head comparison on RAER between baseline CLIP-CAER (Left, 68.00% UAR) and proposed RAPT-CLIP (Right, 77.66% UAR, +9.66% absolute improvement).</em>
+</p>
+
+<p align="center">
+  <img src="image/confusion_matrices/raer_vit_b32_vs_b16_confusion_matrices.png" width="95%" alt="ViT-B/16 vs ViT-B/32 Backbone Analysis" />
+</p>
+<p align="center">
+  <em>Figure 4: Backbone efficiency trade-off on RAER: ViT-B/16 Standard (Left, 77.66% UAR) vs. ViT-B/32 High-Throughput (Right, 75.33% UAR with 2.5× faster inference and 47% VRAM reduction).</em>
+</p>
+
+<p align="center">
+  <img src="image/confusion_matrices/raer_visual_only_confusion_matrix.png" width="48%" alt="Visual-Only Ablation Confusion Matrix" />
+  <img src="image/training_curves.png" width="48%" alt="Training Progression Curves" />
+</p>
+<p align="center">
+  <em>Figure 5: (Left) Visual-only linear probe ablation without text branch (57.83% UAR, -19.83% drop proving the decisive role of multimodal text grounding); (Right) Convergence curves across 20 training epochs.</em>
+</p>
+
+---
+
+### 3. Multi-Seed Statistical Stability Analysis (5 Independent Seeds)
+
+<p align="center">
+  <img src="image/confusion_matrices/raer_5seeds_summary_p1.png" width="49%" alt="5 Seeds Summary Page 1" />
+  <img src="image/confusion_matrices/raer_5seeds_summary_p2.png" width="49%" alt="5 Seeds Summary Page 2" />
+</p>
+<p align="center">
+  <em>Figure 6: Full multi-seed statistical audit on RAER across Seeds 7, 42, 123, 456, and 789 (Mean UAR: 76.36% ± 2.34%, Peak Seed 7: 79.23% UAR, 82.58% WAR).</em>
+</p>
+
+---
+
+## 🎨 Qualitative Evaluation & Visual Showcase (`viz_evaluation_samples`)
+
+### 1. Tri-Stream Modal Alignment Across Benchmarks
+
+<p align="center">
+  <img src="image/viz_evaluation_samples/figure_tri_stream_benchmark_showcase.png" width="100%" alt="Tri-Stream Benchmark Showcase" />
+</p>
+<p align="center">
+  <em>Figure 7: Unified Tri-Stream visual decomposition (Face, Body, and Context crops) across RAER (academic video), CAER-S (static cinema affect), and EMOTIC (in-the-wild everyday emotions).</em>
+</p>
+
+---
+
+### 2. Comprehensive Qualitative Predictions & Attention Heatmaps
+
+<p align="center">
+  <img src="image/viz_evaluation_samples/figure_qualitative_analysis_master_grid.png" width="95%" alt="Qualitative Analysis Master Grid" />
+</p>
+<p align="center">
+  <em>Figure 8: Master qualitative prediction grid detailing correct detections and subtle failure modes across facial micro-expressions, postural dynamics, and background context.</em>
+</p>
+
+<p align="center">
+  <img src="image/viz_evaluation_samples/figure_emotic_mega_gallery_9_showcase.png" width="95%" alt="EMOTIC 9-Sample Affective Gallery" />
+</p>
+<p align="center">
+  <em>Figure 9: In-depth 9-sample gallery on EMOTIC illustrating cross-modal synergy under heavy occlusions, low lighting, and complex emotional interactions.</em>
+</p>
+
+<p align="center">
+  <img src="image/viz_evaluation_samples/figure_tri_benchmark_statistical_stability.png" width="100%" alt="Tri-Benchmark Statistical Stability" />
+</p>
+<p align="center">
+  <em>Figure 10: Cross-benchmark statistical distributions confirming consistent superiority and low variance across all affective dimensions.</em>
+</p>
+
+---
+
+### 3. Per-Benchmark Exemplars (Correct vs. Failure Analysis)
+
+<table align="center">
+  <tr>
+    <th align="center">Benchmark</th>
+    <th align="center">Correct Classification</th>
+    <th align="center">Challenging / Error Case</th>
+  </tr>
+  <tr>
+    <td align="center"><b>RAER</b><br/>(Academic Video)</td>
+    <td align="center">
+      <img src="image/viz_evaluation_samples/RAER/raer_correct_1_Fatigue.png" width="280px" alt="RAER Fatigue" /><br/>
+      <em>Correct: Fatigue (slumped head & heavy eyelids)</em>
+    </td>
+    <td align="center">
+      <img src="image/viz_evaluation_samples/RAER/raer_wrong_2_Confusion_pred_Neutral.png" width="280px" alt="RAER Confusion" /><br/>
+      <em>Missed: Subtle Confusion predicted as Neutral</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><b>CAER-S</b><br/>(Context-Aware)</td>
+    <td align="center">
+      <img src="image/viz_evaluation_samples/CAER-S/caers_correct_1_Happy.png" width="280px" alt="CAER-S Happy" /><br/>
+      <em>Correct: Happiness (smiling face & celebratory context)</em>
+    </td>
+    <td align="center">
+      <img src="image/viz_evaluation_samples/CAER-S/caers_wrong_1_Disgust_pred_Surprise.png" width="280px" alt="CAER-S Disgust" /><br/>
+      <em>Ambiguity: Disgust recoiling predicted as Surprise</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><b>EMOTIC</b><br/>(In-The-Wild)</td>
+    <td align="center">
+      <img src="image/viz_evaluation_samples/EMOTIC/emotic_correct_12_Happiness_UHD.png" width="280px" alt="EMOTIC Happiness" /><br/>
+      <em>Correct: Happiness & Affection in outdoor gathering</em>
+    </td>
+    <td align="center">
+      <img src="image/viz_evaluation_samples/EMOTIC/emotic_wrong_1_Sadness_missed.png" width="280px" alt="EMOTIC Sadness" /><br/>
+      <em>Challenging: Subtle sadness masked by neutral body stance</em>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -337,7 +468,7 @@ Surprise[       18        4      4     17       26     13       918 ]
   <img src="image/tsne_finetuned.png" width="48%" alt="Fine-Tuned RAPT-CLIP Features" />
 </p>
 <p align="center">
-  <em>Figure 2: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
+  <em>Figure 11: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
 </p>
 
 ---
@@ -345,10 +476,10 @@ Surprise[       18        4      4     17       26     13       918 ]
 ## 🔬 Qualitative Interpretability: 4-Stream Grad-CAM
 
 <p align="center">
-  <img src="image/gradcam_sample.png" width="95%" alt="Figure 3: Qualitative comparison of original, body, face, and context streams" />
+  <img src="image/gradcam_sample.png" width="95%" alt="Figure 12: Qualitative comparison of original, body, face, and context streams" />
 </p>
 <p align="center">
-  <em>Figure 3: Qualitative comparison across Original, Body, Face, and Context streams on RAER. Salient heatmaps pinpoint key affective cues: micro-expressions on Face, phone and posture cues on Body, and classroom environment cues on Context.</em>
+  <em>Figure 12: Qualitative comparison across Original, Body, Face, and Context streams on RAER. Salient heatmaps pinpoint key affective cues: micro-expressions on Face, phone and posture cues on Body, and classroom environment cues on Context.</em>
 </p>
 
 ---
@@ -360,7 +491,7 @@ Surprise[       18        4      4     17       26     13       918 ]
   <img src="image/robustness_degradation.png" width="48%" alt="Robustness Degradation" />
 </p>
 <p align="center">
-  <em>Figure 4: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
+  <em>Figure 13: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
 </p>
 
 ---
