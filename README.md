@@ -552,18 +552,7 @@ $$\bar{x} = \frac{1}{N} \sum_{i=1}^{N} x_i, \qquad s = \sqrt{\frac{1}{N-1} \sum_
   <img src="image/tsne_finetuned.png" width="48%" alt="Fine-Tuned RAPT-CLIP Features" />
 </p>
 <p align="center">
-  <em>Figure 11: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
-</p>
-
----
-
-## 🔬 Qualitative Interpretability: 4-Stream Grad-CAM
-
-<p align="center">
-  <img src="image/gradcam_sample.png" width="95%" alt="Figure 12: Qualitative comparison of original, body, face, and context streams" />
-</p>
-<p align="center">
-  <em>Figure 12: Qualitative comparison across Original, Body, Face, and Context streams on RAER. Salient heatmaps pinpoint key affective cues: micro-expressions on Face, phone and posture cues on Body, and classroom environment cues on Context.</em>
+  <em>Figure 9: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
 </p>
 
 ---
@@ -575,15 +564,8 @@ $$\bar{x} = \frac{1}{N} \sum_{i=1}^{N} x_i, \qquad s = \sqrt{\frac{1}{N-1} \sum_
   <img src="image/robustness_degradation.png" width="48%" alt="Robustness Degradation" />
 </p>
 <p align="center">
-  <em>Figure 13: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
+  <em>Figure 10: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
 </p>
-
----
-
-## 📄 Technical PDF Report
-
-A comprehensive 4-page report has been compiled directly from the model checkpoints:
-* **[RAPT_CLIP_RAER_Hyperparameters_Report.pdf](RAPT_CLIP_RAER_Hyperparameters_Report.pdf)**: Contains full hyperparameter tables, loss profiles, two-tier ablation tables, and copy-pasteable LaTeX tables for paper publication.
 
 ---
 
