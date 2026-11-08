@@ -1,3 +1,10 @@
+import os
+import sys
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 """
 Advanced Academic Benchmarks for RAPT-CLIP FrameLevelFusion:
 1. Parameter Count & Inference Latency / Throughput (FPS)

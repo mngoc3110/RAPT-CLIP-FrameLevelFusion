@@ -1,3 +1,10 @@
+import os
+import sys
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 """
 Full Dataset 4-Stream Qualitative Visualization (Figure 5 Style) for RAPT-CLIP.
 Processes all 528 test videos in RAER.

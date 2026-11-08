@@ -42,9 +42,13 @@ RAER/clips/
 
 emotic_dataset/
 outputs/
-!outputs/robustness/*.txt
 scratch/
 .gemini/
+.agents/
+*.pdf
+*.tex
+latex_figures/
+notebooks/
 *.zip
 CAER_Video/
 
