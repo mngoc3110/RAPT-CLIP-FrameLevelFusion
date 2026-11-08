@@ -1,15 +1,14 @@
-# Ignore dataset (root-level only)
+# Ignore datasets and annotations
+/DAiSEE/
+/RAER/
 /raer/
 /CAER/
 /CAER-S/
+/CAER_Video/
 /CKPlus_Dataset/
-/DAiSEE/*
-!/DAiSEE/*.txt
-!/DAiSEE/*.json
-!/DAiSEE/*.py
 /Student_FER_Dataset/
-
-# Annotations (generated)
+/emotic_dataset/
+/annotations/
 daisee_annotations/
 caer_annotations/
 
