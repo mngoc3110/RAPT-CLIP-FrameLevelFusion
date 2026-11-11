@@ -311,11 +311,16 @@ def main():
             out = model(f_in, b_in, c_in)
             logits = out[0] if isinstance(out, (tuple, list)) else out
             probs = torch.sigmoid(logits)[0]
-            top_k = torch.topk(probs, k=3).indices.cpu().tolist()
+            # True multi-label dynamic thresholding
+            threshold_val = 0.55
+            pred_indices = [c for c in range(len(class_names)) if probs[c].item() >= threshold_val]
+            if not pred_indices:
+                pred_indices = [probs.argmax().item()]
+            pred_indices = sorted(pred_indices, key=lambda c: probs[c].item(), reverse=True)
 
         active_indices = [i for i, v in enumerate(lbls) if v == 1]
-        true_names = [class_names[c] for c in active_indices[:3]]
-        pred_names = [f"{class_names[c]} ({probs[c].item():.2f})" for c in top_k[:2]]
+        true_names = [class_names[c] for c in active_indices] # FULL Ground Truth
+        pred_names = [f"{class_names[c]} ({probs[c].item():.2f})" for c in pred_indices]
 
         true_t = ", ".join(true_names) if true_names else class_names[target_idx]
         pred_t = ", ".join(pred_names)

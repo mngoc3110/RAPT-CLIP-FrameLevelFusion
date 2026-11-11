@@ -495,11 +495,16 @@ def run_emotic_50():
             out = model(f_in, b_in, c_in)
             logits = out[0] if isinstance(out, (tuple, list)) else out
             probs = torch.sigmoid(logits)[0]
-            top_k_indices = torch.topk(probs, k=3).indices.cpu().tolist()
-            top_cls = top_k_indices[0]
+            # True multi-label dynamic thresholding (variable label counts: 1 to 5+)
+            threshold_val = 0.55
+            pred_indices = [c for c in range(len(class_names)) if probs[c].item() >= threshold_val]
+            if not pred_indices:
+                pred_indices = [probs.argmax().item()]
+            pred_indices = sorted(pred_indices, key=lambda c: probs[c].item(), reverse=True)
+            top_cls = pred_indices[0]
 
-        target_cls = active_classes[0] if active_classes[0] in top_k_indices else top_cls
-        is_correct = any(c in active_classes for c in top_k_indices[:2])
+        target_cls = active_classes[0] if active_classes[0] in pred_indices else top_cls
+        is_correct = any(c in active_classes for c in pred_indices)
 
         cam_f = compute_vivid_cam(model, face_orig, target_cls, 'face')
         cam_b = compute_vivid_cam(model, body_orig, target_cls, 'body')
@@ -513,8 +518,9 @@ def run_emotic_50():
             cv2.rectangle(ov_b, (m_x1, m_y1), (m_x2, m_y2), (75, 75, 75), 1)
         ov_c = overlay_heatmap(ctx_orig, cam_c)
 
-        true_names = [class_names[c] for c in active_classes[:3]]
-        pred_names = [f"{class_names[c]} ({probs[c].item():.2f})" for c in top_k_indices]
+        # Full ground-truth and multi-label predictions (No artificial [:3] clipping!)
+        true_names = [class_names[c] for c in active_classes]
+        pred_names = [f"{class_names[c]} ({probs[c].item():.2f})" for c in pred_indices]
         true_t = ", ".join(true_names)
         pred_t = ", ".join(pred_names)
         att_t  = class_names[target_cls]
