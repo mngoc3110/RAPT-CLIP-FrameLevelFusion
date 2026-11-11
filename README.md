@@ -498,6 +498,13 @@ $$\bar{x} = \frac{1}{N} \sum_{i=1}^{N} x_i, \qquad s = \sqrt{\frac{1}{N-1} \sum_
   <em>Figure 8: In-depth 9-sample gallery on EMOTIC illustrating cross-modal synergy under heavy occlusions, low lighting, and complex emotional interactions.</em>
 </p>
 
+<p align="center">
+  <img src="image/figure_emotic_multilabel_predictions.png" width="95%" alt="EMOTIC Multi-Label Predictions Across Varying Cardinalities" />
+</p>
+<p align="center">
+  <em>Figure 9: Qualitative multi-label prediction cards on EMOTIC across varying label cardinalities (3, 4, 5, and 6 predicted labels), demonstrating authentic unconstrained multi-label inference without artificial top-k ranking constraints (green: correct, red: false alarm, gray: missed).</em>
+</p>
+
 ---
 
 ### 3. Per-Benchmark Exemplars (Correct vs. Failure Analysis)
@@ -552,7 +559,7 @@ $$\bar{x} = \frac{1}{N} \sum_{i=1}^{N} x_i, \qquad s = \sqrt{\frac{1}{N-1} \sum_
   <img src="image/tsne_finetuned.png" width="48%" alt="Fine-Tuned RAPT-CLIP Features" />
 </p>
 <p align="center">
-  <em>Figure 9: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
+  <em>Figure 10: Feature distributions before fine-tuning (left) vs. distinct class clusters formed by RAPT-CLIP (right).</em>
 </p>
 
 ---
@@ -564,7 +571,7 @@ $$\bar{x} = \frac{1}{N} \sum_{i=1}^{N} x_i, \qquad s = \sqrt{\frac{1}{N-1} \sum_
   <img src="image/robustness_degradation.png" width="48%" alt="Robustness Degradation" />
 </p>
 <p align="center">
-  <em>Figure 10: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
+  <em>Figure 11: Resilience to modality masking/occlusion (left) and degradation dynamics under Gaussian sensor noise & structural disturbances (right).</em>
 </p>
 
 ---
